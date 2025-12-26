@@ -1,0 +1,339 @@
+{
+  "meta": {
+    "version": "1.1",
+    "last_updated": "2024-12-20",
+    "updated_by": "human",
+    "notes": "添加测试基础设施任务"
+  },
+  "current_phase": "Phase 1 - MVP",
+  "frontend": {
+    "migration": "completed",
+    "completedAt": "2025-12-22"
+  },
+  "nextSteps": "后端开发相关",
+  "overall_progress": 0,
+  "features": [
+    {
+      "id": "infra-test-frontend",
+      "name": "前端测试基础设施",
+      "category": "infrastructure",
+      "owner": "frontend",
+      "priority": "P0",
+      "status": "not_started",
+      "description": "配置 Vitest + Testing Library",
+      "acceptance_criteria": [
+        "vitest.config.ts 配置完成",
+        "npm run test 可运行",
+        "示例测试通过"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "infra-test-backend",
+      "name": "后端测试基础设施",
+      "category": "infrastructure",
+      "owner": "backend",
+      "priority": "P0",
+      "status": "not_started",
+      "description": "配置 pytest + httpx + fixtures",
+      "acceptance_criteria": [
+        "pytest.ini 配置完成",
+        "conftest.py fixtures 就绪",
+        "pytest 可运行"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "auth-oauth",
+      "name": "OAuth 登录",
+      "category": "authentication",
+      "owner": "frontend",
+      "priority": "P0",
+      "status": "not_started",
+      "description": "Google/GitHub OAuth 一键登录",
+      "acceptance_criteria": [
+        "登录页只有两个 OAuth 按钮",
+        "登录后跳转到仪表盘",
+        "刷新页面保持登录状态",
+        "退出登录后返回登录页"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "auth-jwt",
+      "name": "JWT 验签",
+      "category": "authentication",
+      "owner": "backend",
+      "priority": "P0",
+      "status": "not_started",
+      "description": "FastAPI 验证前端签发的 JWT",
+      "acceptance_criteria": [
+        "正确解析 JWT 获取 user_id",
+        "过期 token 返回 401",
+        "无效 token 返回 403"
+      ],
+      "dependencies": ["auth-oauth"]
+    },
+    {
+      "id": "upload-presign",
+      "name": "Presigned URL 生成",
+      "category": "upload",
+      "owner": "backend",
+      "priority": "P0",
+      "status": "not_started",
+      "description": "生成 S3 预签名上传 URL",
+      "acceptance_criteria": [
+        "返回有效的 PUT URL",
+        "URL 5分钟内有效",
+        "支持 mp3/mp4/wav/m4a 格式"
+      ],
+      "dependencies": ["auth-jwt"]
+    },
+    {
+      "id": "upload-instant",
+      "name": "秒传检查",
+      "category": "upload",
+      "owner": "backend",
+      "priority": "P0",
+      "status": "not_started",
+      "description": "通过 content_hash 检查文件是否已存在",
+      "acceptance_criteria": [
+        "相同 hash 返回已有任务",
+        "不同 hash 返回预签名 URL"
+      ],
+      "dependencies": ["upload-presign"]
+    },
+    {
+      "id": "upload-frontend",
+      "name": "前端文件上传",
+      "category": "upload",
+      "owner": "frontend",
+      "priority": "P0",
+      "status": "not_started",
+      "description": "前端计算 Hash + 直传 S3 + 进度条",
+      "acceptance_criteria": [
+        "正确计算 SHA256",
+        "进度条显示 0-100%",
+        "上传失败可重试",
+        "不支持格式给出提示"
+      ],
+      "dependencies": ["upload-presign"]
+    },
+    {
+      "id": "task-create",
+      "name": "创建任务 API",
+      "category": "task",
+      "owner": "backend",
+      "priority": "P0",
+      "status": "not_started",
+      "description": "POST /tasks 创建处理任务",
+      "acceptance_criteria": [
+        "支持 upload 和 youtube 两种 source_type",
+        "返回 task_id 和初始状态",
+        "触发 Celery 异步任务"
+      ],
+      "dependencies": ["upload-instant"]
+    },
+    {
+      "id": "task-list",
+      "name": "任务列表 API",
+      "category": "task",
+      "owner": "backend",
+      "priority": "P0",
+      "status": "not_started",
+      "description": "GET /tasks 获取用户任务列表",
+      "acceptance_criteria": [
+        "按创建时间倒序",
+        "支持分页",
+        "返回状态和进度"
+      ],
+      "dependencies": ["task-create"]
+    },
+    {
+      "id": "task-detail",
+      "name": "任务详情 API",
+      "category": "task",
+      "owner": "backend",
+      "priority": "P0",
+      "status": "not_started",
+      "description": "GET /tasks/:id 获取任务详情",
+      "acceptance_criteria": [
+        "返回完整任务信息",
+        "包含转写和摘要数据"
+      ],
+      "dependencies": ["task-create"]
+    },
+    {
+      "id": "worker-extract",
+      "name": "音频提取 Worker",
+      "category": "processing",
+      "owner": "backend",
+      "priority": "P0",
+      "status": "not_started",
+      "description": "FFmpeg 转码 + yt-dlp 下载",
+      "acceptance_criteria": [
+        "输出 16kHz 单声道 WAV",
+        "yt-dlp 自动更新",
+        "失败重试 3 次"
+      ],
+      "dependencies": ["task-create"]
+    },
+    {
+      "id": "worker-transcribe",
+      "name": "ASR 转写 Worker",
+      "category": "processing",
+      "owner": "backend",
+      "priority": "P0",
+      "status": "not_started",
+      "description": "调用腾讯云 ASR + 说话人分离",
+      "acceptance_criteria": [
+        "返回带时间戳的转写",
+        "识别说话人",
+        "结果存入数据库"
+      ],
+      "dependencies": ["worker-extract"]
+    },
+    {
+      "id": "worker-summarize",
+      "name": "LLM 摘要 Worker",
+      "category": "processing",
+      "owner": "backend",
+      "priority": "P0",
+      "status": "not_started",
+      "description": "Map-Reduce 长文本摘要",
+      "acceptance_criteria": [
+        "支持 1小时+ 音频",
+        "生成 overview/key_points/action_items",
+        "摘要包含时间引用"
+      ],
+      "dependencies": ["worker-transcribe"]
+    },
+    {
+      "id": "websocket-progress",
+      "name": "WebSocket 进度推送",
+      "category": "realtime",
+      "owner": "backend",
+      "priority": "P0",
+      "status": "not_started",
+      "description": "实时推送任务进度到前端",
+      "acceptance_criteria": [
+        "延迟 < 2秒",
+        "断开自动重连",
+        "降级为轮询"
+      ],
+      "dependencies": ["worker-extract"]
+    },
+    {
+      "id": "ui-login",
+      "name": "登录页面",
+      "category": "ui",
+      "owner": "frontend",
+      "priority": "P0",
+      "status": "not_started",
+      "description": "OAuth 登录页面",
+      "acceptance_criteria": [
+        "品牌展示 + 两个 OAuth 按钮",
+        "加载状态",
+        "错误提示"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "ui-dashboard",
+      "name": "仪表盘页面",
+      "category": "ui",
+      "owner": "frontend",
+      "priority": "P0",
+      "status": "not_started",
+      "description": "任务列表和新建入口",
+      "acceptance_criteria": [
+        "显示最近任务",
+        "新建任务入口",
+        "空状态展示"
+      ],
+      "dependencies": ["auth-oauth", "task-list"]
+    },
+    {
+      "id": "ui-new-task",
+      "name": "新建任务页面",
+      "category": "ui",
+      "owner": "frontend",
+      "priority": "P0",
+      "status": "not_started",
+      "description": "上传文件或输入 YouTube 链接",
+      "acceptance_criteria": [
+        "文件上传组件",
+        "YouTube 链接输入",
+        "格式校验"
+      ],
+      "dependencies": ["upload-frontend"]
+    },
+    {
+      "id": "ui-task-detail",
+      "name": "任务详情页面",
+      "category": "ui",
+      "owner": "frontend",
+      "priority": "P0",
+      "status": "not_started",
+      "description": "转写内容 + 摘要展示",
+      "acceptance_criteria": [
+        "转写内容带时间轴",
+        "说话人标注",
+        "摘要面板切换"
+      ],
+      "dependencies": ["task-detail", "websocket-progress"]
+    },
+    {
+      "id": "ui-i18n",
+      "name": "国际化",
+      "category": "ui",
+      "owner": "frontend",
+      "priority": "P2",
+      "status": "not_started",
+      "description": "中英文双语界面",
+      "acceptance_criteria": [
+        "语言切换器",
+        "所有文案支持 i18n"
+      ],
+      "dependencies": ["ui-dashboard"]
+    },
+    {
+      "id": "ui-theme",
+      "name": "暗色主题",
+      "category": "ui",
+      "owner": "frontend",
+      "priority": "P2",
+      "status": "not_started",
+      "description": "支持亮色/暗色主题切换",
+      "acceptance_criteria": [
+        "主题切换器",
+        "跟随系统设置"
+      ],
+      "dependencies": ["ui-dashboard"]
+    },
+    {
+      "id": "export-md",
+      "name": "导出 Markdown",
+      "category": "export",
+      "owner": "frontend",
+      "priority": "P2",
+      "status": "not_started",
+      "description": "导出转写和摘要为 Markdown",
+      "acceptance_criteria": [
+        "格式正确",
+        "包含时间戳"
+      ],
+      "dependencies": ["ui-task-detail"]
+    }
+  ],
+  "blockers": [],
+  "next_tasks": [
+    "infra-test-frontend",
+    "infra-test-backend",
+    "auth-oauth",
+    "auth-jwt",
+    "ui-login"
+  ],
+  "completed_tasks": [],
+  "notes": []
+}
