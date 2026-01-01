@@ -130,8 +130,40 @@
     "transcriptTitle": "转写内容",
     "transcriptEmpty": "暂无转写内容",
     "retryProcessing": "重新处理",
+    "summaryRetry": "重新生成",
+    "summaryRetrying": "生成中...",
     "retrySuccess": "任务已重新提交，正在处理中...",
     "retryFailed": "重试失败，请稍后再试",
+    "retryDialog": {
+      "title": "选择重试模式",
+      "open": "重试任务",
+      "confirm": "开始重试",
+      "cancel": "取消",
+      "retrying": "重试中...",
+      "recommended": "推荐",
+      "options": {
+        "auto": {
+          "label": "智能重试",
+          "desc": "自动从失败阶段继续，节省时间和资源"
+        },
+        "full": {
+          "label": "完整重试",
+          "desc": "从头开始重新处理所有阶段"
+        },
+        "fromTranscribe": {
+          "label": "从转写开始",
+          "desc": "复用下载/转码结果，从转写阶段重新开始"
+        },
+        "transcribeOnly": {
+          "label": "仅重新转写",
+          "desc": "只重新执行语音转写，保留其他结果"
+        },
+        "summarizeOnly": {
+          "label": "仅重新摘要",
+          "desc": "只重新生成摘要，保留转写结果"
+        }
+      }
+    },
     "cleanupPromptTitle": "发现重复的失败任务",
     "cleanupPromptMessage": "发现 {count} 个相同内容的失败任务，是否清理？",
     "cleanupNow": "立即清理",

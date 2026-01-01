@@ -202,13 +202,30 @@ export interface TaskDetail {
   error_code?: number
 }
 
-export interface TaskRetryResponse {
-  action: "retrying" | "duplicate_found"
-  task_id: string
-  duplicate_task_id: string | null
-  failed_task_ids?: string[]
-  message: string
+export type RetryMode =
+  | "auto"
+  | "full"
+  | "from_transcribe"
+  | "transcribe_only"
+  | "summarize_only"
+
+export interface TaskRetryRequest {
+  mode: RetryMode
 }
+
+export type TaskRetryResponse =
+  | {
+      task_id: string
+      status: string
+      retry_mode: RetryMode
+    }
+  | {
+      action: "retrying" | "duplicate_found"
+      task_id: string
+      duplicate_task_id: string | null
+      failed_task_ids?: string[]
+      message: string
+    }
 
 export interface BatchDeleteResponse {
   deleted_count: number
@@ -286,6 +303,18 @@ export interface SummaryResponse {
   task_id: string
   total: number
   items: SummaryItem[]
+}
+
+export type SummaryRegenerateType = "overview" | "key_points" | "action_items"
+
+export interface SummaryRegenerateRequest {
+  summary_type: SummaryRegenerateType
+}
+
+export interface SummaryRegenerateResponse {
+  task_id: string
+  summary_type: SummaryRegenerateType
+  status: string
 }
 
 // ============================================================================

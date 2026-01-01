@@ -21,10 +21,13 @@ import {
   NotificationStatsResponse,
   PresignRequest,
   PresignResponse,
+  SummaryRegenerateRequest,
+  SummaryRegenerateResponse,
   SummaryResponse,
   TaskDetail,
   TaskListRequest,
   TaskListResponse,
+  RetryMode,
   TaskRetryResponse,
   TranscriptRequest,
   TranscriptResponse,
@@ -304,17 +307,25 @@ export class APIClient {
   /**
    * 重试失败任务
    */
-  async retryTask(taskId: string, force = false): Promise<TaskRetryResponse> {
+  async retryTask(
+    taskId: string,
+    options?: boolean | { mode?: RetryMode }
+  ): Promise<TaskRetryResponse> {
     const queryParams = new URLSearchParams()
-    if (force) {
-      queryParams.set("force", "true")
+    let body = "{}"
+    if (typeof options === "boolean") {
+      if (options) {
+        queryParams.set("force", "true")
+      }
+    } else if (options?.mode) {
+      body = JSON.stringify({ mode: options.mode })
     }
     const query = queryParams.toString()
     const endpoint = query
       ? `/tasks/${taskId}/retry?${query}`
       : `/tasks/${taskId}/retry`
 
-    return request(endpoint, { method: "POST", body: "{}" }, this.token)
+    return request(endpoint, { method: "POST", body }, this.token)
   }
 
   /**
@@ -364,6 +375,23 @@ export class APIClient {
    */
   async getSummary(taskId: string): Promise<SummaryResponse> {
     return request(`/summaries/${taskId}`, { method: "GET" }, this.token)
+  }
+
+  /**
+   * 重新生成摘要（支持指定 summary_type）
+   */
+  async regenerateSummary(
+    taskId: string,
+    data: SummaryRegenerateRequest
+  ): Promise<SummaryRegenerateResponse> {
+    return request(
+      `/summaries/${taskId}/regenerate`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+      this.token
+    )
   }
 
   // ==========================================================================

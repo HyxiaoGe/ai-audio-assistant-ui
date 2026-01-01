@@ -130,8 +130,40 @@
     "transcriptTitle": "Transcript",
     "transcriptEmpty": "No transcript yet",
     "retryProcessing": "Retry processing",
+    "summaryRetry": "Regenerate",
+    "summaryRetrying": "Regenerating...",
     "retrySuccess": "Task resubmitted and processing...",
     "retryFailed": "Retry failed, please try again later",
+    "retryDialog": {
+      "title": "Choose retry mode",
+      "open": "Retry task",
+      "confirm": "Start retry",
+      "cancel": "Cancel",
+      "retrying": "Retrying...",
+      "recommended": "Recommended",
+      "options": {
+        "auto": {
+          "label": "Smart retry",
+          "desc": "Continue from the failed stage to save time and resources"
+        },
+        "full": {
+          "label": "Full retry",
+          "desc": "Restart all stages from scratch"
+        },
+        "fromTranscribe": {
+          "label": "From transcription",
+          "desc": "Reuse download/transcode results and restart from transcription"
+        },
+        "transcribeOnly": {
+          "label": "Transcribe only",
+          "desc": "Redo transcription and keep other results"
+        },
+        "summarizeOnly": {
+          "label": "Summarize only",
+          "desc": "Regenerate summary and keep transcripts"
+        }
+      }
+    },
     "cleanupPromptTitle": "Duplicate failed tasks found",
     "cleanupPromptMessage": "Found {count} duplicate failed task(s), clean them up?",
     "cleanupNow": "Clean Now",

@@ -165,7 +165,7 @@ export default function TaskList({
     setRetryingTaskId(taskId);
     try {
       const result = await client.retryTask(taskId, false);
-      if (result.action === 'duplicate_found') {
+      if ('action' in result && result.action === 'duplicate_found') {
         const duplicateId = result.duplicate_task_id;
         if (!duplicateId) {
           notifyError(t("task.retryFailed"));

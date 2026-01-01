@@ -8,6 +8,7 @@ import { ArrowLeft, ChevronDown, FileText, CheckSquare, Lightbulb } from 'lucide
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
 import PlayerBar from '@/components/task/PlayerBar';
+import RetryTaskDialog from '@/components/task/RetryTaskDialog';
 import TranscriptItem from '@/components/task/TranscriptItem';
 import TabSwitch from '@/components/task/TabSwitch';
 import ProcessingState from '@/components/common/ProcessingState';
@@ -16,8 +17,9 @@ import LoginModal from '@/components/auth/LoginModal';
 import RetryCleanupToast from '@/components/task/RetryCleanupToast';
 import { useAPIClient } from '@/lib/use-api-client';
 import { useGlobalStore } from '@/store/global-store';
+import { getToken } from '@/lib/auth-token';
 import { ApiError } from '@/types/api';
-import type { TaskDetail as ApiTaskDetail, TranscriptSegment as ApiTranscriptSegment, SummaryItem } from '@/types/api';
+import type { TaskDetail as ApiTaskDetail, TranscriptSegment as ApiTranscriptSegment, SummaryItem, RetryMode, SummaryRegenerateType } from '@/types/api';
 import { useI18n } from '@/lib/i18n-context';
 
 interface TaskDetailProps {
@@ -73,6 +75,7 @@ export default function TaskDetail({
   const [progress, setProgress] = useState(0);
   const [loginOpen, setLoginOpen] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [isRetryDialogOpen, setIsRetryDialogOpen] = useState(false);
   const [showCleanupToast, setShowCleanupToast] = useState(false);
   const [failedTaskIds, setFailedTaskIds] = useState<string[]>([]);
   const [isCleaning, setIsCleaning] = useState(false);
@@ -82,6 +85,36 @@ export default function TaskDetail({
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const [keyPoints, setKeyPoints] = useState<KeyPoint[]>([]);
   const [summaryOverview, setSummaryOverview] = useState<string[]>([]);
+  const [summaryStreaming, setSummaryStreaming] = useState({
+    overview: false,
+    key_points: false,
+    action_items: false,
+  });
+  const [summaryStreamContent, setSummaryStreamContent] = useState<Record<SummaryRegenerateType, string>>({
+    overview: "",
+    key_points: "",
+    action_items: "",
+  });
+  const [summaryVersions, setSummaryVersions] = useState<Record<SummaryRegenerateType, number>>({
+    overview: 0,
+    key_points: 0,
+    action_items: 0,
+  });
+  const summaryStreamRef = useRef<Record<SummaryRegenerateType, EventSource | null>>({
+    overview: null,
+    key_points: null,
+    action_items: null,
+  });
+  const summaryBufferRef = useRef<Record<SummaryRegenerateType, string>>({
+    overview: '',
+    key_points: '',
+    action_items: '',
+  });
+  const summaryPollRef = useRef<Record<SummaryRegenerateType, number | null>>({
+    overview: null,
+    key_points: null,
+    action_items: null,
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isProcessingTask = task?.status
@@ -157,6 +190,11 @@ export default function TaskDetail({
     const overview = items.find((item) => item.summary_type === 'overview' && item.is_active)?.content;
     const keyPointsContent = items.find((item) => item.summary_type === 'key_points' && item.is_active)?.content;
     const actionItemsContent = items.find((item) => item.summary_type === 'action_items' && item.is_active)?.content;
+    const latestVersions = {
+      overview: items.find((item) => item.summary_type === 'overview' && item.is_active)?.version ?? 0,
+      key_points: items.find((item) => item.summary_type === 'key_points' && item.is_active)?.version ?? 0,
+      action_items: items.find((item) => item.summary_type === 'action_items' && item.is_active)?.version ?? 0,
+    };
 
     const keyPointLines = parseSummaryLines(keyPointsContent);
     const actionLines = parseActionItems(actionItemsContent);
@@ -169,6 +207,7 @@ export default function TaskDetail({
     setActionItems(actionLines);
 
     setSummaryOverview(overview ? parseSummaryLines(overview) : []);
+    setSummaryVersions(latestVersions);
   }, [parseActionItems, parseSummaryLines]);
 
   const loadTask = useCallback(async () => {
@@ -236,6 +275,201 @@ export default function TaskDetail({
   }, [buildSummaryState, client, getSpeakerColor, id, session, t]);
 
   useEffect(() => {
+    return () => {
+      (Object.keys(summaryStreamRef.current) as SummaryRegenerateType[]).forEach((type) => {
+        summaryStreamRef.current[type]?.close();
+        summaryStreamRef.current[type] = null;
+        if (summaryPollRef.current[type]) {
+          window.clearInterval(summaryPollRef.current[type] ?? undefined);
+          summaryPollRef.current[type] = null;
+        }
+      });
+    };
+  }, []);
+
+  const updateSummaryFromStream = useCallback(
+    (summaryType: SummaryRegenerateType, content: string) => {
+      setSummaryStreamContent((prev) => ({ ...prev, [summaryType]: content }));
+      if (summaryType === 'overview') {
+        setSummaryOverview(parseSummaryLines(content));
+      } else if (summaryType === 'key_points') {
+        const keyPointLines = parseSummaryLines(content);
+        setKeyPoints(keyPointLines.map((text) => ({
+          text,
+          timeReference: '--:--',
+        })));
+      } else if (summaryType === 'action_items') {
+        setActionItems(parseActionItems(content));
+      }
+    },
+    [parseActionItems, parseSummaryLines]
+  );
+
+  const regenerateSummary = useCallback(
+    async (summaryType: SummaryRegenerateType) => {
+      if (!id) return;
+      if (summaryStreaming[summaryType]) return;
+
+      summaryStreamRef.current[summaryType]?.close();
+      summaryStreamRef.current[summaryType] = null;
+      if (summaryPollRef.current[summaryType]) {
+        window.clearInterval(summaryPollRef.current[summaryType] ?? undefined);
+        summaryPollRef.current[summaryType] = null;
+      }
+      summaryBufferRef.current[summaryType] = '';
+
+      setSummaryStreaming((prev) => ({ ...prev, [summaryType]: true }));
+      updateSummaryFromStream(summaryType, '');
+
+      try {
+        const previousVersion = summaryVersions[summaryType] || 0;
+        const startPolling = () => {
+          summaryPollRef.current[summaryType] = window.setInterval(async () => {
+            try {
+              const result = await client.getSummary(id);
+              const latest = result.items.find(
+                (item) => item.summary_type === summaryType && item.is_active
+              );
+              if (latest && latest.version > previousVersion) {
+                window.clearInterval(summaryPollRef.current[summaryType] ?? undefined);
+                summaryPollRef.current[summaryType] = null;
+                setSummaryStreaming((prev) => ({ ...prev, [summaryType]: false }));
+                buildSummaryState(result.items);
+              }
+            } catch {
+              // Ignore polling errors, keep trying
+            }
+          }, 2000);
+
+          window.setTimeout(() => {
+            if (summaryPollRef.current[summaryType]) {
+              window.clearInterval(summaryPollRef.current[summaryType] ?? undefined);
+              summaryPollRef.current[summaryType] = null;
+              setSummaryStreaming((prev) => ({ ...prev, [summaryType]: false }));
+              notifyError(t("task.retryFailed"));
+            }
+          }, 120000);
+        };
+
+        const rawBaseUrl =
+          process.env.NEXT_PUBLIC_API_URL ||
+          process.env.NEXT_PUBLIC_API_BASE_URL ||
+          'http://localhost:8000';
+        const normalizedBaseUrl = /\/api\/v1\/?$/.test(rawBaseUrl)
+          ? rawBaseUrl.replace(/\/$/, '')
+          : `${rawBaseUrl.replace(/\/$/, '')}/api/v1`;
+
+        const token = await getToken();
+        if (token) {
+          const streamUrl = `${normalizedBaseUrl}/summaries/${id}/stream?summary_type=${summaryType}&token=${encodeURIComponent(token)}`;
+          const eventSource = new EventSource(streamUrl);
+          summaryStreamRef.current[summaryType] = eventSource;
+          let regenerateTriggered = false;
+          let connectedReceived = false;
+
+          const triggerRegenerate = async () => {
+            if (regenerateTriggered) return;
+            regenerateTriggered = true;
+            await client.regenerateSummary(id, { summary_type: summaryType });
+          };
+
+          const connectionTimeout = window.setTimeout(() => {
+            if (!connectedReceived) {
+              triggerRegenerate().catch((err) => {
+                setSummaryStreaming((prev) => ({ ...prev, [summaryType]: false }));
+                if (err instanceof ApiError) {
+                  notifyError(err.message);
+                } else {
+                  notifyError(t("task.retryFailed"));
+                }
+              });
+            }
+          }, 3000);
+
+          const handleStreamError = (message?: string) => {
+            eventSource.close();
+            summaryStreamRef.current[summaryType] = null;
+            setSummaryStreaming((prev) => ({ ...prev, [summaryType]: false }));
+            notifyError(message || t("task.retryFailed"));
+            startPolling();
+          };
+
+          eventSource.addEventListener("connected", () => {
+            connectedReceived = true;
+            window.clearTimeout(connectionTimeout);
+            triggerRegenerate().catch((err) => {
+              handleStreamError(err instanceof ApiError ? err.message : undefined);
+            });
+          });
+
+          eventSource.addEventListener("summary.started", (event) => {
+            try {
+              const payload = JSON.parse(event.data);
+              if (payload.summary_type && payload.summary_type !== summaryType) return;
+              summaryBufferRef.current[summaryType] = '';
+              updateSummaryFromStream(summaryType, '');
+            } catch {
+              // Ignore malformed payloads
+            }
+          });
+
+          eventSource.addEventListener("summary.delta", (event) => {
+            try {
+              const payload = JSON.parse(event.data);
+              if (payload.summary_type && payload.summary_type !== summaryType) return;
+              if (typeof payload.content !== 'string') return;
+              summaryBufferRef.current[summaryType] += payload.content;
+              updateSummaryFromStream(summaryType, summaryBufferRef.current[summaryType]);
+            } catch {
+              // Ignore malformed payloads
+            }
+          });
+
+          eventSource.addEventListener("summary.completed", (event) => {
+            try {
+              const payload = JSON.parse(event.data);
+              if (payload.summary_type && payload.summary_type !== summaryType) return;
+            } catch {
+              // Ignore malformed payloads
+            }
+            eventSource.close();
+            summaryStreamRef.current[summaryType] = null;
+            setSummaryStreaming((prev) => ({ ...prev, [summaryType]: false }));
+            client.getSummary(id).then((result) => {
+              buildSummaryState(result.items);
+            });
+          });
+
+          eventSource.addEventListener("error", (event) => {
+            try {
+              const payload = JSON.parse((event as MessageEvent).data);
+              handleStreamError(payload?.message);
+            } catch {
+              handleStreamError();
+            }
+          });
+
+          eventSource.onerror = () => {
+            window.clearTimeout(connectionTimeout);
+            handleStreamError();
+          };
+        } else {
+          await client.regenerateSummary(id, { summary_type: summaryType });
+          startPolling();
+        }
+      } catch (err) {
+        setSummaryStreaming((prev) => ({ ...prev, [summaryType]: false }));
+        if (err instanceof ApiError) {
+          notifyError(err.message);
+        } else {
+          notifyError(t("task.retryFailed"));
+        }
+      }
+    },
+    [buildSummaryState, client, id, summaryStreaming, summaryVersions, t, updateSummaryFromStream]
+  );
+
+  useEffect(() => {
     if (session?.user) {
       loadTask();
     }
@@ -287,13 +521,13 @@ export default function TaskDetail({
     }
   }, [globalTaskState, loadTask, task?.status]);
 
-  const handleRetry = async () => {
+  const handleRetry = async (mode: RetryMode) => {
     if (!id) return;
 
     setIsRetrying(true);
     try {
-      const result = await client.retryTask(id, false);
-      if (result.action === 'duplicate_found') {
+      const result = await client.retryTask(id, { mode });
+      if ('action' in result && result.action === 'duplicate_found') {
         const duplicateId = result.duplicate_task_id;
         if (!duplicateId) {
           notifyError(t("task.retryFailed"));
@@ -615,7 +849,7 @@ export default function TaskDetail({
               </h1>
 
               {/* Right: Empty space for balance */}
-              <div style={{ width: '100px' }}></div>
+              <div style={{ width: '140px' }}></div>
             </div>
 
             <div className="flex-1 flex flex-col items-center justify-center px-6 py-8">
@@ -642,17 +876,23 @@ export default function TaskDetail({
                   {task.error_message || t("task.error.transcribeUnavailable")}
                 </p>
                 <button
-                  onClick={handleRetry}
+                  onClick={() => setIsRetryDialogOpen(true)}
                   disabled={isRetrying}
                   className="px-6 py-2 rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ background: 'var(--app-danger)', color: 'var(--app-button-primary-text)' }}
                 >
-                  {isRetrying ? t("common.processing") : t("common.retry")}
+                  {isRetrying ? t("common.processing") : t("task.retryDialog.open")}
                 </button>
               </div>
             </div>
           </main>
         </div>
+        <RetryTaskDialog
+          isOpen={isRetryDialogOpen}
+          isRetrying={isRetrying}
+          onClose={() => setIsRetryDialogOpen(false)}
+          onRetry={handleRetry}
+        />
       </div>
     );
   }
@@ -840,35 +1080,35 @@ export default function TaskDetail({
               {task.title}
             </h1>
 
-            {/* Right: Export Button */}
-            <div className="relative">
-              <button
-                onClick={() => setShowExportMenu(!showExportMenu)}
-                className="flex items-center gap-2 px-4 py-2 border rounded-lg hover:bg-[var(--app-glass-bg-strong)] transition-colors"
-                style={{ borderColor: 'var(--app-glass-border)', color: 'var(--app-text)' }}
-              >
-                <span className="text-sm" style={{ fontWeight: 500 }}>{t("task.export")}</span>
-                <ChevronDown className="w-4 h-4" />
-              </button>
-
-              {showExportMenu && (
-                <div
-                  className="absolute right-0 mt-2 w-48 rounded-lg shadow-lg border overflow-hidden z-10"
-                  style={{ background: 'var(--app-glass-bg)', borderColor: 'var(--app-glass-border)' }}
+              {/* Right: Export */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowExportMenu(!showExportMenu)}
+                  className="flex items-center gap-2 px-4 py-2 border rounded-lg hover:bg-[var(--app-glass-bg-strong)] transition-colors"
+                  style={{ borderColor: 'var(--app-glass-border)', color: 'var(--app-text)' }}
                 >
-                  <button className="w-full px-4 py-2 text-left text-sm hover:bg-[var(--app-glass-bg-strong)]" style={{ color: 'var(--app-text)' }}>
-                    {t("task.exportPdf")}
-                  </button>
-                  <button className="w-full px-4 py-2 text-left text-sm hover:bg-[var(--app-glass-bg-strong)]" style={{ color: 'var(--app-text)' }}>
-                    {t("task.exportWord")}
-                  </button>
-                  <button className="w-full px-4 py-2 text-left text-sm hover:bg-[var(--app-glass-bg-strong)]" style={{ color: 'var(--app-text)' }}>
-                    {t("task.exportMarkdown")}
-                  </button>
-                </div>
-              )}
+                  <span className="text-sm" style={{ fontWeight: 500 }}>{t("task.export")}</span>
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+
+                {showExportMenu && (
+                  <div
+                    className="absolute right-0 mt-2 w-48 rounded-lg shadow-lg border overflow-hidden z-10"
+                    style={{ background: 'var(--app-glass-bg)', borderColor: 'var(--app-glass-border)' }}
+                  >
+                    <button className="w-full px-4 py-2 text-left text-sm hover:bg-[var(--app-glass-bg-strong)]" style={{ color: 'var(--app-text)' }}>
+                      {t("task.exportPdf")}
+                    </button>
+                    <button className="w-full px-4 py-2 text-left text-sm hover:bg-[var(--app-glass-bg-strong)]" style={{ color: 'var(--app-text)' }}>
+                      {t("task.exportWord")}
+                    </button>
+                    <button className="w-full px-4 py-2 text-left text-sm hover:bg-[var(--app-glass-bg-strong)]" style={{ color: 'var(--app-text)' }}>
+                      {t("task.exportMarkdown")}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
 
           {/* Player Bar */}
           <div className="px-6 py-4" style={{ background: 'var(--app-glass-bg)' }}>
@@ -939,10 +1179,24 @@ export default function TaskDetail({
                 {activeTab === 'summary' && (
                   <div className="space-y-6">
                     <div>
-                      <h3 className="text-lg mb-2" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
-                        {t("task.summaryOverview")}
-                      </h3>
-                      {summaryOverview.length > 0 ? (
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-lg" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
+                          {t("task.summaryOverview")}
+                        </h3>
+                        <button
+                          onClick={() => regenerateSummary('overview')}
+                          disabled={summaryStreaming.overview}
+                          className="text-xs px-3 py-1 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          style={{ background: 'var(--app-primary-soft)', color: 'var(--app-primary)' }}
+                        >
+                          {summaryStreaming.overview ? t("task.summaryRetrying") : t("task.summaryRetry")}
+                        </button>
+                      </div>
+                      {summaryStreaming.overview && summaryStreamContent.overview ? (
+                        <p className="text-base leading-7" style={{ color: 'var(--app-text)' }}>
+                          {summaryStreamContent.overview}
+                        </p>
+                      ) : summaryOverview.length > 0 ? (
                         summaryOverview.map((line, index) => (
                           <p key={index} className="text-base leading-7" style={{ color: 'var(--app-text)' }}>
                             {line}
@@ -955,93 +1209,115 @@ export default function TaskDetail({
                       )}
                     </div>
 
-                    <div>
-                      <h3 className="text-lg mb-2" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
-                        {t("task.keyPointsTitle")}
-                      </h3>
-                      {keyPoints.length > 0 ? (
-                        <ol className="space-y-2 text-base leading-7" style={{ color: 'var(--app-text)' }}>
-                          {keyPoints.map((point, index) => (
-                            <li key={point.text}>{index + 1}. {point.text}</li>
-                          ))}
-                        </ol>
-                      ) : (
-                        <p className="text-base leading-7" style={{ color: 'var(--app-text-subtle)' }}>
-                          {t("task.keyPointsEmpty")}
-                        </p>
-                      )}
-                    </div>
                   </div>
                 )}
 
                 {/* Key Points Tab */}
                 {activeTab === 'keypoints' && (
                   <div className="space-y-4">
-                    {keyPoints.map((point, index) => (
-                      <div key={index} className="flex items-start gap-3">
-                        <div className="flex-shrink-0 mt-1">
-                          <Lightbulb className="w-5 h-5" style={{ color: 'var(--app-warning)' }} />
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
+                        {t("task.keyPointsTitle")}
+                      </h3>
+                      <button
+                        onClick={() => regenerateSummary('key_points')}
+                        disabled={summaryStreaming.key_points}
+                        className="text-xs px-3 py-1 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        style={{ background: 'var(--app-primary-soft)', color: 'var(--app-primary)' }}
+                      >
+                        {summaryStreaming.key_points ? t("task.summaryRetrying") : t("task.summaryRetry")}
+                      </button>
+                    </div>
+                    {summaryStreaming.key_points && summaryStreamContent.key_points ? (
+                      <p className="text-base leading-7" style={{ color: 'var(--app-text)' }}>
+                        {summaryStreamContent.key_points}
+                      </p>
+                    ) : (
+                      keyPoints.map((point, index) => (
+                        <div key={index} className="flex items-start gap-3">
+                          <div className="flex-shrink-0 mt-1">
+                            <Lightbulb className="w-5 h-5" style={{ color: 'var(--app-warning)' }} />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-base mb-1" style={{ color: 'var(--app-text)' }}>
+                              {point.text}
+                            </p>
+                            <button
+                              onClick={() => handleTimeClick(point.timeReference)}
+                              className="text-sm hover:underline"
+                              style={{ color: 'var(--app-primary)' }}
+                            >
+                              ↗{point.timeReference} {t("task.keyPointDetail")}
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex-1">
-                          <p className="text-base mb-1" style={{ color: 'var(--app-text)' }}>
-                            {point.text}
-                          </p>
-                          <button
-                            onClick={() => handleTimeClick(point.timeReference)}
-                            className="text-sm hover:underline"
-                            style={{ color: 'var(--app-primary)' }}
-                          >
-                            ↗{point.timeReference} {t("task.keyPointDetail")}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 )}
 
                 {/* Action Items Tab */}
                 {activeTab === 'actions' && (
                   <div className="space-y-4">
-                    {actionItems.map((item) => (
-                      <div
-                        key={item.id}
-                        className="flex items-start gap-3 p-3 rounded-lg border transition-colors"
-                        style={{
-                          borderColor: 'var(--app-glass-border)',
-                          background: item.completed ? 'var(--app-glass-bg-strong)' : 'var(--app-glass-bg)'
-                        }}
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
+                        {t("task.tabs.actions")}
+                      </h3>
+                      <button
+                        onClick={() => regenerateSummary('action_items')}
+                        disabled={summaryStreaming.action_items}
+                        className="text-xs px-3 py-1 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        style={{ background: 'var(--app-primary-soft)', color: 'var(--app-primary)' }}
                       >
-                        <button
-                          onClick={() => toggleActionItem(item.id)}
-                          className="flex-shrink-0 mt-0.5"
+                        {summaryStreaming.action_items ? t("task.summaryRetrying") : t("task.summaryRetry")}
+                      </button>
+                    </div>
+                    {summaryStreaming.action_items && summaryStreamContent.action_items ? (
+                      <p className="text-base leading-7" style={{ color: 'var(--app-text)' }}>
+                        {summaryStreamContent.action_items}
+                      </p>
+                    ) : (
+                      actionItems.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-start gap-3 p-3 rounded-lg border transition-colors"
+                          style={{
+                            borderColor: 'var(--app-glass-border)',
+                            background: item.completed ? 'var(--app-glass-bg-strong)' : 'var(--app-glass-bg)'
+                          }}
                         >
-                          {item.completed ? (
-                            <CheckSquare className="w-5 h-5" style={{ color: 'var(--app-success)' }} />
-                          ) : (
-                            <div
-                              className="w-5 h-5 border-2 rounded"
-                              style={{ borderColor: 'var(--app-glass-border)' }}
-                            />
-                          )}
-                        </button>
-                        <div className="flex-1">
-                          <p
-                            className="text-base mb-1"
-                            style={{
-                              color: item.completed ? 'var(--app-text-subtle)' : 'var(--app-text)',
-                              textDecoration: item.completed ? 'line-through' : 'none'
-                            }}
+                          <button
+                            onClick={() => toggleActionItem(item.id)}
+                            className="flex-shrink-0 mt-0.5"
                           >
-                            {item.task}
-                          </p>
-                          <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--app-text-muted)' }}>
-                            <span>@{item.assignee}</span>
-                            <span>·</span>
-                            <span>{t("task.deadline", { date: item.deadline })}</span>
+                            {item.completed ? (
+                              <CheckSquare className="w-5 h-5" style={{ color: 'var(--app-success)' }} />
+                            ) : (
+                              <div
+                                className="w-5 h-5 border-2 rounded"
+                                style={{ borderColor: 'var(--app-glass-border)' }}
+                              />
+                            )}
+                          </button>
+                          <div className="flex-1">
+                            <p
+                              className="text-base mb-1"
+                              style={{
+                                color: item.completed ? 'var(--app-text-subtle)' : 'var(--app-text)',
+                                textDecoration: item.completed ? 'line-through' : 'none'
+                              }}
+                            >
+                              {item.task}
+                            </p>
+                            <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--app-text-muted)' }}>
+                              <span>@{item.assignee}</span>
+                              <span>·</span>
+                              <span>{t("task.deadline", { date: item.deadline })}</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 )}
               </div>
