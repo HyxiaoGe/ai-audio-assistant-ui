@@ -620,88 +620,34 @@ export default function TaskDetail({
     setCurrentTime(time);
   };
 
-  // 同步音频播放状态
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    const updateTime = () => {
-      if (audio.currentTime !== undefined && !isNaN(audio.currentTime)) {
-        setCurrentTime(audio.currentTime);
-      }
-    };
-    const handleEnded = () => setIsPlaying(false);
-    const handlePause = () => setIsPlaying(false);
-    const handlePlay = () => setIsPlaying(true);
-    const handleLoadedMetadata = () => {
-      if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
-        setAudioDuration(audio.duration);
-      }
-    };
-
-    audio.addEventListener('timeupdate', updateTime);
-    audio.addEventListener('ended', handleEnded);
-    audio.addEventListener('pause', handlePause);
-    audio.addEventListener('play', handlePlay);
-    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-
-    // 如果元数据已经加载，立即设置 duration
-    if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
-      setAudioDuration(audio.duration);
+  const handleAudioTimeUpdate = () => {
+    if (!audioRef.current) return;
+    const { currentTime: time } = audioRef.current;
+    if (time !== undefined && !isNaN(time)) {
+      setCurrentTime(time);
     }
+  };
 
-    // Fallback: Manual polling for currentTime when playing (in case timeupdate doesn't fire consistently)
-    let intervalId: NodeJS.Timeout | null = null;
-    const handlePlayForInterval = () => {
-      intervalId = setInterval(() => {
-        if (audio && !audio.paused && !audio.ended) {
-          updateTime();
-        }
-      }, 100); // Update every 100ms for smooth progress
-    };
-    const handlePauseForInterval = () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-        intervalId = null;
-      }
-    };
-    const handleEndedForInterval = () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-        intervalId = null;
-      }
-    };
+  const handleAudioEnded = () => setIsPlaying(false);
 
-    audio.addEventListener('play', handlePlayForInterval);
-    audio.addEventListener('pause', handlePauseForInterval);
-    audio.addEventListener('ended', handleEndedForInterval);
+  const handleAudioPause = () => setIsPlaying(false);
 
-    // If already playing, start interval
-    if (!audio.paused && !audio.ended) {
-      handlePlayForInterval();
+  const handleAudioPlay = () => setIsPlaying(true);
+
+  const handleAudioLoadedMetadata = () => {
+    if (!audioRef.current) return;
+    const duration = audioRef.current.duration;
+    if (duration && !isNaN(duration) && isFinite(duration)) {
+      setAudioDuration(duration);
     }
-
-    return () => {
-      audio.removeEventListener('timeupdate', updateTime);
-      audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('pause', handlePause);
-      audio.removeEventListener('play', handlePlay);
-      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.removeEventListener('play', handlePlayForInterval);
-      audio.removeEventListener('pause', handlePauseForInterval);
-      audio.removeEventListener('ended', handleEndedForInterval);
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
-    };
-  }, [task?.audio_url]); // 当 audio_url 变化时重新注册事件监听器
+  };
 
   const handleTimeClick = (time: string) => {
     // Convert time string to seconds
     const [mins, secs] = time.split(':').map(Number);
     if (Number.isNaN(mins) || Number.isNaN(secs)) return;
     const totalSeconds = mins * 60 + secs;
-    setCurrentTime(totalSeconds);
+    handleSeek(totalSeconds);
   };
 
   const handleEditTranscript = (segmentId: string, newContent: string) => {
@@ -1041,6 +987,11 @@ export default function TaskDetail({
           src={task.audio_url}
           preload="metadata"
           crossOrigin="anonymous"
+          onTimeUpdate={handleAudioTimeUpdate}
+          onEnded={handleAudioEnded}
+          onPause={handleAudioPause}
+          onPlay={handleAudioPlay}
+          onLoadedMetadata={handleAudioLoadedMetadata}
         />
       )}
 
