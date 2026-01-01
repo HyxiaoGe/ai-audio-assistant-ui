@@ -10,13 +10,18 @@ const buttonVariants = cva(
     variants: {
       variant: {
         // Primary: 背景 #0F172A，文字白色
-        default: "bg-[#0F172A] text-white hover:bg-[#1E293B] focus-visible:ring-[#3B82F6]",
+        default:
+          "bg-[var(--app-button-primary-bg)] text-[var(--app-button-primary-text)] hover:bg-[var(--app-button-primary-hover)] focus-visible:ring-[var(--app-primary)]",
         // Secondary: 背景白色，边框 #E2E8F0，文字 #0F172A
-        secondary: "bg-white border border-[#E2E8F0] text-[#0F172A] hover:bg-[#F8FAFC] focus-visible:ring-[#3B82F6]",
+        secondary:
+          "glass-control text-[var(--app-text)] hover:bg-[var(--app-glass-hover)] focus-visible:ring-[var(--app-primary)]",
         // Ghost: 背景透明，文字 #64748B
-        ghost: "bg-transparent text-[#64748B] hover:bg-[#F8FAFC] hover:text-[#0F172A] focus-visible:ring-[#3B82F6]",
-        destructive: "bg-[#EF4444] text-white hover:bg-[#DC2626] focus-visible:ring-[#EF4444]",
-        outline: "border border-[#E2E8F0] bg-background text-foreground hover:bg-accent hover:text-accent-foreground",
+        ghost:
+          "bg-transparent text-[var(--app-text-muted)] hover:bg-[var(--app-glass-hover)] hover:text-[var(--app-text)] focus-visible:ring-[var(--app-primary)]",
+        destructive:
+          "bg-[var(--app-danger)] text-white hover:bg-[var(--app-danger-strong)] focus-visible:ring-[var(--app-danger)]",
+        outline:
+          "glass-control text-[var(--app-text)] hover:bg-[var(--app-glass-hover)] hover:text-[var(--app-text)]",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

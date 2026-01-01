@@ -1,20 +1,85 @@
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import type { TaskStatus } from "@/types"
-
-const statusConfig: Record<TaskStatus, { label: string; className: string }> = {
-  pending: { label: "待处理", className: "bg-gray-100 text-gray-600" },
-  processing: { label: "处理中", className: "bg-blue-100 text-blue-600" },
-  completed: { label: "已完成", className: "bg-green-100 text-green-600" },
-  failed: { label: "失败", className: "bg-red-100 text-red-600" },
-}
+import { useI18n } from "@/lib/i18n-context"
 
 interface StatusBadgeProps {
   status: TaskStatus
 }
 
 export const StatusBadge = ({ status }: StatusBadgeProps) => {
-  const config = statusConfig[status]
+  const { t } = useI18n()
+  const statusConfig: Partial<Record<TaskStatus, { label: string; className: string }>> = {
+    pending: {
+      label: t("task.status.pending"),
+      className: "bg-[var(--app-glass-bg-strong)] text-[var(--app-text-muted)]"
+    },
+    processing: {
+      label: t("status.processing"),
+      className: "bg-[var(--app-primary-soft)] text-[var(--app-primary)]"
+    },
+    queued: {
+      label: t("task.status.pending"),
+      className: "bg-[var(--app-glass-bg-strong)] text-[var(--app-text-muted)]"
+    },
+    resolving: {
+      label: t("status.processing"),
+      className: "bg-[var(--app-primary-soft)] text-[var(--app-primary)]"
+    },
+    downloading: {
+      label: t("status.processing"),
+      className: "bg-[var(--app-primary-soft)] text-[var(--app-primary)]"
+    },
+    downloaded: {
+      label: t("status.processing"),
+      className: "bg-[var(--app-primary-soft)] text-[var(--app-primary)]"
+    },
+    transcoding: {
+      label: t("status.processing"),
+      className: "bg-[var(--app-primary-soft)] text-[var(--app-primary)]"
+    },
+    uploading: {
+      label: t("status.processing"),
+      className: "bg-[var(--app-primary-soft)] text-[var(--app-primary)]"
+    },
+    uploaded: {
+      label: t("status.processing"),
+      className: "bg-[var(--app-primary-soft)] text-[var(--app-primary)]"
+    },
+    resolved: {
+      label: t("status.processing"),
+      className: "bg-[var(--app-primary-soft)] text-[var(--app-primary)]"
+    },
+    extracting: {
+      label: t("status.processing"),
+      className: "bg-[var(--app-primary-soft)] text-[var(--app-primary)]"
+    },
+    asr_submitting: {
+      label: t("status.processing"),
+      className: "bg-[var(--app-primary-soft)] text-[var(--app-primary)]"
+    },
+    asr_polling: {
+      label: t("status.processing"),
+      className: "bg-[var(--app-primary-soft)] text-[var(--app-primary)]"
+    },
+    transcribing: {
+      label: t("status.processing"),
+      className: "bg-[var(--app-primary-soft)] text-[var(--app-primary)]"
+    },
+    summarizing: {
+      label: t("status.processing"),
+      className: "bg-[var(--app-primary-soft)] text-[var(--app-primary)]"
+    },
+    completed: {
+      label: t("task.status.completed"),
+      className: "bg-[var(--app-success-bg)] text-[var(--app-success)]"
+    },
+    failed: {
+      label: t("task.status.failed"),
+      className: "bg-[var(--app-danger-bg)] text-[var(--app-danger)]"
+    },
+  }
+  const config = statusConfig[status] || statusConfig.pending!
   return (
     <Badge variant="secondary" className={cn("font-normal", config.className)}>
       {config.label}

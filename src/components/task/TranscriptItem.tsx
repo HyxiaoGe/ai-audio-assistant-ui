@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Edit2, Check, X, ChevronDown } from 'lucide-react';
+import { useI18n } from '@/lib/i18n-context';
 
 interface Speaker {
   name: string;
@@ -23,7 +24,7 @@ export default function TranscriptItem({
   startTime,
   endTime,
   content,
-  avatarColor = '#3B82F6',
+  avatarColor = 'var(--app-primary)',
   availableSpeakers = [],
   onEdit = () => {},
   onTimeClick = () => {},
@@ -33,6 +34,7 @@ export default function TranscriptItem({
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(content);
   const [showSpeakerMenu, setShowSpeakerMenu] = useState(false);
+  const { t } = useI18n();
 
   // 获取说话人首字母
   const getInitials = (name: string) => {
@@ -63,8 +65,8 @@ export default function TranscriptItem({
     <div
       className="px-4 py-4 transition-colors cursor-default border-b relative"
       style={{
-        background: isHovered || isEditing ? '#F8FAFC' : '#FFFFFF',
-        borderColor: '#F1F5F9'
+        background: isHovered || isEditing ? 'var(--app-glass-hover)' : 'var(--app-glass-bg)',
+        borderColor: 'var(--app-glass-border)'
       }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -76,7 +78,7 @@ export default function TranscriptItem({
           <div className="relative">
             <button
               onClick={() => setShowSpeakerMenu(!showSpeakerMenu)}
-              className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-gray-100 transition-colors group"
+              className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-[var(--app-glass-hover)] transition-colors group"
             >
               <div
                 className="flex items-center justify-center rounded-full text-white text-xs ring-2 ring-transparent group-hover:ring-gray-300 transition-all"
@@ -91,35 +93,35 @@ export default function TranscriptItem({
               </div>
 
               {/* Speaker Name */}
-              <span className="text-sm" style={{ fontWeight: 500, color: '#0F172A' }}>
+              <span className="text-sm" style={{ fontWeight: 500, color: 'var(--app-text)' }}>
                 {speaker}
               </span>
 
               {/* Dropdown indicator */}
               <ChevronDown 
                 className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" 
-                style={{ color: '#94A3B8' }}
+                style={{ color: 'var(--app-text-subtle)' }}
               />
             </button>
 
             {/* Speaker Selection Menu */}
             {showSpeakerMenu && (
               <div
-                className="absolute left-0 top-full mt-1 w-48 rounded-lg shadow-lg border overflow-hidden z-20"
-                style={{ background: '#FFFFFF', borderColor: '#E2E8F0' }}
+                className="glass-panel-strong absolute left-0 top-full mt-1 w-48 rounded-lg border overflow-hidden z-20"
+                style={{ borderColor: 'var(--app-glass-border)' }}
                 onMouseLeave={() => setShowSpeakerMenu(false)}
               >
                 <div className="py-1">
-                  <div className="px-3 py-1.5 text-xs" style={{ color: '#94A3B8', fontWeight: 500 }}>
-                    选择说话人
+                  <div className="px-3 py-1.5 text-xs" style={{ color: 'var(--app-text-subtle)', fontWeight: 500 }}>
+                    {t("transcript.selectSpeaker")}
                   </div>
                   {availableSpeakers.map((spk, index) => (
                     <button
                       key={index}
                       onClick={() => handleSpeakerSelect(spk.name, spk.color)}
-                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 transition-colors"
+                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-[var(--app-glass-hover)] transition-colors"
                       style={{
-                        background: spk.name === speaker ? '#F8FAFC' : 'transparent'
+                        background: spk.name === speaker ? 'var(--app-glass-bg-strong)' : 'transparent'
                       }}
                     >
                       <div
@@ -133,11 +135,11 @@ export default function TranscriptItem({
                       >
                         {getInitials(spk.name)}
                       </div>
-                      <span className="text-sm" style={{ color: '#0F172A' }}>
+                      <span className="text-sm" style={{ color: 'var(--app-text)' }}>
                         {spk.name}
                       </span>
                       {spk.name === speaker && (
-                        <Check className="w-3.5 h-3.5 ml-auto" style={{ color: '#3B82F6' }} />
+                        <Check className="w-3.5 h-3.5 ml-auto" style={{ color: 'var(--app-primary)' }} />
                       )}
                     </button>
                   ))}
@@ -150,7 +152,7 @@ export default function TranscriptItem({
           <button
             onClick={() => onTimeClick(startTime)}
             className="text-xs hover:underline"
-            style={{ color: '#94A3B8' }}
+            style={{ color: 'var(--app-text-subtle)' }}
           >
             ({startTime} - {endTime})
           </button>
@@ -161,30 +163,30 @@ export default function TranscriptItem({
           <div className="flex items-center gap-2">
             <button
               onClick={handleSaveEdit}
-              className="flex items-center gap-1 px-2 py-1 rounded hover:bg-green-100 transition-colors"
-              style={{ color: '#10B981' }}
+              className="flex items-center gap-1 px-2 py-1 rounded hover:bg-[var(--app-success-bg)] transition-colors"
+              style={{ color: 'var(--app-success)' }}
             >
               <Check className="w-3.5 h-3.5" />
-              <span className="text-xs">保存</span>
+              <span className="text-xs">{t("common.save")}</span>
             </button>
             <button
               onClick={handleCancelEdit}
-              className="flex items-center gap-1 px-2 py-1 rounded hover:bg-red-100 transition-colors"
-              style={{ color: '#EF4444' }}
+              className="flex items-center gap-1 px-2 py-1 rounded hover:bg-[var(--app-danger-bg)] transition-colors"
+              style={{ color: 'var(--app-danger)' }}
             >
               <X className="w-3.5 h-3.5" />
-              <span className="text-xs">取消</span>
+              <span className="text-xs">{t("common.cancel")}</span>
             </button>
           </div>
         ) : (
           isHovered && (
             <button
               onClick={handleStartEdit}
-              className="flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-200 transition-colors"
-              style={{ color: '#64748B' }}
+              className="flex items-center gap-1 px-2 py-1 rounded hover:bg-[var(--app-glass-hover)] transition-colors"
+              style={{ color: 'var(--app-text-muted)' }}
             >
               <Edit2 className="w-3.5 h-3.5" />
-              <span className="text-xs">编辑</span>
+              <span className="text-xs">{t("common.edit")}</span>
             </button>
           )
         )}
@@ -195,11 +197,11 @@ export default function TranscriptItem({
         <textarea
           value={editedContent}
           onChange={(e) => setEditedContent(e.target.value)}
-          className="w-full px-3 py-2 border rounded-lg text-base leading-relaxed resize-none"
+          className="glass-control w-full px-3 py-2 rounded-lg text-base leading-relaxed resize-none"
           style={{ 
-            color: '#0F172A', 
+            color: 'var(--app-text)', 
             lineHeight: '24px',
-            borderColor: '#3B82F6',
+            borderColor: 'var(--app-primary)',
             minHeight: '100px'
           }}
           autoFocus
@@ -207,7 +209,7 @@ export default function TranscriptItem({
       ) : (
         <p
           className="text-base leading-relaxed"
-          style={{ color: '#0F172A', lineHeight: '24px' }}
+          style={{ color: 'var(--app-text)', lineHeight: '24px' }}
         >
           {content}
         </p>

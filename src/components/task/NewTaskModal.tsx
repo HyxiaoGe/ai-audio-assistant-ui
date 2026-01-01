@@ -1,50 +1,45 @@
 "use client";
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { notifyError, notifySuccess } from '@/lib/notify';
 import { X, Link as LinkIcon, ChevronDown, ChevronUp } from 'lucide-react';
 import TabSwitch from './TabSwitch';
 import UploadZone from './UploadZone';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
+import { useAPIClient } from '@/lib/use-api-client';
+import { useFileUpload } from '@/hooks/use-file-upload';
+import type { TaskOptions } from '@/types/api';
+import { useI18n } from '@/lib/i18n-context';
 
 interface NewTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: TaskData) => void;
-}
-
-export interface TaskData {
-  type: 'upload' | 'link';
-  file?: File;
-  videoUrl?: string;
-  platform?: 'youtube' | 'bilibili';
-  options: {
-    language: string;
-    speakerDiarization: boolean;
-    summaryStyle: string;
-  };
 }
 
 type Platform = 'youtube' | 'bilibili';
 
-export default function NewTaskModal({ isOpen, onClose, onSubmit }: NewTaskModalProps) {
+export default function NewTaskModal({ isOpen, onClose }: NewTaskModalProps) {
+  const router = useRouter();
+  const client = useAPIClient();
+  const { state: uploadState, uploadFile, reset, isUploading } = useFileUpload();
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState('upload');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [videoUrl, setVideoUrl] = useState('');
   const [selectedPlatform, setSelectedPlatform] = useState<Platform>('youtube');
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
   const [advancedOptions, setAdvancedOptions] = useState({
     language: 'auto',
     speakerDiarization: true,
     summaryStyle: 'meeting'
   });
-  const uploadTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const tabs = [
-    { id: 'upload', label: '上传文件' },
-    { id: 'link', label: '复制链接' }
+    { id: 'upload', label: t("newTask.tabs.upload") },
+    { id: 'link', label: t("newTask.tabs.link") }
   ];
 
   const platformTabs = [
@@ -70,71 +65,76 @@ export default function NewTaskModal({ isOpen, onClose, onSubmit }: NewTaskModal
   };
 
   const handleFileSelect = (file: File) => {
+    reset();
     setSelectedFile(file);
-    setIsUploading(true);
-    setUploadProgress(0);
-    if (uploadTimerRef.current) {
-      clearInterval(uploadTimerRef.current);
-    }
-
-    // Simulate upload
-    uploadTimerRef.current = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 100) {
-          if (uploadTimerRef.current) {
-            clearInterval(uploadTimerRef.current);
-            uploadTimerRef.current = null;
-          }
-          setIsUploading(false);
-          return 100;
-        }
-        return prev + 10;
-      });
-    }, 300);
   };
 
   const handleFileRemove = () => {
-    if (uploadTimerRef.current) {
-      clearInterval(uploadTimerRef.current);
-      uploadTimerRef.current = null;
-    }
+    reset();
     setSelectedFile(null);
-    setIsUploading(false);
-    setUploadProgress(0);
   };
 
-  const handleSubmit = () => {
-    const taskData: TaskData = {
-      type: activeTab as 'upload' | 'link',
-      file: selectedFile || undefined,
-      videoUrl: videoUrl || undefined,
-      platform: selectedPlatform,
-      options: advancedOptions
+  const buildOptions = (): TaskOptions => {
+    const summaryStyleMap: Record<string, TaskOptions["summary_style"]> = {
+      meeting: "meeting",
+      lecture: "learning",
+      podcast: "interview",
     };
 
-    onSubmit(taskData);
-    handleClose();
+    return {
+      language: advancedOptions.language as TaskOptions["language"],
+      enable_speaker_diarization: advancedOptions.speakerDiarization,
+      summary_style: summaryStyleMap[advancedOptions.summaryStyle] || "meeting",
+    };
+  };
+
+  const handleSubmit = async () => {
+    if (activeTab === 'upload') {
+      if (!selectedFile || isUploading) return;
+      try {
+        await uploadFile(selectedFile, buildOptions());
+        handleClose();
+      } catch {
+        // useFileUpload handles toast
+      }
+      return;
+    }
+
+    if (!videoUrl.trim()) return;
+
+    setIsCreating(true);
+    try {
+      const task = await client.createTask({
+        source_type: 'youtube',
+        source_url: videoUrl.trim(),
+        options: buildOptions(),
+      });
+      notifySuccess(t("upload.taskCreated"));
+      handleClose();
+      router.push(`/tasks/${task.id}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("newTask.createFailed");
+      notifyError(message, { persist: false });
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const handleClose = () => {
     // Reset state
-    if (uploadTimerRef.current) {
-      clearInterval(uploadTimerRef.current);
-      uploadTimerRef.current = null;
-    }
+    reset();
     setActiveTab('upload');
     setSelectedFile(null);
-    setIsUploading(false);
-    setUploadProgress(0);
     setVideoUrl('');
     setSelectedPlatform('youtube');
     setShowAdvanced(false);
+    setIsCreating(false);
     onClose();
   };
 
-  const canSubmit = activeTab === 'upload' 
-    ? selectedFile && !isUploading 
-    : videoUrl.trim().length > 0;
+  const canSubmit = activeTab === 'upload'
+    ? selectedFile && !isUploading
+    : videoUrl.trim().length > 0 && !isCreating;
 
   if (!isOpen) return null;
 
@@ -145,22 +145,21 @@ export default function NewTaskModal({ isOpen, onClose, onSubmit }: NewTaskModal
       onClick={handleClose}
     >
       <div 
-        className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl"
-        style={{ background: '#FFFFFF' }}
+        className="glass-panel-strong relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div 
           className="sticky top-0 z-10 flex items-center justify-between px-8 py-6 border-b"
-          style={{ background: '#FFFFFF', borderColor: '#E2E8F0' }}
+          style={{ background: 'var(--app-glass-bg-strong)', borderColor: 'var(--app-glass-border)' }}
         >
-          <h2 className="text-2xl" style={{ fontWeight: 600, color: '#0F172A' }}>
-            新建任务
+          <h2 className="text-2xl" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
+            {t("task.newTask")}
           </h2>
           <button
             onClick={handleClose}
-            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-            style={{ color: '#64748B' }}
+            className="p-2 rounded-lg hover:bg-[var(--app-glass-hover)] transition-colors"
+            style={{ color: 'var(--app-text-muted)' }}
           >
             <X className="w-6 h-6" />
           </button>
@@ -185,7 +184,7 @@ export default function NewTaskModal({ isOpen, onClose, onSubmit }: NewTaskModal
                 <UploadZone
                   onFileSelect={handleFileSelect}
                   onFileRemove={handleFileRemove}
-                  uploadProgress={uploadProgress}
+                  uploadProgress={uploadState.progress}
                   uploadedFile={selectedFile}
                   isUploading={isUploading}
                 />
@@ -195,7 +194,10 @@ export default function NewTaskModal({ isOpen, onClose, onSubmit }: NewTaskModal
               <div className="space-y-6">
                 {/* Platform Selection */}
                 <div className="flex justify-center">
-                  <div className="inline-flex rounded-lg border p-1" style={{ borderColor: '#E2E8F0', background: '#F8FAFC' }}>
+                  <div
+                    className="inline-flex rounded-lg border p-1"
+                    style={{ borderColor: 'var(--app-glass-border)', background: 'var(--app-glass-bg)' }}
+                  >
                     {platformTabs.map((tab) => {
                       const isActive = tab.id === selectedPlatform;
                       return (
@@ -204,10 +206,11 @@ export default function NewTaskModal({ isOpen, onClose, onSubmit }: NewTaskModal
                           onClick={() => setSelectedPlatform(tab.id as Platform)}
                           className="px-6 py-2 rounded-md text-sm transition-all"
                           style={{
-                            background: isActive ? '#FFFFFF' : 'transparent',
-                            color: isActive ? '#0F172A' : '#64748B',
+                            background: isActive ? 'var(--app-glass-bg-strong)' : 'transparent',
+                            color: isActive ? 'var(--app-text)' : 'var(--app-text-muted)',
                             fontWeight: isActive ? 500 : 400,
-                            boxShadow: isActive ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                            boxShadow: isActive ? 'var(--app-glass-shadow)' : 'none',
+                            border: isActive ? '1px solid var(--app-glass-border)' : '1px solid transparent'
                           }}
                         >
                           {tab.label}
@@ -220,9 +223,11 @@ export default function NewTaskModal({ isOpen, onClose, onSubmit }: NewTaskModal
                 {/* URL Input */}
                 <div className="space-y-4">
                   <div className="flex items-center gap-2">
-                    <LinkIcon className="w-5 h-5" style={{ color: '#64748B' }} />
-                    <h3 className="text-base" style={{ fontWeight: 500, color: '#0F172A' }}>
-                      粘贴 {selectedPlatform === 'youtube' ? 'YouTube' : 'Bilibili'} 视频链接
+                    <LinkIcon className="w-5 h-5" style={{ color: 'var(--app-text-muted)' }} />
+                    <h3 className="text-base" style={{ fontWeight: 500, color: 'var(--app-text)' }}>
+                      {t("newTask.pasteLink", {
+                        platform: selectedPlatform === 'youtube' ? 'YouTube' : 'Bilibili'
+                      })}
                     </h3>
                   </div>
 
@@ -234,8 +239,8 @@ export default function NewTaskModal({ isOpen, onClose, onSubmit }: NewTaskModal
                     className="w-full"
                   />
 
-                  <div className="space-y-1" style={{ color: '#94A3B8', fontSize: '14px' }}>
-                    <p>支持格式：</p>
+                  <div className="space-y-1" style={{ color: 'var(--app-text-subtle)', fontSize: '14px' }}>
+                    <p>{t("newTask.supportedFormats")}</p>
                     <ul className="list-disc list-inside pl-2 space-y-1">
                       {platformInfo[selectedPlatform].formats.map((format, index) => (
                         <li key={index}>{format}</li>
@@ -251,9 +256,9 @@ export default function NewTaskModal({ isOpen, onClose, onSubmit }: NewTaskModal
               <button
                 onClick={() => setShowAdvanced(!showAdvanced)}
                 className="flex items-center gap-2 text-sm hover:opacity-70 transition-opacity"
-                style={{ color: '#64748B' }}
+                style={{ color: 'var(--app-text-muted)' }}
               >
-                <span>高级选项</span>
+                <span>{t("newTask.advancedOptions")}</span>
                 {showAdvanced ? (
                   <ChevronUp className="w-4 h-4" />
                 ) : (
@@ -262,28 +267,28 @@ export default function NewTaskModal({ isOpen, onClose, onSubmit }: NewTaskModal
               </button>
 
               {showAdvanced && (
-                <div className="border rounded-lg p-6 space-y-4" style={{ borderColor: '#E2E8F0' }}>
+                <div className="border rounded-lg p-6 space-y-4" style={{ borderColor: 'var(--app-glass-border)', background: 'var(--app-glass-bg)' }}>
                   {/* Language Selection */}
                   <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                    <label className="text-sm sm:w-32" style={{ color: '#64748B' }}>
-                      语言：
+                    <label className="text-sm sm:w-32" style={{ color: 'var(--app-text-muted)' }}>
+                      {t("newTask.language")}：
                     </label>
                     <select
                       value={advancedOptions.language}
                       onChange={(e) => setAdvancedOptions({ ...advancedOptions, language: e.target.value })}
-                      className="flex-1 sm:max-w-xs px-3 py-2 border rounded-lg text-sm"
-                      style={{ borderColor: '#E2E8F0', color: '#0F172A' }}
+                      className="glass-control flex-1 sm:max-w-xs px-3 py-2 rounded-lg text-sm"
+                      style={{ color: 'var(--app-text)' }}
                     >
-                      <option value="auto">自动检测</option>
-                      <option value="zh">中文</option>
-                      <option value="en">English</option>
+                      <option value="auto">{t("task.languageAuto")}</option>
+                      <option value="zh">{t("task.languageZh")}</option>
+                      <option value="en">{t("task.languageEn")}</option>
                     </select>
                   </div>
 
                   {/* Speaker Diarization */}
                   <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                    <label className="text-sm sm:w-32" style={{ color: '#64748B' }}>
-                      说话人分离：
+                    <label className="text-sm sm:w-32" style={{ color: 'var(--app-text-muted)' }}>
+                      {t("newTask.speakerDiarization")}：
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
@@ -292,24 +297,24 @@ export default function NewTaskModal({ isOpen, onClose, onSubmit }: NewTaskModal
                         onChange={(e) => setAdvancedOptions({ ...advancedOptions, speakerDiarization: e.target.checked })}
                         className="w-4 h-4"
                       />
-                      <span className="text-sm" style={{ color: '#0F172A' }}>启用</span>
+                      <span className="text-sm" style={{ color: 'var(--app-text)' }}>{t("newTask.enabled")}</span>
                     </label>
                   </div>
 
                   {/* Summary Style */}
                   <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                    <label className="text-sm sm:w-32" style={{ color: '#64748B' }}>
-                      摘要风格：
+                    <label className="text-sm sm:w-32" style={{ color: 'var(--app-text-muted)' }}>
+                      {t("newTask.summaryStyle")}：
                     </label>
                     <select
                       value={advancedOptions.summaryStyle}
                       onChange={(e) => setAdvancedOptions({ ...advancedOptions, summaryStyle: e.target.value })}
-                      className="flex-1 sm:max-w-xs px-3 py-2 border rounded-lg text-sm"
-                      style={{ borderColor: '#E2E8F0', color: '#0F172A' }}
+                      className="glass-control flex-1 sm:max-w-xs px-3 py-2 rounded-lg text-sm"
+                      style={{ color: 'var(--app-text)' }}
                     >
-                      <option value="meeting">会议纪要</option>
-                      <option value="lecture">讲座笔记</option>
-                      <option value="podcast">播客摘要</option>
+                      <option value="meeting">{t("newTask.summaryMeeting")}</option>
+                      <option value="lecture">{t("newTask.summaryLecture")}</option>
+                      <option value="podcast">{t("newTask.summaryPodcast")}</option>
                     </select>
                   </div>
                 </div>
@@ -321,31 +326,31 @@ export default function NewTaskModal({ isOpen, onClose, onSubmit }: NewTaskModal
         {/* Footer */}
         <div 
           className="sticky bottom-0 flex items-center justify-end gap-3 px-8 py-6 border-t"
-          style={{ background: '#FFFFFF', borderColor: '#E2E8F0' }}
+          style={{ background: 'var(--app-glass-bg-strong)', borderColor: 'var(--app-glass-border)' }}
         >
           <Button
             onClick={handleClose}
-            className="px-6 py-2 rounded-lg text-sm transition-colors"
+            className="glass-control px-6 py-2 rounded-lg text-sm"
             style={{
-              background: 'transparent',
-              color: '#64748B',
-              border: '1px solid #E2E8F0'
+              color: 'var(--app-text-muted)',
             }}
           >
-            取消
+            {t("common.cancel")}
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={!canSubmit}
+            disabled={!canSubmit || isCreating}
             className="px-8 py-2 rounded-lg text-sm transition-all"
             style={{
-              background: canSubmit ? '#3B82F6' : '#E2E8F0',
-              color: canSubmit ? '#FFFFFF' : '#94A3B8',
+              background: (canSubmit && !isCreating) ? 'var(--app-primary)' : 'var(--app-glass-border)',
+              color: (canSubmit && !isCreating) ? 'var(--app-button-primary-text)' : 'var(--app-text-subtle)',
               fontWeight: 600,
-              cursor: canSubmit ? 'pointer' : 'not-allowed'
+              cursor: (canSubmit && !isCreating) ? 'pointer' : 'not-allowed'
             }}
           >
-            开始处理
+            {isCreating && activeTab === 'link'
+              ? t("newTask.validatingVideo")
+              : t("newTask.startProcessing")}
           </Button>
         </div>
       </div>

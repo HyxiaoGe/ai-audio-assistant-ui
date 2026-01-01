@@ -16,9 +16,13 @@
 # next.js
 /.next/
 /out/
+/logs
 
 # production
 /build
+.vscode
+.claude
+
 
 /_vite_backup/
 
@@ -43,3 +47,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+AGENTS.md
+CLAUDE.md

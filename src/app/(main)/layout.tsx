@@ -1,5 +1,13 @@
-const MainLayout = ({ children }: { children: React.ReactNode }) => {
-  return <>{children}</>
-}
+import { GlobalWebSocketProvider } from "@/components/providers/GlobalWebSocketProvider";
+import { ToastProvider } from "@/components/providers/ToastProvider";
 
-export default MainLayout
+const MainLayout = ({ children }: { children: React.ReactNode }) => {
+  return (
+    <GlobalWebSocketProvider>
+      <ToastProvider />
+      {children}
+    </GlobalWebSocketProvider>
+  );
+};
+
+export default MainLayout;

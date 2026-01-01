@@ -7,73 +7,207 @@ import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
 import TaskCard from '@/components/task/TaskCard';
 import EmptyState from '@/components/common/EmptyState';
-import { getStoredTasks, mockTasks, Task } from '@/data/mockTasks';
+import { useAPIClient } from '@/lib/use-api-client';
+import { useDateFormatter } from '@/lib/use-date-formatter';
+import { ApiError } from '@/types/api';
+import type { TaskListItem, TaskStatus } from '@/types/api';
+import { useI18n } from '@/lib/i18n-context';
+import { notifyError, notifySuccess } from '@/lib/notify';
 
 interface TaskListProps {
   isAuthenticated: boolean;
-  onLogout: () => void;
   onOpenLogin: () => void;
+  onOpenNewTask?: () => void;
   language?: 'zh' | 'en';
-  theme?: 'light' | 'dark';
   onToggleLanguage?: () => void;
   onToggleTheme?: () => void;
 }
 
 export default function TaskList({
   isAuthenticated,
-  onLogout,
   onOpenLogin,
+  onOpenNewTask,
   language = 'zh',
-  theme = 'light',
   onToggleLanguage = () => {},
   onToggleTheme = () => {}
 }: TaskListProps) {
   const router = useRouter();
-  const [tasks, setTasks] = useState<Task[]>(mockTasks);
+  const client = useAPIClient();
+  const { formatRelativeTime } = useDateFormatter();
+  const { t } = useI18n();
+  const [tasks, setTasks] = useState<TaskListItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [totalTasks, setTotalTasks] = useState(0);
+  const [statusCounts, setStatusCounts] = useState({
+    all: 0,
+    processing: 0,
+    completed: 0,
+    failed: 0
+  });
   const [filterStatus, setFilterStatus] = useState<'all' | 'processing' | 'completed' | 'failed'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [retryingTaskId, setRetryingTaskId] = useState<string | null>(null);
   const tasksPerPage = 10;
 
   useEffect(() => {
-    const stored = getStoredTasks();
-    if (stored.length) {
-      const merged = [...stored, ...mockTasks].filter(
-        (task, index, list) => list.findIndex((item) => item.id === task.id) === index
-      );
-      setTasks(merged);
+    if (!isAuthenticated) {
+      setTasks([]);
+      setLoading(false);
+      setError(null);
+      setTotalTasks(0);
+      return;
     }
-  }, []);
+
+    let isMounted = true;
+    const loadTasks = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const statusParam = filterStatus === 'processing' ? 'processing' : filterStatus;
+
+        const result = await client.getTasks({
+          page: currentPage,
+          page_size: tasksPerPage,
+          status: statusParam as TaskStatus | 'all',
+        });
+        if (isMounted) {
+          setTasks(result.items);
+          setTotalTasks(result.total);
+        }
+      } catch (err) {
+        if (isMounted) {
+          if (err instanceof ApiError) {
+            setError(err.message);
+            if (err.code >= 40100 && err.code < 40200) {
+              onOpenLogin();
+            }
+          } else {
+            setError(err instanceof Error ? err.message : t("errors.loadTaskFailed"));
+          }
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadTasks();
+    return () => {
+      isMounted = false;
+    };
+  }, [client, currentPage, filterStatus, isAuthenticated, onOpenLogin, t]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setStatusCounts({ all: 0, processing: 0, completed: 0, failed: 0 });
+      return;
+    }
+
+    let isMounted = true;
+    const loadCounts = async () => {
+      try {
+        const [allRes, completedRes, failedRes, processingRes] =
+          await Promise.all([
+            client.getTasks({ page: 1, page_size: 1, status: 'all' }),
+            client.getTasks({ page: 1, page_size: 1, status: 'completed' }),
+            client.getTasks({ page: 1, page_size: 1, status: 'failed' }),
+            client.getTasks({ page: 1, page_size: 1, status: 'processing' })
+          ]);
+
+        if (!isMounted) return;
+
+        setStatusCounts({
+          all: allRes.total,
+          processing: processingRes.total,
+          completed: completedRes.total,
+          failed: failedRes.total
+        });
+      } catch (err) {
+        if (err instanceof ApiError && err.code >= 40100 && err.code < 40200) {
+          onOpenLogin();
+        }
+      }
+    };
+
+    loadCounts();
+    return () => {
+      isMounted = false;
+    };
+  }, [client, isAuthenticated, onOpenLogin]);
+
+  const formatDurationLabel = (seconds?: number) => {
+    if (!seconds || seconds <= 0) return '--';
+    const minutes = Math.round(seconds / 60);
+    if (minutes < 60) return t("time.minutes", { count: minutes });
+    const hours = Math.floor(minutes / 60);
+    const remainder = minutes % 60;
+    return remainder === 0
+      ? t("time.hours", { count: hours })
+      : t("time.hoursMinutes", { hours, minutes: remainder });
+  };
+
+  const displayStatus = (status: TaskStatus) => {
+    if (status === 'completed') return 'completed';
+    if (status === 'failed') return 'failed';
+    return 'processing';
+  };
 
   const handleTaskClick = (taskId: string) => {
     router.push(`/tasks/${taskId}`);
   };
 
-  // 先按状态筛选
-  const statusFilteredTasks = tasks.filter(task => {
-    if (filterStatus === 'all') return true;
-    return task.status === filterStatus;
-  });
+  const handleRetryTask = async (taskId: string) => {
+    if (retryingTaskId) return;
 
-  // 再按搜索关键词筛选
-  const filteredTasks = statusFilteredTasks.filter(task => {
+    setRetryingTaskId(taskId);
+    try {
+      const result = await client.retryTask(taskId, false);
+      if (result.action === 'duplicate_found') {
+        const duplicateId = result.duplicate_task_id;
+        if (!duplicateId) {
+          notifyError(t("task.retryFailed"));
+          return;
+        }
+
+        const failedIds = result.failed_task_ids || [];
+        if (failedIds.length > 0 && typeof window !== "undefined") {
+          const storageKey = `task-cleanup:${duplicateId}`;
+          window.sessionStorage.setItem(
+            storageKey,
+            JSON.stringify({ failedTaskIds: failedIds, savedAt: Date.now() })
+          );
+        }
+
+        router.push(`/tasks/${duplicateId}`);
+        return;
+      }
+
+      notifySuccess(t("task.retrySuccess"));
+    } catch (err) {
+      if (err instanceof ApiError) {
+        notifyError(err.message);
+      } else {
+        notifyError(t("task.retryFailed"));
+      }
+    } finally {
+      setRetryingTaskId(null);
+    }
+  };
+
+  // 搜索关键词筛选（当前页数据）
+  const filteredTasks = tasks.filter(task => {
     if (!searchQuery.trim()) return true;
     return task.title.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
-  // 计算分页
-  const totalPages = Math.ceil(filteredTasks.length / tasksPerPage);
+  // 计算分页（服务端已分页，这里只显示当前页数据）
+  const totalPages = Math.ceil(totalTasks / tasksPerPage);
   const startIndex = (currentPage - 1) * tasksPerPage;
-  const endIndex = startIndex + tasksPerPage;
-  const currentTasks = filteredTasks.slice(startIndex, endIndex);
-
-  // 状态统计（基于搜索结果）
-  const statusCounts = {
-    all: tasks.length,
-    processing: tasks.filter(t => t.status === 'processing').length,
-    completed: tasks.filter(t => t.status === 'completed').length,
-    failed: tasks.filter(t => t.status === 'failed').length
-  };
+  const endIndex = startIndex + filteredTasks.length;
+  const currentTasks = filteredTasks;
 
   // 切换状态时重置到第一页
   const handleStatusChange = (status: 'all' | 'processing' | 'completed' | 'failed') => {
@@ -93,14 +227,26 @@ export default function TaskList({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const getStatusText = (status: string): string => {
+    switch (status) {
+      case 'processing':
+        return t("tasks.filterProcessing");
+      case 'completed':
+        return t("tasks.filterCompleted");
+      case 'failed':
+        return t("tasks.filterFailed");
+      default:
+        return '';
+    }
+  };
+
   return (
-    <div className="h-screen flex flex-col" style={{ background: '#FFFFFF' }}>
+    <div className="h-screen flex flex-col" style={{ background: "var(--app-bg)" }}>
       {/* Header */}
-      <Header
-        isAuthenticated={isAuthenticated}
+      <Header 
+        isAuthenticated={isAuthenticated} 
         onOpenLogin={onOpenLogin}
         language={language}
-        theme={theme}
         onToggleLanguage={onToggleLanguage}
         onToggleTheme={onToggleTheme}
       />
@@ -116,12 +262,12 @@ export default function TaskList({
           <div className="mb-6">
             <h2
               className="text-h2"
-              style={{ color: '#0F172A' }}
+              style={{ color: "var(--app-text)" }}
             >
-              所有任务
+              {t("tasks.pageTitle")}
             </h2>
-            <p className="text-base mt-2" style={{ color: '#64748B' }}>
-              管理和查看你的所有音视频处理任务
+            <p className="text-base mt-2" style={{ color: "var(--app-text-muted)" }}>
+              {t("tasks.pageSubtitle")}
             </p>
           </div>
 
@@ -129,47 +275,31 @@ export default function TaskList({
           <div className="flex items-center gap-3 mb-6">
             <button
               onClick={() => handleStatusChange('all')}
-              className="px-4 py-2 rounded-lg text-sm transition-all"
-              style={{
-                background: filterStatus === 'all' ? '#3B82F6' : '#F8FAFC',
-                color: filterStatus === 'all' ? '#FFFFFF' : '#64748B',
-                fontWeight: filterStatus === 'all' ? 500 : 400
-              }}
+              className="glass-chip px-4 py-2 rounded-lg text-sm"
+              data-active={filterStatus === 'all'}
             >
-              全部 ({statusCounts.all})
+              {t("tasks.filterAll")} ({statusCounts.all})
             </button>
             <button
               onClick={() => handleStatusChange('processing')}
-              className="px-4 py-2 rounded-lg text-sm transition-all"
-              style={{
-                background: filterStatus === 'processing' ? '#3B82F6' : '#F8FAFC',
-                color: filterStatus === 'processing' ? '#FFFFFF' : '#64748B',
-                fontWeight: filterStatus === 'processing' ? 500 : 400
-              }}
+              className="glass-chip px-4 py-2 rounded-lg text-sm"
+              data-active={filterStatus === 'processing'}
             >
-              处理中 ({statusCounts.processing})
+              {t("tasks.filterProcessing")} ({statusCounts.processing})
             </button>
             <button
               onClick={() => handleStatusChange('completed')}
-              className="px-4 py-2 rounded-lg text-sm transition-all"
-              style={{
-                background: filterStatus === 'completed' ? '#3B82F6' : '#F8FAFC',
-                color: filterStatus === 'completed' ? '#FFFFFF' : '#64748B',
-                fontWeight: filterStatus === 'completed' ? 500 : 400
-              }}
+              className="glass-chip px-4 py-2 rounded-lg text-sm"
+              data-active={filterStatus === 'completed'}
             >
-              已完成 ({statusCounts.completed})
+              {t("tasks.filterCompleted")} ({statusCounts.completed})
             </button>
             <button
               onClick={() => handleStatusChange('failed')}
-              className="px-4 py-2 rounded-lg text-sm transition-all"
-              style={{
-                background: filterStatus === 'failed' ? '#3B82F6' : '#F8FAFC',
-                color: filterStatus === 'failed' ? '#FFFFFF' : '#64748B',
-                fontWeight: filterStatus === 'failed' ? 500 : 400
-              }}
+              className="glass-chip px-4 py-2 rounded-lg text-sm"
+              data-active={filterStatus === 'failed'}
             >
-              失败 ({statusCounts.failed})
+              {t("tasks.filterFailed")} ({statusCounts.failed})
             </button>
           </div>
 
@@ -177,51 +307,71 @@ export default function TaskList({
           <div className="mb-6">
             <div className="relative max-w-md">
               <div className="absolute left-3 top-1/2 -translate-y-1/2">
-                <Search className="w-5 h-5" style={{ color: '#94A3B8' }} />
+                <Search className="w-5 h-5" style={{ color: "var(--app-text-subtle)" }} />
               </div>
               <input
                 type="text"
-                placeholder="搜索任务标题..."
+                placeholder={t("tasks.searchPlaceholder")}
                 value={searchQuery}
                 onChange={(e) => handleSearchChange(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 rounded-lg border transition-colors text-sm"
+                className="glass-control w-full pl-10 pr-4 py-2.5 rounded-lg text-sm"
                 style={{
-                  borderColor: searchQuery ? '#3B82F6' : '#E2E8F0',
-                  color: '#0F172A'
+                  color: "var(--app-text)"
                 }}
               />
               {searchQuery && (
                 <div className="absolute right-3 top-1/2 -translate-y-1/2">
                   <button
                     onClick={() => handleSearchChange('')}
-                    className="text-xs px-2 py-1 rounded hover:bg-gray-100"
-                    style={{ color: '#94A3B8' }}
+                    className="glass-chip text-xs px-2 py-1 rounded"
+                    style={{ color: "var(--app-text-subtle)" }}
                   >
-                    清除
+                    {t("tasks.clearSearch")}
                   </button>
                 </div>
               )}
             </div>
             {searchQuery && (
-              <p className="mt-2 text-sm" style={{ color: '#64748B' }}>
-                找到 {filteredTasks.length} 个结果
+              <p className="mt-2 text-sm" style={{ color: "var(--app-text-muted)" }}>
+                {t("tasks.searchResults", { count: filteredTasks.length })}
               </p>
             )}
           </div>
 
           {/* 任务列表 */}
           <div className="space-y-3">
-            {currentTasks.length > 0 ? (
+            {!isAuthenticated ? (
+              <EmptyState
+                variant="default"
+                title={t("tasks.loginToViewTitle")}
+                description={t("tasks.loginToViewDescription")}
+                action={{
+                  label: t("dashboard.goLogin"),
+                  onClick: onOpenLogin,
+                  variant: 'primary'
+                }}
+              />
+            ) : loading ? (
+              <div className="text-sm" style={{ color: "var(--app-text-muted)" }}>
+                {t("common.loading")}...
+              </div>
+            ) : error ? (
+              <div className="text-sm" style={{ color: "var(--app-danger)" }}>
+                {error}
+              </div>
+            ) : currentTasks.length > 0 ? (
               currentTasks.map((task) => (
                 <TaskCard
                   key={task.id}
                   id={task.id}
                   title={task.title}
-                  duration={task.duration}
-                  timeAgo={task.timeAgo}
-                  status={task.status}
-                  type={task.type}
+                  duration={formatDurationLabel(task.duration_seconds)}
+                  timeAgo={formatRelativeTime(task.created_at)}
+                  status={displayStatus(task.status)}
+                  type={task.source_type === 'youtube' ? 'video' : 'file'}
                   onClick={() => handleTaskClick(task.id)}
+                  onRetry={() => handleRetryTask(task.id)}
+                  isRetrying={retryingTaskId === task.id}
                 />
               ))
             ) : (
@@ -229,10 +379,10 @@ export default function TaskList({
               searchQuery ? (
                 <EmptyState
                   variant="search"
-                  title="没有找到任务"
-                  description="尝试调整筛选条件或搜索关键词"
+                  title={t("tasks.noResultTitle")}
+                  description={t("tasks.noResultDescription")}
                   action={{
-                    label: '清除筛选',
+                    label: t("tasks.clearFilters"),
                     onClick: () => {
                       setSearchQuery('');
                       setFilterStatus('all');
@@ -243,14 +393,20 @@ export default function TaskList({
               ) : (
                 <EmptyState
                   variant="default"
-                  title={`暂无${filterStatus === 'all' ? '' : getStatusText(filterStatus)}任务`}
-                  description={filterStatus === 'all' ? '创建新任务开始使用' : '切换其他筛选条件查看'}
+                  title={filterStatus === "all"
+                    ? t("tasks.noTaskTitleAll")
+                    : t("tasks.noTaskTitle", { status: getStatusText(filterStatus) })}
+                  description={filterStatus === 'all' ? t("tasks.noTaskDescriptionAll") : t("tasks.noTaskDescriptionFiltered")}
                   action={filterStatus === 'all' ? {
-                    label: '+ 创建任务',
-                    onClick: () => router.push('/new-task'),
+                    label: t("dashboard.createTask"),
+                    onClick: () => {
+                      if (onOpenNewTask) {
+                        onOpenNewTask()
+                      }
+                    },
                     variant: 'primary'
                   } : {
-                    label: '查看全部',
+                    label: t("tasks.viewAll"),
                     onClick: () => setFilterStatus('all'),
                     variant: 'secondary'
                   }}
@@ -265,12 +421,7 @@ export default function TaskList({
               <button
                 onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1}
-                className="flex items-center justify-center w-9 h-9 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{
-                  background: currentPage > 1 ? '#F8FAFC' : '#F8FAFC',
-                  color: '#64748B',
-                  border: '1px solid #E2E8F0'
-                }}
+                className="glass-chip flex items-center justify-center w-9 h-9 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
@@ -288,13 +439,8 @@ export default function TaskList({
                       <button
                         key={page}
                         onClick={() => handlePageChange(page)}
-                        className="flex items-center justify-center min-w-9 h-9 px-3 rounded-lg text-sm transition-all"
-                        style={{
-                          background: page === currentPage ? '#3B82F6' : '#F8FAFC',
-                          color: page === currentPage ? '#FFFFFF' : '#64748B',
-                          fontWeight: page === currentPage ? 500 : 400,
-                          border: page === currentPage ? 'none' : '1px solid #E2E8F0'
-                        }}
+                        className="glass-chip flex items-center justify-center min-w-9 h-9 px-3 rounded-lg text-sm"
+                        data-active={page === currentPage}
                       >
                         {page}
                       </button>
@@ -307,7 +453,7 @@ export default function TaskList({
                       <span
                         key={page}
                         className="flex items-center justify-center w-9 h-9 text-sm"
-                        style={{ color: '#94A3B8' }}
+                        style={{ color: "var(--app-text-subtle)" }}
                       >
                         ...
                       </span>
@@ -320,12 +466,7 @@ export default function TaskList({
               <button
                 onClick={() => handlePageChange(currentPage + 1)}
                 disabled={currentPage === totalPages}
-                className="flex items-center justify-center w-9 h-9 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{
-                  background: currentPage < totalPages ? '#F8FAFC' : '#F8FAFC',
-                  color: '#64748B',
-                  border: '1px solid #E2E8F0'
-                }}
+                className="glass-chip flex items-center justify-center w-9 h-9 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
@@ -335,8 +476,12 @@ export default function TaskList({
           {/* 分页信息 */}
           {filteredTasks.length > 0 && (
             <div className="text-center mt-4">
-              <p className="text-sm" style={{ color: '#94A3B8' }}>
-                显示 {startIndex + 1}-{Math.min(endIndex, filteredTasks.length)} 条，共 {filteredTasks.length} 条
+              <p className="text-sm" style={{ color: "var(--app-text-subtle)" }}>
+                {t("tasks.pagination", {
+                  from: startIndex + 1,
+                  to: Math.min(endIndex, totalTasks),
+                  total: totalTasks
+                })}
               </p>
             </div>
           )}
@@ -344,17 +489,4 @@ export default function TaskList({
       </div>
     </div>
   );
-}
-
-function getStatusText(status: string): string {
-  switch (status) {
-    case 'processing':
-      return '处理中';
-    case 'completed':
-      return '已完成';
-    case 'failed':
-      return '失败';
-    default:
-      return '';
-  }
 }

@@ -8,7 +8,7 @@ function Card({ className, ...props }: React.ComponentProps<"div">) {
       data-slot="card"
       className={cn(
         // 背景白色，边框 1px #E2E8F0，圆角 12px
-        "bg-white text-card-foreground flex flex-col rounded-xl border border-[#E2E8F0]",
+        "glass-panel text-[var(--app-text)] flex flex-col rounded-xl",
         className,
       )}
       {...props}

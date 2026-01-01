@@ -1,4 +1,21 @@
-export type TaskStatus = "pending" | "processing" | "completed" | "failed"
+export type TaskStatus =
+  | "pending"
+  | "processing"
+  | "queued"
+  | "resolving"
+  | "downloading"
+  | "downloaded"
+  | "transcoding"
+  | "uploading"
+  | "uploaded"
+  | "resolved"
+  | "extracting"
+  | "asr_submitting"
+  | "asr_polling"
+  | "transcribing"
+  | "summarizing"
+  | "completed"
+  | "failed"
 
 export interface TranscriptSegment {
   id: string

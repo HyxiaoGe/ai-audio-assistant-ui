@@ -18,19 +18,62 @@ export const authConfig: NextAuthConfig = {
     signIn: "/login",
   },
   callbacks: {
-    authorized({ auth: session, request }) {
-      const isLoggedIn = !!session?.user
-      const isMockAuthed = request?.cookies.get("mock_auth")?.value === "1"
-      const isOnDashboard =
-        request.nextUrl.pathname.startsWith("/tasks") ||
-        request.nextUrl.pathname.startsWith("/settings") ||
-        request.nextUrl.pathname === "/"
-
-      if (isOnDashboard) {
-        if (isLoggedIn || isMockAuthed) return true
+    async signIn({ user, account }) {
+      if (!account?.provider || !account?.providerAccountId) {
         return false
       }
 
+      const baseUrl =
+        process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL
+      if (!baseUrl) {
+        return false
+      }
+
+      const syncUrl = /\/api\/v1\/?$/.test(baseUrl)
+        ? `${baseUrl}/auth/sync`
+        : `${baseUrl}/api/v1/auth/sync`
+
+      try {
+        const res = await fetch(syncUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            provider: account.provider,
+            provider_account_id: account.providerAccountId,
+            email: user.email,
+            name: user.name,
+            avatar_url: user.image,
+          }),
+        })
+
+        if (!res.ok) {
+          return false
+        }
+
+        const data = await res.json()
+        if (data.code !== 0 || !data.data?.user_id) {
+          return false
+        }
+
+        ;(user as { id?: string }).id = data.data.user_id
+        return true
+      } catch {
+        return false
+      }
+    },
+    async jwt({ token, user }) {
+      if (user) {
+        ;(token as { sub?: string }).sub = (user as { id?: string }).id
+      }
+      return token
+    },
+    async session({ session, token }) {
+      if (session.user && token.sub) {
+        ;(session.user as { id?: string }).id = token.sub
+      }
+      return session
+    },
+    authorized() {
       return true
     },
   },

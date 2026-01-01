@@ -11,7 +11,7 @@ interface TabSwitchProps {
 
 export default function TabSwitch({ tabs, activeTab, onTabChange }: TabSwitchProps) {
   return (
-    <div className="inline-flex border-b" style={{ borderColor: '#E2E8F0' }}>
+    <div className="inline-flex border-b" style={{ borderColor: 'var(--app-glass-border)' }}>
       {tabs.map((tab) => {
         const isActive = tab.id === activeTab;
         return (
@@ -20,7 +20,7 @@ export default function TabSwitch({ tabs, activeTab, onTabChange }: TabSwitchPro
             onClick={() => onTabChange(tab.id)}
             className="px-8 py-3 relative transition-colors whitespace-nowrap"
             style={{
-              color: isActive ? '#0F172A' : '#64748B',
+              color: isActive ? 'var(--app-text)' : 'var(--app-text-muted)',
               fontWeight: isActive ? 500 : 400,
               fontSize: '16px'
             }}
@@ -29,7 +29,7 @@ export default function TabSwitch({ tabs, activeTab, onTabChange }: TabSwitchPro
             {isActive && (
               <div
                 className="absolute bottom-0 left-0 right-0 h-[3px]"
-                style={{ background: '#3B82F6' }}
+                style={{ background: 'var(--app-primary)' }}
               />
             )}
           </button>

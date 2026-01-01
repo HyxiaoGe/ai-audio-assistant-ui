@@ -1,4 +1,5 @@
-import { AlertCircle, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
+import { useI18n } from '@/lib/i18n-context';
 
 interface ErrorStateProps {
   type?: 'network' | 'processing' | 'general';
@@ -13,24 +14,25 @@ export default function ErrorState({
   title,
   description,
   onRetry,
-  retryLabel = '重试'
+  retryLabel
 }: ErrorStateProps) {
+  const { t } = useI18n();
   // 默认配置
   const configs = {
     network: {
       icon: '❌',
-      defaultTitle: '网络连接失败',
-      defaultDescription: '请检查网络后重试'
+      defaultTitle: t("errors.networkFailedTitle"),
+      defaultDescription: t("errors.networkFailedDesc")
     },
     processing: {
       icon: '⚠️',
-      defaultTitle: '处理失败',
-      defaultDescription: '任务处理失败，请重试'
+      defaultTitle: t("errors.processFailedTitle"),
+      defaultDescription: t("errors.processFailedDesc")
     },
     general: {
       icon: '⚠️',
-      defaultTitle: '出错了',
-      defaultDescription: '发生了一些错误'
+      defaultTitle: t("errors.unknownErrorTitle"),
+      defaultDescription: t("errors.unknownError")
     }
   };
 
@@ -54,7 +56,7 @@ export default function ErrorState({
       <h3 
         className="text-xl mb-2"
         style={{ 
-          color: '#0F172A',
+          color: "var(--app-text)",
           fontWeight: 600
         }}
       >
@@ -64,7 +66,7 @@ export default function ErrorState({
       {/* Description */}
       <p 
         className="text-base mb-6 text-center max-w-sm"
-        style={{ color: '#64748B' }}
+        style={{ color: "var(--app-text-muted)" }}
       >
         {description || config.defaultDescription}
       </p>
@@ -75,13 +77,13 @@ export default function ErrorState({
           onClick={onRetry}
           className="flex items-center gap-2 px-6 py-2.5 rounded-lg transition-all text-sm"
           style={{
-            background: '#3B82F6',
-            color: '#FFFFFF',
+            background: "var(--app-primary)",
+            color: "var(--app-button-primary-text)",
             fontWeight: 500
           }}
         >
           <RefreshCw className="w-4 h-4" />
-          {retryLabel}
+          {retryLabel || t("common.retry")}
         </button>
       )}
     </div>

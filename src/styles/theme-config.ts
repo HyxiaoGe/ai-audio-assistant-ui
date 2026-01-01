@@ -170,15 +170,20 @@ export function getTheme(theme: Theme): ThemeColors {
 export function getColor(theme: Theme, path: string): string {
   const colors = getTheme(theme);
   const keys = path.split('.');
-  let value: any = colors;
+  let value: unknown = colors;
   
   for (const key of keys) {
-    value = value[key];
-    if (value === undefined) {
+    if (typeof value !== "object" || value === null) {
       console.warn(`Color path "${path}" not found in theme`);
       return '';
     }
+    const record = value as Record<string, unknown>;
+    if (!(key in record)) {
+      console.warn(`Color path "${path}" not found in theme`);
+      return '';
+    }
+    value = record[key];
   }
   
-  return value as string;
+  return typeof value === "string" ? value : "";
 }

@@ -3,7 +3,7 @@
 import type React from "react";
 import { BarChart3, Settings, List } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
-import { getTheme, Theme } from '@/styles/theme-config';
+import { useI18n } from '@/lib/i18n-context';
 
 interface SidebarItemProps {
   icon: React.ReactNode;
@@ -11,31 +11,15 @@ interface SidebarItemProps {
   path: string;
   isActive: boolean;
   onClick: () => void;
-  theme: Theme;
 }
 
-function SidebarItem({ icon, label, isActive, onClick, theme }: SidebarItemProps) {
-  const colors = getTheme(theme);
-  
+function SidebarItem({ icon, label, isActive, onClick }: SidebarItemProps) {
   return (
     <button
       onClick={onClick}
-      className="w-full h-11 flex items-center gap-3 px-4 rounded-lg transition-all relative"
-      style={{
-        background: isActive ? colors.bg.secondary : 'transparent',
-        color: isActive ? colors.text.primary : colors.text.tertiary,
-        fontSize: '14px',
-        fontWeight: isActive ? 500 : 400
-      }}
+      className="sidebar-item relative"
+      data-active={isActive}
     >
-      {/* 左侧蓝色指示条 */}
-      {isActive && (
-        <div 
-          className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r"
-          style={{ background: colors.brand.primary }}
-        />
-      )}
-      
       <div className="w-5 h-5 flex items-center justify-center">
         {icon}
       </div>
@@ -44,29 +28,25 @@ function SidebarItem({ icon, label, isActive, onClick, theme }: SidebarItemProps
   );
 }
 
-interface SidebarProps {
-  theme?: Theme;
-}
-
-export default function Sidebar({ theme = 'light' }: SidebarProps) {
+export default function Sidebar() {
   const router = useRouter();
   const pathname = usePathname();
-  const colors = getTheme(theme);
+  const { t } = useI18n();
 
   const menuItems = [
     {
       icon: <BarChart3 className="w-5 h-5" />,
-      label: '概览',
+      label: t("nav.overview"),
       path: '/'
     },
     {
       icon: <List className="w-5 h-5" />,
-      label: '任务',
+      label: t("nav.tasks"),
       path: '/tasks'
     },
     {
       icon: <Settings className="w-5 h-5" />,
-      label: '设置',
+      label: t("nav.settings"),
       path: '/settings'
     }
   ];
@@ -92,8 +72,10 @@ export default function Sidebar({ theme = 'light' }: SidebarProps) {
     <aside 
       className="w-60 h-full p-4 space-y-1"
       style={{
-        background: colors.bg.tertiary,
-        borderRight: `1px solid ${colors.border.default}`
+        background: "var(--app-glass-bg)",
+        borderRight: "1px solid var(--app-glass-border)",
+        backdropFilter: `blur(var(--app-glass-blur))`,
+        boxShadow: "var(--app-glass-shadow)"
       }}
     >
       {menuItems.map((item) => (
@@ -104,7 +86,6 @@ export default function Sidebar({ theme = 'light' }: SidebarProps) {
           path={item.path}
           isActive={isActive(item.path)}
           onClick={() => router.push(item.path)}
-          theme={theme}
         />
       ))}
     </aside>

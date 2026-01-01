@@ -1,17 +1,20 @@
 "use client";
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { signOut } from 'next-auth/react';
+import { signOut, useSession } from 'next-auth/react';
+import { clearToken } from '@/lib/auth-token';
 import { Moon, Sun, ChevronDown, Mic, LogOut } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { getTheme } from '@/styles/theme-config';
+import { useI18n } from '@/lib/i18n-context';
+import { useTheme } from "next-themes";
+import { useAPIClient } from "@/lib/use-api-client";
+import NotificationBell from '@/components/notifications/NotificationBell';
 
 interface HeaderProps {
   isAuthenticated: boolean;
   onOpenLogin: () => void;
   language?: 'zh' | 'en';
-  theme?: 'light' | 'dark';
   onToggleLanguage?: () => void;
   onToggleTheme?: () => void;
 }
@@ -20,41 +23,84 @@ export default function Header({
   isAuthenticated, 
   onOpenLogin,
   language = 'zh',
-  theme = 'light',
   onToggleLanguage = () => {},
   onToggleTheme = () => {}
 }: HeaderProps) {
-  const colors = getTheme(theme);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const { data: session, update } = useSession();
+  const client = useAPIClient();
+  const { t } = useI18n();
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
+  const [avatarSrc, setAvatarSrc] = useState("");
+  const avatarName = session?.user?.name || session?.user?.email || "U";
+  const resolvedAvatarSrc = avatarSrc || session?.user?.image || "";
+
+  useEffect(() => {
+    if (!session?.user) return;
+    let isMounted = true;
+    const loadProfile = async () => {
+      try {
+        const profile = await client.getCurrentUser();
+        if (!isMounted) return;
+        if (profile?.image_url) {
+          setAvatarSrc(profile.image_url);
+          if (!session.user?.image && typeof update === "function") {
+            await update({ user: { image: profile.image_url } });
+          }
+        }
+      } catch {
+        // Fallback to session user image if profile fetch fails.
+      }
+    };
+    loadProfile();
+    return () => {
+      isMounted = false;
+    };
+  }, [client, session?.user, update]);
+
+  useEffect(() => {
+    if (!isMenuOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (!menuRef.current?.contains(target)) {
+        setIsMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isMenuOpen]);
 
   const handleLogout = async () => {
-    localStorage.removeItem('isAuthenticated');
-    localStorage.removeItem('user');
-    document.cookie = "mock_auth=; path=/; max-age=0; samesite=lax";
+    clearToken();
     await signOut({ callbackUrl: '/' });
   };
   
   return (
     <header 
-      className="h-16 flex items-center justify-between px-6"
+      className="h-16 flex items-center justify-between px-6 sticky top-0 z-40"
       style={{ 
-        background: colors.bg.secondary,
-        borderBottom: `1px solid ${colors.border.default}`
+        background: "var(--app-glass-bg)",
+        borderBottom: "1px solid var(--app-glass-border)",
+        backdropFilter: "blur(var(--app-glass-blur))"
       }}
     >
       {/* 左侧：Logo + 产品名称 */}
       <Link href="/" className="flex items-center gap-2">
         <div 
           className="w-6 h-6 rounded-lg flex items-center justify-center"
-          style={{ background: 'linear-gradient(135deg, #3B82F6 0%, #0F172A 100%)' }}
+          style={{ background: "var(--app-brand-gradient)" }}
         >
           <Mic className="w-4 h-4 text-white" />
         </div>
         <span 
           className="text-base"
-          style={{ fontWeight: 600, color: colors.text.primary }}
+          style={{ fontWeight: 600, color: "var(--app-text)" }}
         >
-          {language === 'zh' ? 'AI 音频助手' : 'AI Audio'}
+          {t("app.name")}
         </span>
       </Link>
 
@@ -64,9 +110,9 @@ export default function Header({
         <button 
           onClick={onToggleLanguage}
           className="text-sm transition-all hover:opacity-70 px-2 py-1 rounded"
-          style={{ color: colors.text.tertiary }}
+          style={{ color: "var(--app-text-muted)" }}
         >
-          {language === 'zh' ? '中/EN' : 'EN/中'}
+          {language === 'zh' ? t("header.languageToggleZh") : t("header.languageToggleEn")}
         </button>
 
         {/* 主题切换 */}
@@ -74,44 +120,51 @@ export default function Header({
           onClick={onToggleTheme}
           className="w-6 h-6 flex items-center justify-center transition-all hover:opacity-70 duration-300"
           style={{ 
-            color: theme === 'dark' ? '#F59E0B' : '#6366F1',
-            transform: theme === 'dark' ? 'rotate(180deg)' : 'rotate(0deg)'
+            color: isDark ? "var(--app-warning)" : "var(--app-primary)",
+            transform: isDark ? 'rotate(180deg)' : 'rotate(0deg)'
           }}
-          title={theme === 'light' ? '切换到深色模式' : '切换到浅色模式'}
+          title={isDark ? t("header.switchToLight") : t("header.switchToDark")}
         >
-          {theme === 'light' ? (
-            <Moon className="w-5 h-5" />
-          ) : (
+          {isDark ? (
             <Sun className="w-5 h-5" />
+          ) : (
+            <Moon className="w-5 h-5" />
           )}
         </button>
 
+        {/* 通知 - 使用新的全局 WebSocket 通知系统 */}
+        <NotificationBell />
+
         {/* 用户头像 + 下拉 */}
         {isAuthenticated ? (
-          <div className="relative">
+          <div className="relative" ref={menuRef}>
             <button
               onClick={() => setIsMenuOpen((prev) => !prev)}
               className="flex items-center gap-2 hover:opacity-70 transition-opacity"
             >
               <Avatar size="sm">
-                <AvatarImage src="https://api.dicebear.com/7.x/avataaars/svg?seed=Sean" />
-                <AvatarFallback>S</AvatarFallback>
+                <AvatarImage
+                  src={resolvedAvatarSrc || undefined}
+                  referrerPolicy="no-referrer"
+                  onError={() => setAvatarSrc("")}
+                />
+                <AvatarFallback>{avatarName.charAt(0).toUpperCase()}</AvatarFallback>
               </Avatar>
-              <ChevronDown className="w-4 h-4" style={{ color: colors.text.tertiary }} />
+              <ChevronDown className="w-4 h-4" style={{ color: "var(--app-text-subtle)" }} />
             </button>
 
             {isMenuOpen && (
               <div
-                className="absolute right-0 mt-2 w-36 rounded-lg border shadow-lg z-10"
-                style={{ background: colors.bg.secondary, borderColor: colors.border.default }}
+                className="glass-panel-strong absolute right-0 mt-2 w-36 rounded-lg border z-10"
+                style={{ borderColor: "var(--app-glass-border)" }}
               >
                 <button
                   onClick={handleLogout}
-                  className="w-full px-3 py-2 flex items-center gap-2 text-sm hover:bg-black/5 transition-colors"
-                  style={{ color: colors.text.primary }}
+                  className="w-full px-3 py-2 flex items-center gap-2 text-sm transition-colors hover:bg-[var(--app-glass-hover)]"
+                  style={{ color: "var(--app-text)" }}
                 >
                   <LogOut className="w-4 h-4" />
-                  退出登录
+                  {t("auth.logout")}
                 </button>
               </div>
             )}
@@ -119,15 +172,14 @@ export default function Header({
         ) : (
           <button
             onClick={onOpenLogin}
-            className="px-4 py-2 rounded-lg border transition-colors"
+            className="glass-control px-4 py-2 rounded-lg"
             style={{
-              borderColor: colors.border.default,
-              color: colors.text.primary,
+              color: "var(--app-text)",
               fontSize: '14px',
               fontWeight: 500
             }}
           >
-            {language === 'zh' ? '登录' : 'Login'}
+            {t("auth.login")}
           </button>
         )}
       </div>

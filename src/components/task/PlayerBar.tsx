@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Play, Pause } from 'lucide-react';
 
 interface PlayerBarProps {
@@ -19,12 +19,7 @@ export default function PlayerBar({
   const [isDragging, setIsDragging] = useState(false);
   const [localTime, setLocalTime] = useState(currentTime);
   const progressBarRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!isDragging) {
-      setLocalTime(currentTime);
-    }
-  }, [currentTime, isDragging]);
+  const displayTime = isDragging ? localTime : currentTime;
 
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -34,49 +29,48 @@ export default function PlayerBar({
 
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
-    handleSeek(e);
-  };
-
-  const handleMouseMove = (e: MouseEvent) => {
-    if (isDragging) {
-      handleSeek(e as any);
-    }
-  };
-
-  const handleMouseUp = () => {
-    if (isDragging) {
-      setIsDragging(false);
-      onSeek(localTime);
-    }
-  };
-
-  const handleSeek = (e: React.MouseEvent | MouseEvent) => {
     if (!progressBarRef.current) return;
-
     const rect = progressBarRef.current.getBoundingClientRect();
-    const x = (e as MouseEvent).clientX - rect.left;
+    const x = e.clientX - rect.left;
     const percentage = Math.max(0, Math.min(1, x / rect.width));
     const newTime = percentage * duration;
     setLocalTime(newTime);
   };
 
   useEffect(() => {
-    if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-      return () => {
-        window.removeEventListener('mousemove', handleMouseMove);
-        window.removeEventListener('mouseup', handleMouseUp);
-      };
-    }
-  }, [isDragging]);
+    if (!isDragging) return;
 
-  const progress = (localTime / duration) * 100;
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!progressBarRef.current) return;
+      const rect = progressBarRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const percentage = Math.max(0, Math.min(1, x / rect.width));
+      const newTime = percentage * duration;
+      setLocalTime(newTime);
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      onSeek(localTime);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [duration, isDragging, localTime, onSeek]);
+
+  // Guard against invalid duration (0, NaN, Infinity)
+  const progress = duration > 0 && isFinite(duration)
+    ? Math.min(100, Math.max(0, (displayTime / duration) * 100))
+    : 0;
 
   return (
     <div 
       className="flex items-center gap-4 w-full rounded-xl px-6 py-4"
-      style={{ background: '#0F172A' }}
+      style={{ background: "var(--app-player-bg)" }}
     >
       {/* Play/Pause Button */}
       <button
@@ -85,19 +79,19 @@ export default function PlayerBar({
         style={{
           width: '48px',
           height: '48px',
-          background: '#FFFFFF'
+          background: "var(--app-player-text)"
         }}
       >
         {isPlaying ? (
-          <Pause className="w-6 h-6" style={{ color: '#0F172A' }} />
+          <Pause className="w-6 h-6" style={{ color: "var(--app-player-bg)" }} />
         ) : (
-          <Play className="w-6 h-6 ml-1" style={{ color: '#0F172A' }} />
+          <Play className="w-6 h-6 ml-1" style={{ color: "var(--app-player-bg)" }} />
         )}
       </button>
 
       {/* Current Time */}
-      <span className="text-sm" style={{ color: 'rgba(255, 255, 255, 0.8)', minWidth: '45px' }}>
-        {formatTime(localTime)}
+      <span className="text-sm" style={{ color: "var(--app-player-text-muted)", minWidth: '45px' }}>
+        {formatTime(displayTime)}
       </span>
 
       {/* Progress Bar */}
@@ -113,7 +107,7 @@ export default function PlayerBar({
             className="w-full rounded-full"
             style={{ 
               height: '4px',
-              background: 'rgba(255, 255, 255, 0.2)'
+              background: "var(--app-player-track)"
             }}
           >
             {/* Fill */}
@@ -121,7 +115,7 @@ export default function PlayerBar({
               className="h-full rounded-full relative transition-all"
               style={{ 
                 width: `${progress}%`,
-                background: '#3B82F6'
+                background: "var(--app-primary)"
               }}
             >
               {/* Knob */}
@@ -130,7 +124,7 @@ export default function PlayerBar({
                 style={{
                   width: '16px',
                   height: '16px',
-                  background: '#FFFFFF',
+                  background: "var(--app-player-text)",
                   boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
                 }}
               />
@@ -140,7 +134,7 @@ export default function PlayerBar({
       </div>
 
       {/* Duration */}
-      <span className="text-sm" style={{ color: 'rgba(255, 255, 255, 0.8)', minWidth: '45px' }}>
+      <span className="text-sm" style={{ color: "var(--app-player-text-muted)", minWidth: '45px' }}>
         {formatTime(duration)}
       </span>
     </div>

@@ -9,6 +9,17 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { useSettings } from '@/lib/settings-context';
+import { useI18n } from '@/lib/i18n-context';
+import { notifyInfo } from '@/lib/notify';
 import { 
   Globe,
   Palette,
@@ -21,46 +32,244 @@ interface SettingsProps {
   isAuthenticated?: boolean;
   onOpenLogin?: () => void;
   language?: 'zh' | 'en';
-  theme?: 'light' | 'dark';
   onToggleLanguage?: () => void;
   onToggleTheme?: () => void;
 }
+
+type LocalSettings = {
+  emailNotifications: boolean;
+  pushNotifications: boolean;
+  defaultLanguage: string;
+  summaryDetail: string;
+};
+
+const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
+  emailNotifications: true,
+  pushNotifications: false,
+  defaultLanguage: "auto",
+  summaryDetail: "medium",
+};
+
+const loadLocalSettings = (): LocalSettings => {
+  if (typeof window === "undefined") return DEFAULT_LOCAL_SETTINGS;
+  const saved = localStorage.getItem("settings");
+  if (!saved) return DEFAULT_LOCAL_SETTINGS;
+  try {
+    const parsed = JSON.parse(saved) as Partial<LocalSettings> & {
+      emailNotifications?: boolean;
+      pushNotifications?: boolean;
+      defaultLanguage?: string;
+      summaryDetail?: string;
+    };
+    const normalizedDefaultLanguage =
+      parsed.defaultLanguage === "zh-CN"
+        ? "zh"
+        : parsed.defaultLanguage === "en-US"
+          ? "en"
+          : parsed.defaultLanguage;
+    return {
+      emailNotifications:
+        typeof parsed.emailNotifications === "boolean"
+          ? parsed.emailNotifications
+          : DEFAULT_LOCAL_SETTINGS.emailNotifications,
+      pushNotifications:
+        typeof parsed.pushNotifications === "boolean"
+          ? parsed.pushNotifications
+          : DEFAULT_LOCAL_SETTINGS.pushNotifications,
+      defaultLanguage: normalizedDefaultLanguage || DEFAULT_LOCAL_SETTINGS.defaultLanguage,
+      summaryDetail: parsed.summaryDetail || DEFAULT_LOCAL_SETTINGS.summaryDetail,
+    };
+  } catch {
+    return DEFAULT_LOCAL_SETTINGS;
+  }
+};
 
 export default function Settings({ 
   isAuthenticated = false, 
   onOpenLogin = () => {},
   language = 'zh',
-  theme = 'light',
   onToggleLanguage = () => {},
   onToggleTheme = () => {}
 }: SettingsProps) {
-  const [languageState, setLanguageState] = useState('zh-CN');
-  const [themeState, setThemeState] = useState('light');
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [pushNotifications, setPushNotifications] = useState(false);
+  const {
+    locale,
+    theme: currentTheme,
+    timeZone,
+    hourCycle,
+    setLocale,
+    setTheme,
+    setTimeZone,
+    setHourCycle,
+  } = useSettings();
+  const [localSettings, setLocalSettings] = useState<LocalSettings>(() => loadLocalSettings());
   const [saved, setSaved] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<"clearTasks" | "deleteAccount" | "resetSettings" | null>(null);
+  const { t } = useI18n();
+
+  const languageState = locale;
+  const themeState = currentTheme;
+  const timeZoneState = timeZone;
+  const hourCycleState = hourCycle;
+  const {
+    emailNotifications,
+    pushNotifications,
+    defaultLanguage: defaultLanguageState,
+    summaryDetail: summaryDetailState,
+  } = localSettings;
+
+  const persistLocalSettings = (partial: Record<string, unknown>) => {
+    const saved = localStorage.getItem("settings");
+    const current = saved ? JSON.parse(saved) : {};
+    localStorage.setItem("settings", JSON.stringify({ ...current, ...partial }));
+  };
+
+  const openConfirm = (action: "clearTasks" | "deleteAccount" | "resetSettings") => {
+    setConfirmAction(action);
+    setConfirmOpen(true);
+  };
+
+  const resetAllSettings = () => {
+    localStorage.removeItem("settings");
+    setLocalSettings(DEFAULT_LOCAL_SETTINGS);
+    setLocale("zh-CN");
+    setTheme("system");
+    setTimeZone("auto");
+    setHourCycle("auto");
+    notifyInfo(t("settings.resetSuccess"), { persist: false });
+  };
+
+  const handleConfirm = () => {
+    if (!confirmAction) return;
+    if (confirmAction === "resetSettings") {
+      resetAllSettings();
+    } else if (confirmAction === "clearTasks") {
+      notifyInfo(t("settings.clearTasksSuccess"), { persist: false });
+    } else if (confirmAction === "deleteAccount") {
+      notifyInfo(t("settings.deleteAccountSuccess"), { persist: false });
+    }
+    setConfirmOpen(false);
+    setConfirmAction(null);
+  };
+
+  const handleLanguageChange = (value: string) => {
+    setLocale(value);
+    notifyInfo(
+      value.toLowerCase().startsWith("zh")
+        ? t("settings.languageSwitchedZh")
+        : t("settings.languageSwitchedEn"),
+      { persist: false }
+    );
+  };
+
+  const handleThemeChange = (value: string) => {
+    setTheme(value as "light" | "dark" | "system");
+    notifyInfo(
+      value === "dark"
+        ? t("settings.themeSwitchedDark")
+        : value === "light"
+          ? t("settings.themeSwitchedLight")
+          : t("settings.themeSwitchedSystem"),
+      { persist: false }
+    );
+  };
+
+  const handleTimeZoneChange = (value: string) => {
+    setTimeZone(value);
+    notifyInfo(
+      value === "auto"
+        ? t("settings.timeZoneAutoSelected")
+        : t("settings.timeZoneSelected", { value }),
+      { persist: false }
+    );
+  };
+
+  const handleHourCycleChange = (value: string) => {
+    setHourCycle(value as "auto" | "h12" | "h23");
+    notifyInfo(
+      value === "auto"
+        ? t("settings.timeFormatAutoSelected")
+        : value === "h23"
+          ? t("settings.timeFormat24Selected")
+          : t("settings.timeFormat12Selected"),
+      { persist: false }
+    );
+  };
+
+  const handleDefaultLanguageChange = (value: string) => {
+    setLocalSettings((prev) => ({ ...prev, defaultLanguage: value }));
+    persistLocalSettings({ defaultLanguage: value });
+    const label =
+      value === "auto"
+        ? t("task.languageAuto")
+        : value === "zh"
+          ? t("task.languageZh")
+          : t("task.languageEn");
+    notifyInfo(t("settings.processingLanguageSelected", { value: label }), {
+      persist: false,
+    });
+  };
+
+  const handleSummaryDetailChange = (value: string) => {
+    setLocalSettings((prev) => ({ ...prev, summaryDetail: value }));
+    persistLocalSettings({ summaryDetail: value });
+    const label =
+      value === "brief"
+        ? t("settings.summaryBrief")
+        : value === "detailed"
+          ? t("settings.summaryDetailed")
+          : t("settings.summaryMedium");
+    notifyInfo(t("settings.summaryDetailSelected", { value: label }), {
+      persist: false,
+    });
+  };
+
+  const handleEmailToggle = (checked: boolean) => {
+    setLocalSettings((prev) => ({ ...prev, emailNotifications: checked }));
+    persistLocalSettings({ emailNotifications: checked });
+    notifyInfo(
+      checked ? t("settings.emailNotificationsEnabled") : t("settings.emailNotificationsDisabled"),
+      { persist: false }
+    );
+  };
+
+  const handlePushToggle = (checked: boolean) => {
+    setLocalSettings((prev) => ({ ...prev, pushNotifications: checked }));
+    persistLocalSettings({ pushNotifications: checked });
+    notifyInfo(
+      checked ? t("settings.pushNotificationsEnabled") : t("settings.pushNotificationsDisabled"),
+      { persist: false }
+    );
+  };
 
   const handleSave = () => {
     // 保存设置到localStorage
     localStorage.setItem('settings', JSON.stringify({
       language: languageState,
       theme: themeState,
+      timeZone: timeZoneState,
+      hourCycle: hourCycleState,
       emailNotifications,
-      pushNotifications
+      pushNotifications,
+      defaultLanguage: defaultLanguageState,
+      summaryDetail: summaryDetailState
     }));
+    setLocale(languageState);
+    setTheme(themeState as "light" | "dark" | "system");
+    setTimeZone(timeZoneState);
+    setHourCycle(hourCycleState as "auto" | "h12" | "h23");
     
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   };
 
   return (
-    <div className="h-screen flex flex-col" style={{ background: '#FFFFFF' }}>
+    <div className="h-screen flex flex-col" style={{ background: "var(--app-bg)" }}>
       {/* Header */}
       <Header 
         isAuthenticated={isAuthenticated} 
         onOpenLogin={onOpenLogin}
         language={language}
-        theme={theme}
         onToggleLanguage={onToggleLanguage}
         onToggleTheme={onToggleTheme}
       />
@@ -76,27 +285,29 @@ export default function Settings({
           <div className="flex items-center justify-between mb-8">
             <h2 
               className="text-h2"
-              style={{ color: '#0F172A' }}
+              style={{ color: "var(--app-text)" }}
             >
-              设置
+              {t("settings.title")}
             </h2>
             <Button
               onClick={handleSave}
               disabled={saved}
               style={{
-                background: saved ? '#10B981' : 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)'
+                background: saved
+                  ? "var(--app-success)"
+                  : "var(--app-action-gradient)"
               }}
               className="text-white hover:opacity-90 transition-opacity"
             >
               {saved ? (
                 <>
                   <CheckCircle2 className="w-5 h-5 mr-2" />
-                  已保存
+                  {t("common.saved")}
                 </>
               ) : (
                 <>
                   <Save className="w-5 h-5 mr-2" />
-                  保存设置
+                  {t("settings.saveAction")}
                 </>
               )}
             </Button>
@@ -107,30 +318,66 @@ export default function Settings({
             {/* Language & Theme Settings */}
             <Card>
               <CardHeader>
-                <CardTitle>外观设置</CardTitle>
+                <CardTitle>{t("settings.appearanceTitle")}</CardTitle>
                 <CardDescription>
-                  自定义应用的语言和主题
+                  {t("settings.appearanceDesc")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
                     <Globe className="w-4 h-4" />
-                    界面语言
+                    {t("settings.languageLabel")}
                   </Label>
-                  <Select value={languageState} onValueChange={setLanguageState}>
+                  <Select value={languageState} onValueChange={handleLanguageChange}>
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="zh-CN">简体中文</SelectItem>
-                      <SelectItem value="zh-TW">繁體中文</SelectItem>
-                      <SelectItem value="en-US">English</SelectItem>
-                      <SelectItem value="ja-JP">日本語</SelectItem>
+                      <SelectItem value="zh-CN">{t("settings.languageZh")}</SelectItem>
+                      <SelectItem value="en-US">{t("settings.languageEn")}</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-sm text-gray-500">
-                    更改界面显示语言
+                  <p className="text-sm text-[var(--app-text-muted)]">
+                    {t("settings.languageDesc")}
+                  </p>
+                </div>
+
+                <Separator />
+
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Globe className="w-4 h-4" />
+                    {t("settings.timeTitle")}
+                  </Label>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Select value={timeZoneState} onValueChange={handleTimeZoneChange}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder={t("settings.timeZonePlaceholder")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="auto">{t("settings.timeZoneAuto")}</SelectItem>
+                        <SelectItem value="UTC">UTC</SelectItem>
+                        <SelectItem value="Asia/Shanghai">Asia/Shanghai</SelectItem>
+                        <SelectItem value="Asia/Tokyo">Asia/Tokyo</SelectItem>
+                        <SelectItem value="America/Los_Angeles">America/Los_Angeles</SelectItem>
+                        <SelectItem value="America/New_York">America/New_York</SelectItem>
+                        <SelectItem value="Europe/London">Europe/London</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={hourCycleState} onValueChange={handleHourCycleChange}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder={t("settings.timeFormatPlaceholder")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="auto">{t("settings.timeFormatAuto")}</SelectItem>
+                        <SelectItem value="h23">{t("settings.timeFormat24")}</SelectItem>
+                        <SelectItem value="h12">{t("settings.timeFormat12")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <p className="text-sm text-[var(--app-text-muted)]">
+                    {t("settings.timeDesc")}
                   </p>
                 </div>
 
@@ -139,48 +386,47 @@ export default function Settings({
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
                     <Palette className="w-4 h-4" />
-                    主题模式
+                    {t("settings.themeLabel")}
                   </Label>
-                  <Select value={themeState} onValueChange={setThemeState}>
+                  <Select value={themeState} onValueChange={handleThemeChange}>
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="light">浅色模式</SelectItem>
-                      <SelectItem value="dark">深色模式</SelectItem>
-                      <SelectItem value="auto">跟随系统</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-sm text-gray-500">
-                    选择你喜欢的界面主题
-                  </p>
-                </div>
+                  <SelectItem value="light">{t("settings.themeLight")}</SelectItem>
+                  <SelectItem value="dark">{t("settings.themeDark")}</SelectItem>
+                  <SelectItem value="system">{t("settings.themeAuto")}</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-sm text-[var(--app-text-muted)]">
+                {t("settings.themeDesc")}
+              </p>
+            </div>
               </CardContent>
             </Card>
-
             {/* Notification Settings */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Bell className="w-5 h-5" />
-                  通知设置
+                  {t("settings.notificationsTitle")}
                 </CardTitle>
                 <CardDescription>
-                  管理通知和提醒方式
+                  {t("settings.notificationsDesc")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
-                    <Label htmlFor="email-notifications">邮件通知</Label>
-                    <p className="text-sm text-gray-500">
-                      任务完成时发送邮件通知
+                    <Label htmlFor="email-notifications">{t("settings.emailNotifications")}</Label>
+                    <p className="text-sm text-[var(--app-text-muted)]">
+                      {t("settings.emailNotificationsDesc")}
                     </p>
                   </div>
                   <Switch
                     id="email-notifications"
                     checked={emailNotifications}
-                    onCheckedChange={setEmailNotifications}
+                    onCheckedChange={handleEmailToggle}
                   />
                 </div>
 
@@ -188,15 +434,15 @@ export default function Settings({
 
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
-                    <Label htmlFor="push-notifications">推送通知</Label>
-                    <p className="text-sm text-gray-500">
-                      接收浏览器推送通知
+                    <Label htmlFor="push-notifications">{t("settings.pushNotifications")}</Label>
+                    <p className="text-sm text-[var(--app-text-muted)]">
+                      {t("settings.pushNotificationsDesc")}
                     </p>
                   </div>
                   <Switch
                     id="push-notifications"
                     checked={pushNotifications}
-                    onCheckedChange={setPushNotifications}
+                    onCheckedChange={handlePushToggle}
                   />
                 </div>
               </CardContent>
@@ -205,47 +451,45 @@ export default function Settings({
             {/* Processing Settings */}
             <Card>
               <CardHeader>
-                <CardTitle>处理偏好</CardTitle>
+                <CardTitle>{t("settings.processingTitle")}</CardTitle>
                 <CardDescription>
-                  自定义音视频处理选项
+                  {t("settings.processingDesc")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
-                  <Label>默认转写语言</Label>
-                  <Select defaultValue="zh-CN">
+                  <Label>{t("settings.defaultLanguage")}</Label>
+                  <Select value={defaultLanguageState} onValueChange={handleDefaultLanguageChange}>
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="zh-CN">中文（普通话）</SelectItem>
-                      <SelectItem value="en-US">英语（美国）</SelectItem>
-                      <SelectItem value="en-GB">英语（英国）</SelectItem>
-                      <SelectItem value="ja-JP">日语</SelectItem>
-                      <SelectItem value="ko-KR">韩语</SelectItem>
+                      <SelectItem value="auto">{t("task.languageAuto")}</SelectItem>
+                      <SelectItem value="zh">{t("task.languageZh")}</SelectItem>
+                      <SelectItem value="en">{t("task.languageEn")}</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-sm text-gray-500">
-                    设置音频转写的默认语言
+                  <p className="text-sm text-[var(--app-text-muted)]">
+                    {t("settings.defaultLanguageDesc")}
                   </p>
                 </div>
 
                 <Separator />
 
                 <div className="space-y-2">
-                  <Label>摘要详细程度</Label>
-                  <Select defaultValue="medium">
+                  <Label>{t("settings.summaryDetail")}</Label>
+                  <Select value={summaryDetailState} onValueChange={handleSummaryDetailChange}>
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="brief">简要</SelectItem>
-                      <SelectItem value="medium">中</SelectItem>
-                      <SelectItem value="detailed">详细</SelectItem>
+                      <SelectItem value="brief">{t("settings.summaryBrief")}</SelectItem>
+                      <SelectItem value="medium">{t("settings.summaryMedium")}</SelectItem>
+                      <SelectItem value="detailed">{t("settings.summaryDetailed")}</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-sm text-gray-500">
-                    选择AI生成摘要的详细程度
+                  <p className="text-sm text-[var(--app-text-muted)]">
+                    {t("settings.summaryDetailDesc")}
                   </p>
                 </div>
               </CardContent>
@@ -254,27 +498,27 @@ export default function Settings({
             {/* Account Info */}
             <Card>
               <CardHeader>
-                <CardTitle>账户信息</CardTitle>
+                <CardTitle>{t("settings.accountTitle")}</CardTitle>
                 <CardDescription>
-                  查看你的账户使用情况
+                  {t("settings.accountDesc")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <p className="text-sm text-gray-500">总任务数</p>
+                    <p className="text-sm text-[var(--app-text-muted)]">{t("settings.statsTotalTasks")}</p>
                     <p className="text-2xl font-semibold">24</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-sm text-gray-500">本月使用</p>
+                    <p className="text-sm text-[var(--app-text-muted)]">{t("settings.statsMonthly")}</p>
                     <p className="text-2xl font-semibold">8</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-sm text-gray-500">总处理时长</p>
+                    <p className="text-sm text-[var(--app-text-muted)]">{t("settings.statsDuration")}</p>
                     <p className="text-2xl font-semibold">12.5h</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-sm text-gray-500">存储空间</p>
+                    <p className="text-sm text-[var(--app-text-muted)]">{t("settings.statsStorage")}</p>
                     <p className="text-2xl font-semibold">2.3GB</p>
                   </div>
                 </div>
@@ -282,31 +526,53 @@ export default function Settings({
             </Card>
 
             {/* Danger Zone */}
-            <Card className="border-red-200">
+            <Card className="border-[var(--app-danger-border)]">
               <CardHeader>
-                <CardTitle className="text-red-600">危险操作</CardTitle>
+                <CardTitle className="text-[var(--app-danger)]">{t("settings.dangerTitle")}</CardTitle>
                 <CardDescription>
-                  这些操作不可逆，请谨慎操作
+                  {t("settings.dangerDesc")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium">清除所有任务</p>
-                    <p className="text-sm text-gray-500">删除所有任务记录和数据</p>
+                    <p className="font-medium">{t("settings.resetSettings")}</p>
+                    <p className="text-sm text-[var(--app-text-muted)]">{t("settings.resetSettingsDesc")}</p>
                   </div>
-                  <Button variant="destructive" size="sm">
-                    清除数据
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => openConfirm("resetSettings")}
+                  >
+                    {t("settings.resetSettingsAction")}
                   </Button>
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium">删除账户</p>
-                    <p className="text-sm text-gray-500">永久删除你的账户和所有数据</p>
+                    <p className="font-medium">{t("settings.clearTasks")}</p>
+                    <p className="text-sm text-[var(--app-text-muted)]">{t("settings.clearTasksDesc")}</p>
                   </div>
-                  <Button variant="destructive" size="sm">
-                    删除账户
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => openConfirm("clearTasks")}
+                  >
+                    {t("settings.clearTasksAction")}
+                  </Button>
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">{t("settings.deleteAccount")}</p>
+                    <p className="text-sm text-[var(--app-text-muted)]">{t("settings.deleteAccountDesc")}</p>
+                  </div>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => openConfirm("deleteAccount")}
+                  >
+                    {t("settings.deleteAccount")}
                   </Button>
                 </div>
               </CardContent>
@@ -314,6 +580,38 @@ export default function Settings({
           </div>
         </main>
       </div>
+
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {confirmAction === "clearTasks"
+                ? t("settings.clearTasksConfirmTitle")
+                : confirmAction === "deleteAccount"
+                  ? t("settings.deleteAccountConfirmTitle")
+                  : t("settings.resetSettingsConfirmTitle")}
+            </DialogTitle>
+            <DialogDescription>
+              {confirmAction === "clearTasks"
+                ? t("settings.clearTasksConfirmDesc")
+                : confirmAction === "deleteAccount"
+                  ? t("settings.deleteAccountConfirmDesc")
+                  : t("settings.resetSettingsConfirmDesc")}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              onClick={() => setConfirmOpen(false)}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button variant="destructive" onClick={handleConfirm}>
+              {t("common.confirm")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,30 +1,29 @@
 import { Plus } from 'lucide-react';
-import { getTheme, Theme } from '@/styles/theme-config';
+import { useI18n } from '@/lib/i18n-context';
 
 interface NewTaskCardProps {
   onClick: () => void;
-  theme?: Theme;
 }
 
-export default function NewTaskCard({ onClick, theme = 'light' }: NewTaskCardProps) {
-  const colors = getTheme(theme);
+export default function NewTaskCard({ onClick }: NewTaskCardProps) {
+  const { t } = useI18n();
   
   return (
     <button
       onClick={onClick}
-      className="w-full h-30 rounded-2xl flex flex-col items-center justify-center gap-3 transition-all group hover:border-blue-500"
+      className="glass-panel w-full h-30 rounded-2xl flex flex-col items-center justify-center gap-3 transition-all group border-2 border-dashed hover:border-[var(--app-primary)]"
       style={{
-        border: `2px dashed ${colors.border.default}`,
-        background: theme === 'light' ? '#F8FAFC' : colors.bg.secondary,
+        borderColor: "var(--app-glass-border)",
+        background: "var(--app-glass-bg)",
         minHeight: '120px'
       }}
     >
       {/* 加号图标 */}
       <div 
         className="w-8 h-8 flex items-center justify-center transition-colors"
-        style={{ color: colors.text.tertiary }}
+        style={{ color: "var(--app-text-muted)" }}
       >
-        <Plus className="w-8 h-8" style={{ color: colors.text.tertiary }} />
+        <Plus className="w-8 h-8" style={{ color: "var(--app-text-muted)" }} />
       </div>
       
       {/* 文字 */}
@@ -32,10 +31,10 @@ export default function NewTaskCard({ onClick, theme = 'light' }: NewTaskCardPro
         className="text-lg transition-colors"
         style={{ 
           fontWeight: 500,
-          color: colors.text.tertiary
+          color: "var(--app-text-muted)"
         }}
       >
-        新建任务
+        {t("task.newTask")}
       </span>
     </button>
   );

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef, DragEvent } from 'react';
-import { Upload, X, FileAudio, CheckCircle } from 'lucide-react';
+import { Upload, FileAudio, CheckCircle } from 'lucide-react';
+import { useI18n } from '@/lib/i18n-context';
 
 interface UploadZoneProps {
   onFileSelect: (file: File) => void;
@@ -20,6 +21,7 @@ export default function UploadZone({
 }: UploadZoneProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { t } = useI18n();
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -39,7 +41,8 @@ export default function UploadZone({
       const file = files[0];
       // Check file type
       const validTypes = ['audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/x-m4a', 'video/mp4'];
-      if (validTypes.some(type => file.type.startsWith('audio/') || file.type.startsWith('video/'))) {
+      const isKnownType = validTypes.includes(file.type);
+      if (isKnownType || file.type.startsWith('audio/') || file.type.startsWith('video/')) {
         onFileSelect(file);
       }
     }
@@ -70,30 +73,30 @@ export default function UploadZone({
   if (uploadedFile && !isUploading) {
     return (
       <div
-        className="w-full rounded-2xl border-2 flex items-center justify-center px-8 py-6"
+        className="glass-panel w-full rounded-2xl border-2 flex items-center justify-center px-8 py-6"
         style={{
-          borderColor: '#E2E8F0',
-          background: '#F8FAFC',
+          borderColor: "var(--app-glass-border)",
+          background: "var(--app-glass-bg)",
           minHeight: '240px'
         }}
       >
         <div className="flex items-center gap-4 w-full">
-          <CheckCircle className="w-6 h-6 flex-shrink-0" style={{ color: '#10B981' }} />
-          <FileAudio className="w-6 h-6 flex-shrink-0" style={{ color: '#64748B' }} />
+          <CheckCircle className="w-6 h-6 flex-shrink-0" style={{ color: "var(--app-success)" }} />
+          <FileAudio className="w-6 h-6 flex-shrink-0" style={{ color: "var(--app-text-muted)" }} />
           <div className="flex-1 min-w-0">
-            <p className="text-base truncate" style={{ fontWeight: 500, color: '#0F172A' }}>
+            <p className="text-base truncate" style={{ fontWeight: 500, color: "var(--app-text)" }}>
               {uploadedFile.name}
             </p>
-            <p className="text-sm" style={{ color: '#64748B' }}>
+            <p className="text-sm" style={{ color: "var(--app-text-muted)" }}>
               {formatFileSize(uploadedFile.size)}
             </p>
           </div>
           <button
             onClick={onFileRemove}
             className="text-sm hover:opacity-70 transition-opacity px-3 py-1"
-            style={{ color: '#EF4444', fontWeight: 500 }}
+            style={{ color: "var(--app-danger)", fontWeight: 500 }}
           >
-            删除
+            {t("common.delete")}
           </button>
         </div>
       </div>
@@ -104,31 +107,31 @@ export default function UploadZone({
   if (isUploading) {
     return (
       <div
-        className="w-full rounded-2xl border-2 flex flex-col items-center justify-center px-8 py-6 gap-4"
+        className="glass-panel w-full rounded-2xl border-2 flex flex-col items-center justify-center px-8 py-6 gap-4"
         style={{
-          borderColor: '#E2E8F0',
-          background: '#F8FAFC',
+          borderColor: "var(--app-glass-border)",
+          background: "var(--app-glass-bg)",
           minHeight: '240px'
         }}
       >
         <div className="flex items-center gap-3 w-full">
-          <FileAudio className="w-6 h-6" style={{ color: '#64748B' }} />
-          <p className="text-base flex-1" style={{ fontWeight: 500, color: '#0F172A' }}>
-            {uploadedFile?.name || 'Uploading...'}
+          <FileAudio className="w-6 h-6" style={{ color: "var(--app-text-muted)" }} />
+          <p className="text-base flex-1" style={{ fontWeight: 500, color: "var(--app-text)" }}>
+            {uploadedFile?.name || t("upload.stageUploading")}
           </p>
         </div>
         
         <div className="w-full space-y-2">
-          <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: '#E2E8F0' }}>
+          <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: "var(--app-glass-border)" }}>
             <div
               className="h-full transition-all duration-300"
               style={{
                 width: `${uploadProgress}%`,
-                background: '#3B82F6'
+                background: "var(--app-primary)"
               }}
             />
           </div>
-          <p className="text-sm text-right" style={{ color: '#64748B' }}>
+          <p className="text-sm text-right" style={{ color: "var(--app-text-muted)" }}>
             {uploadProgress}%
           </p>
         </div>
@@ -136,9 +139,9 @@ export default function UploadZone({
         <button
           onClick={onFileRemove}
           className="text-sm hover:opacity-70 transition-opacity px-4 py-2"
-          style={{ color: '#64748B' }}
+          style={{ color: "var(--app-text-muted)" }}
         >
-          取消
+          {t("common.cancel")}
         </button>
       </div>
     );
@@ -147,10 +150,10 @@ export default function UploadZone({
   // State: Default or Drag Over
   return (
     <div
-      className="w-full rounded-2xl border-2 border-dashed cursor-pointer transition-all"
+      className="glass-panel w-full rounded-2xl border-2 border-dashed cursor-pointer transition-all"
       style={{
-        borderColor: isDragOver ? '#3B82F6' : '#E2E8F0',
-        background: isDragOver ? '#EFF6FF' : '#F8FAFC',
+        borderColor: isDragOver ? "var(--app-primary)" : "var(--app-glass-border)",
+        background: isDragOver ? "var(--app-primary-soft-2)" : "var(--app-glass-bg)",
         minHeight: '240px'
       }}
       onDragOver={handleDragOver}
@@ -169,25 +172,25 @@ export default function UploadZone({
       <div className="h-full flex flex-col items-center justify-center px-8 py-12 gap-4">
         <Upload 
           className="w-12 h-12" 
-          style={{ color: isDragOver ? '#3B82F6' : '#64748B' }} 
+          style={{ color: isDragOver ? "var(--app-primary)" : "var(--app-text-muted)" }} 
         />
         
         <p 
           className="text-base text-center"
           style={{ 
             fontWeight: 500, 
-            color: isDragOver ? '#3B82F6' : '#0F172A' 
+            color: isDragOver ? "var(--app-primary)" : "var(--app-text)" 
           }}
         >
-          将文件拖放到此处，或{' '}
-          <span style={{ color: '#3B82F6' }}>点击上传</span>
+          {t("upload.dropHere")}{' '}
+          <span style={{ color: "var(--app-primary)" }}>{t("upload.clickToUpload")}</span>
         </p>
         
         <p 
           className="text-sm text-center"
-          style={{ color: isDragOver ? '#3B82F6' : '#94A3B8' }}
+          style={{ color: isDragOver ? "var(--app-primary)" : "var(--app-text-subtle)" }}
         >
-          支持 MP3、MP4、WAV、M4A，最大 500MB
+          {t("upload.supportedFormats")}
         </p>
       </div>
     </div>

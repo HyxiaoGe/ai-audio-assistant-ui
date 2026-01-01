@@ -1,5 +1,4 @@
 import { Inbox, SearchX } from 'lucide-react';
-import { getTheme, Theme } from '@/styles/theme-config';
 
 interface EmptyStateProps {
   variant?: 'default' | 'search'; // 默认空状态 vs 搜索无结果
@@ -11,7 +10,6 @@ interface EmptyStateProps {
     onClick: () => void;
     variant?: 'primary' | 'secondary'; // 按钮样式
   };
-  theme?: Theme;
 }
 
 export default function EmptyState({
@@ -19,11 +17,8 @@ export default function EmptyState({
   icon,
   title,
   description,
-  action,
-  theme = 'light'
+  action
 }: EmptyStateProps) {
-  const colors = getTheme(theme);
-  
   // 根据 variant 选择默认图标
   const renderIcon = () => {
     if (icon) {
@@ -44,7 +39,7 @@ export default function EmptyState({
     const iconStyle = {
       width: '64px',
       height: '64px',
-      color: '#CBD5E1'
+      color: 'var(--app-text-faint)'
     };
 
     if (variant === 'search') {
@@ -56,13 +51,9 @@ export default function EmptyState({
 
   return (
     <div
-      className="flex flex-col items-center justify-center rounded-xl border"
+      className="glass-panel flex flex-col items-center justify-center rounded-xl border border-dashed"
       style={{
         minHeight: '320px',
-        background: variant === 'default' 
-          ? (theme === 'light' ? '#F8FAFC' : colors.bg.secondary)
-          : colors.bg.secondary,
-        borderColor: colors.border.default,
         borderStyle: variant === 'default' ? 'dashed' : 'solid',
         padding: '48px 24px'
       }}
@@ -74,7 +65,7 @@ export default function EmptyState({
       <h3 
         className="text-lg mb-2"
         style={{ 
-          color: colors.text.secondary,
+          color: 'var(--app-text-strong)',
           fontWeight: 600
         }}
       >
@@ -85,7 +76,7 @@ export default function EmptyState({
       <p 
         className="text-sm text-center mb-6"
         style={{ 
-          color: colors.text.tertiary,
+          color: 'var(--app-text-muted)',
           maxWidth: '280px'
         }}
       >
@@ -96,18 +87,18 @@ export default function EmptyState({
       {action && (
         <button
           onClick={action.onClick}
-          className="px-6 py-3 rounded-lg transition-all text-sm"
+          className={action.variant === "secondary"
+            ? "glass-control px-6 py-3 rounded-lg text-sm"
+            : "px-6 py-3 rounded-lg text-sm transition-all"}
           style={{
             background: action.variant === 'secondary' 
-              ? colors.bg.secondary 
-              : colors.brand.primary,
+              ? undefined
+              : 'var(--app-primary)',
             color: action.variant === 'secondary' 
-              ? colors.text.primary 
-              : colors.text.inverse,
+              ? 'var(--app-text)' 
+              : 'var(--app-button-primary-text)',
             fontWeight: 500,
-            border: action.variant === 'secondary' 
-              ? `1px solid ${colors.border.default}` 
-              : 'none'
+            border: action.variant === 'secondary' ? undefined : 'none'
           }}
         >
           {action.label}
