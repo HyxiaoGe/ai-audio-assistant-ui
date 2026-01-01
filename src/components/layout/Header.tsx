@@ -27,6 +27,7 @@ export default function Header({
   onToggleTheme = () => {}
 }: HeaderProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const { data: session, update } = useSession();
   const client = useAPIClient();
@@ -36,6 +37,11 @@ export default function Header({
   const [avatarSrc, setAvatarSrc] = useState("");
   const avatarName = session?.user?.name || session?.user?.email || "U";
   const resolvedAvatarSrc = avatarSrc || session?.user?.image || "";
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!session?.user) return;
@@ -120,12 +126,12 @@ export default function Header({
           onClick={onToggleTheme}
           className="w-6 h-6 flex items-center justify-center transition-all hover:opacity-70 duration-300"
           style={{ 
-            color: isDark ? "var(--app-warning)" : "var(--app-primary)",
-            transform: isDark ? 'rotate(180deg)' : 'rotate(0deg)'
+            color: isMounted && isDark ? "var(--app-warning)" : "var(--app-primary)",
+            transform: isMounted && isDark ? 'rotate(180deg)' : 'rotate(0deg)'
           }}
-          title={isDark ? t("header.switchToLight") : t("header.switchToDark")}
+          title={isMounted && isDark ? t("header.switchToLight") : t("header.switchToDark")}
         >
-          {isDark ? (
+          {isMounted && isDark ? (
             <Sun className="w-5 h-5" />
           ) : (
             <Moon className="w-5 h-5" />

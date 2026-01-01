@@ -80,15 +80,17 @@ function loadSettings(): SettingsState {
 }
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
-  const [settings, setSettings] = useState<SettingsState>(() => loadSettings())
+  const [settings, setSettings] = useState<SettingsState>(DEFAULT_SETTINGS)
   const { setTheme: setNextTheme } = useTheme()
-  const initialThemeRef = useRef(settings.theme)
   const previousTheme = useRef<Theme>(DEFAULT_SETTINGS.theme)
   const skipNextTransition = useRef(true)
 
   useEffect(() => {
-    setNextTheme(initialThemeRef.current)
-    previousTheme.current = initialThemeRef.current
+    const loaded = loadSettings()
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSettings(loaded)
+    setNextTheme(loaded.theme)
+    previousTheme.current = loaded.theme
     skipNextTransition.current = true
   }, [setNextTheme])
 
