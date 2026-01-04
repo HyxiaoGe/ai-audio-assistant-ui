@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { notifyError, notifySuccess } from '@/lib/notify';
 import { X, Link as LinkIcon, ChevronDown, ChevronUp } from 'lucide-react';
@@ -10,7 +10,7 @@ import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { useAPIClient } from '@/lib/use-api-client';
 import { useFileUpload } from '@/hooks/use-file-upload';
-import type { TaskOptions } from '@/types/api';
+import type { LLMModel, TaskOptions } from '@/types/api';
 import { useI18n } from '@/lib/i18n-context';
 
 interface NewTaskModalProps {
@@ -24,18 +24,20 @@ export default function NewTaskModal({ isOpen, onClose }: NewTaskModalProps) {
   const router = useRouter();
   const client = useAPIClient();
   const { state: uploadState, uploadFile, reset, isUploading } = useFileUpload();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [activeTab, setActiveTab] = useState('upload');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState('');
   const [selectedPlatform, setSelectedPlatform] = useState<Platform>('youtube');
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [advancedOptions, setAdvancedOptions] = useState({
+    summaryModelId: null as string | null,
     language: 'auto',
     speakerDiarization: true,
     summaryStyle: 'meeting'
   });
+  const [llmModels, setLlmModels] = useState<LLMModel[]>([]);
 
   const tabs = [
     { id: 'upload', label: t("newTask.tabs.upload") },
@@ -74,17 +76,84 @@ export default function NewTaskModal({ isOpen, onClose }: NewTaskModalProps) {
     setSelectedFile(null);
   };
 
+  useEffect(() => {
+    if (!isOpen) return;
+    let active = true;
+    const loadModels = async () => {
+      try {
+        const result = await client.getLLMModels();
+        if (active) {
+          setLlmModels(result.models || []);
+        }
+      } catch {
+        if (active) {
+          setLlmModels([]);
+        }
+      }
+    };
+    loadModels();
+    return () => {
+      active = false;
+    };
+  }, [client, isOpen, locale]);
+
+  const modelGroups = useMemo(() => {
+    const groups = new Map<string, LLMModel[]>();
+    llmModels.forEach((model) => {
+      const key = model.display_name || model.provider;
+      const list = groups.get(key) || [];
+      list.push(model);
+      groups.set(key, list);
+    });
+    return Array.from(groups.entries()).map(([label, models]) => ({
+      label,
+      models,
+    }));
+  }, [llmModels]);
+
+  const renderModelOptions = useMemo(
+    () =>
+      modelGroups.map((group) => (
+        <optgroup key={group.label} label={group.label}>
+          {group.models.map((model) => {
+            const suffix = model.is_available
+              ? (model.is_recommended ? ` ${t("task.summaryModelRecommended")}` : "")
+              : ` ${t("task.summaryModelUnavailable")}`;
+            const label = model.model_id ? `  ${model.model_id}` : `  ${model.provider}`;
+            return (
+              <option
+                key={model.model_id || model.provider}
+                value={model.model_id || model.provider}
+                disabled={!model.is_available}
+              >
+                {label}{suffix}
+              </option>
+            );
+          })}
+        </optgroup>
+      )),
+    [modelGroups, t]
+  );
+
   const buildOptions = (): TaskOptions => {
     const summaryStyleMap: Record<string, TaskOptions["summary_style"]> = {
       meeting: "meeting",
       lecture: "learning",
       podcast: "interview",
     };
+    const selectedModelId = advancedOptions.summaryModelId;
+    const selectedModel = selectedModelId
+      ? llmModels.find((model) =>
+          model.model_id ? model.model_id === selectedModelId : model.provider === selectedModelId
+        ) || null
+      : null;
 
     return {
       language: advancedOptions.language as TaskOptions["language"],
       enable_speaker_diarization: advancedOptions.speakerDiarization,
       summary_style: summaryStyleMap[advancedOptions.summaryStyle] || "meeting",
+      provider: selectedModel?.provider ?? null,
+      model_id: selectedModel?.model_id ?? null,
     };
   };
 
@@ -127,7 +196,7 @@ export default function NewTaskModal({ isOpen, onClose }: NewTaskModalProps) {
     setSelectedFile(null);
     setVideoUrl('');
     setSelectedPlatform('youtube');
-    setShowAdvanced(false);
+    setShowAdvanced(true);
     setIsCreating(false);
     onClose();
   };
@@ -268,6 +337,25 @@ export default function NewTaskModal({ isOpen, onClose }: NewTaskModalProps) {
 
               {showAdvanced && (
                 <div className="border rounded-lg p-6 space-y-4" style={{ borderColor: 'var(--app-glass-border)', background: 'var(--app-glass-bg)' }}>
+                  {/* Summary Model */}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <label className="text-sm sm:w-32" style={{ color: 'var(--app-text-muted)' }}>
+                      {t("newTask.summaryModel")}：
+                    </label>
+                    <select
+                      value={advancedOptions.summaryModelId ?? ''}
+                      onChange={(e) =>
+                        setAdvancedOptions({ ...advancedOptions, summaryModelId: e.target.value || null })
+                      }
+                      disabled={llmModels.length === 0}
+                      className="glass-control flex-1 sm:max-w-xs px-3 py-2 rounded-lg text-sm disabled:opacity-50"
+                      style={{ color: 'var(--app-text)' }}
+                    >
+                      <option value="">{t("task.summaryModelAutoOption")}</option>
+                      {renderModelOptions}
+                    </select>
+                  </div>
+
                   {/* Language Selection */}
                   <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                     <label className="text-sm sm:w-32" style={{ color: 'var(--app-text-muted)' }}>

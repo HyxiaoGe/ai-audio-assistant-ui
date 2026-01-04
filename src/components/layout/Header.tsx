@@ -29,7 +29,7 @@ export default function Header({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const { data: session, update } = useSession();
+  const { data: session, status: sessionStatus, update } = useSession();
   const client = useAPIClient();
   const { t } = useI18n();
   const { resolvedTheme } = useTheme();
@@ -142,7 +142,18 @@ export default function Header({
         <NotificationBell />
 
         {/* 用户头像 + 下拉 */}
-        {isAuthenticated ? (
+        {sessionStatus === "loading" ? (
+          <div className="flex items-center gap-2 opacity-70">
+            <div
+              className="size-8 rounded-full"
+              style={{ background: "var(--app-glass-bg-strong)" }}
+            />
+            <div
+              className="h-2 w-4 rounded"
+              style={{ background: "var(--app-glass-bg-strong)" }}
+            />
+          </div>
+        ) : isAuthenticated ? (
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setIsMenuOpen((prev) => !prev)}

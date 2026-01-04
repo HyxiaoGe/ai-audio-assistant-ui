@@ -141,6 +141,8 @@ export interface TaskOptions {
   language?: Language
   enable_speaker_diarization?: boolean
   summary_style?: SummaryStyle
+  provider?: string | null
+  model_id?: string | null
 }
 
 export interface CreateTaskRequest {
@@ -309,12 +311,85 @@ export type SummaryRegenerateType = "overview" | "key_points" | "action_items"
 
 export interface SummaryRegenerateRequest {
   summary_type: SummaryRegenerateType
+  provider?: string | null
+  model_id?: string | null
 }
 
 export interface SummaryRegenerateResponse {
   task_id: string
   summary_type: SummaryRegenerateType
+  provider?: string | null
+  model_id?: string | null
   status: string
+}
+
+// ============================================================================
+// LLM 模型相关
+// ============================================================================
+
+export interface LLMModel {
+  provider: string
+  model_id?: string
+  display_name: string
+  description: string
+  cost_per_million_tokens: number
+  priority: number
+  status: "healthy" | "unhealthy" | "unknown"
+  is_recommended: boolean
+  is_available: boolean
+}
+
+export interface LLMModelsResponse {
+  models: LLMModel[]
+}
+
+export interface CompareSummariesRequest {
+  summary_type: SummaryRegenerateType
+  models: Array<{
+    provider: string
+    model_id?: string | null
+  }>
+}
+
+export interface CompareSummariesResponse {
+  comparison_id: string
+  task_id: string
+  summary_type: SummaryRegenerateType
+  models: Array<{
+    provider: string
+    model_id?: string | null
+  }>
+  status: string
+}
+
+export interface ComparisonResult {
+  model: string
+  content: string
+  token_count: number | null
+  created_at: string
+  status: "completed" | "generating" | "failed"
+  summary_id?: string | null
+}
+
+export interface ComparisonResultsResponse {
+  comparison_id: string
+  task_id: string
+  summary_type: SummaryRegenerateType
+  models: Array<{
+    provider: string
+    model_id?: string | null
+  }>
+  results: ComparisonResult[]
+}
+
+export interface SummaryActivateResponse {
+  summary_id: string
+  task_id: string
+  summary_type: SummaryRegenerateType
+  version: number
+  model_used: string | null
+  is_active: boolean
+  comparison_id: string | null
 }
 
 // ============================================================================

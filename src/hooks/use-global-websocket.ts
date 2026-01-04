@@ -100,8 +100,8 @@ export function useGlobalWebSocket() {
           console.log("[GlobalWS] HTTP polling successful, attempting WebSocket reconnect");
           reconnectRef.current?.();
         }
-      } catch (error) {
-        console.error("[GlobalWS] Polling error:", error);
+      } catch {
+        // Ignore polling errors to avoid noisy overlays in dev
       }
     };
 
@@ -298,8 +298,7 @@ export function useGlobalWebSocket() {
 
       ws.onmessage = handleMessage;
 
-      ws.onerror = (error) => {
-        console.error("[GlobalWS] Error:", error);
+      ws.onerror = () => {
         setWsConnected(false);
       };
 

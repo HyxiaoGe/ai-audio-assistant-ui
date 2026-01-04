@@ -14,20 +14,24 @@ import { TaskListAPI } from "@/components/task/TaskListAPI"
 import { UploadDialog } from "@/components/upload"
 import LoginModal from "@/components/auth/LoginModal"
 import { useSettings } from "@/lib/settings-context"
+import FullPageLoader from "@/components/common/FullPageLoader"
 
 export default function TasksPageNew() {
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
   const [loginOpen, setLoginOpen] = useState(false)
   const { language, setLanguage, setTheme } = useSettings()
   const { resolvedTheme } = useTheme()
-
   const toggleLanguage = () => {
     setLanguage(language === "zh" ? "en" : "zh")
   }
 
   const toggleTheme = () => {
     setTheme(resolvedTheme === "dark" ? "light" : "dark")
+  }
+
+  if (status === "loading") {
+    return <FullPageLoader />
   }
 
   return (

@@ -351,10 +351,8 @@ export default function TaskList({
                   variant: 'primary'
                 }}
               />
-            ) : loading ? (
-              <div className="text-sm" style={{ color: "var(--app-text-muted)" }}>
-                {t("common.loading")}...
-              </div>
+            ) : loading && currentTasks.length === 0 ? (
+              <div style={{ minHeight: "72px" }} />
             ) : error ? (
               <div className="text-sm" style={{ color: "var(--app-danger)" }}>
                 {error}

@@ -5,7 +5,7 @@
 
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import {
   FileText,
   Sparkles,
@@ -16,7 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAPIClient } from "@/lib/use-api-client"
 import { useDateFormatter } from "@/lib/use-date-formatter"
 import { useI18n } from "@/lib/i18n-context"
-import type { SummaryItem, SummaryType } from "@/types/api"
+import type { LLMModel, SummaryItem, SummaryType } from "@/types/api"
 
 interface SummaryViewProps {
   taskId: string
@@ -51,10 +51,16 @@ const SUMMARY_TYPE_CONFIG: Record<
   },
 }
 
-function SummaryCard({ summary }: { summary: SummaryItem }) {
+function SummaryCard({
+  summary,
+  modelLabel,
+}: {
+  summary: SummaryItem
+  modelLabel: string
+}) {
   const config = SUMMARY_TYPE_CONFIG[summary.summary_type]
   const Icon = config.icon
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const { formatDateTime } = useDateFormatter()
 
   return (
@@ -109,7 +115,7 @@ function SummaryCard({ summary }: { summary: SummaryItem }) {
         style={{ borderTop: "1px solid var(--app-glass-border)", color: "var(--app-text-subtle)" }}
       >
         {summary.model_used && (
-          <span>{t("summary.model", { model: summary.model_used })}</span>
+          <span>{t("summary.model", { model: modelLabel })}</span>
         )}
         {summary.token_count !== null && (
           <span>{t("summary.tokens", { count: summary.token_count.toLocaleString() })}</span>
@@ -147,6 +153,7 @@ export function SummaryView({ taskId }: SummaryViewProps) {
   const client = useAPIClient()
   const { t } = useI18n()
   const [summaries, setSummaries] = useState<SummaryItem[]>([])
+  const [models, setModels] = useState<LLMModel[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -165,6 +172,46 @@ export function SummaryView({ taskId }: SummaryViewProps) {
 
     loadSummaries()
   }, [client, taskId, t])
+
+  useEffect(() => {
+    let active = true
+    const loadModels = async () => {
+      try {
+        const result = await client.getLLMModels()
+        if (active) {
+          setModels(result.models || [])
+        }
+      } catch {
+        if (active) {
+          setModels([])
+        }
+      }
+    }
+
+    loadModels()
+    return () => {
+      active = false
+    }
+  }, [client, locale])
+
+  const modelNameMap = useMemo(() => {
+    const map = new Map<string, { displayName: string; modelId?: string }>()
+    models.forEach((model) => {
+      map.set(model.provider, { displayName: model.display_name, modelId: model.model_id })
+      if (model.model_id) {
+        map.set(model.model_id, { displayName: model.display_name, modelId: model.model_id })
+      }
+    })
+    return map
+  }, [models])
+
+  const getModelLabel = (provider: string) => {
+    const modelMeta = modelNameMap.get(provider)
+    if (!modelMeta) return provider
+    return modelMeta.modelId
+      ? `${modelMeta.displayName} / ${modelMeta.modelId}`
+      : modelMeta.displayName
+  }
 
   if (loading) {
     return (
@@ -229,7 +276,11 @@ export function SummaryView({ taskId }: SummaryViewProps) {
           </h2>
         </div>
         {activeSummaries.map((summary) => (
-          <SummaryCard key={summary.id} summary={summary} />
+          <SummaryCard
+            key={summary.id}
+            summary={summary}
+            modelLabel={summary.model_used ? getModelLabel(summary.model_used) : ""}
+          />
         ))}
       </div>
     )
@@ -263,9 +314,13 @@ export function SummaryView({ taskId }: SummaryViewProps) {
           <TabsContent key={type} value={type} className="mt-4">
             <div className="space-y-4">
               {activeSummaries
-                .filter((s) => s.summary_type === type)
-                .map((summary) => (
-                  <SummaryCard key={summary.id} summary={summary} />
+                  .filter((s) => s.summary_type === type)
+                  .map((summary) => (
+                  <SummaryCard
+                    key={summary.id}
+                    summary={summary}
+                    modelLabel={summary.model_used ? getModelLabel(summary.model_used) : ""}
+                  />
                 ))}
             </div>
           </TabsContent>

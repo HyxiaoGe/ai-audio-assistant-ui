@@ -7,14 +7,14 @@ import TaskList from "@/components/pages/TaskList";
 import LoginModal from "@/components/auth/LoginModal";
 import NewTaskModal from "@/components/task/NewTaskModal";
 import { useSettings } from "@/lib/settings-context";
+import FullPageLoader from "@/components/common/FullPageLoader";
 
 export default function TaskListPage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
   const { language, setLanguage, setTheme } = useSettings();
   const { resolvedTheme } = useTheme();
-
   const openLoginModal = () => {
     setShowLoginModal(true);
   };
@@ -38,6 +38,10 @@ export default function TaskListPage() {
   const toggleTheme = () => {
     setTheme(resolvedTheme === "dark" ? "light" : "dark");
   };
+
+  if (status === "loading") {
+    return <FullPageLoader />;
+  }
 
   return (
     <>

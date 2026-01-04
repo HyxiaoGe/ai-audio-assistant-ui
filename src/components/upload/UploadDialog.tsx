@@ -5,7 +5,7 @@
 
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   Dialog,
   DialogContent,
@@ -17,15 +17,18 @@ import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { FileUploader } from "./FileUploader"
-import type { TaskOptions, Language, SummaryStyle } from "@/types/api"
+import type { LLMModel, TaskOptions, Language, SummaryStyle } from "@/types/api"
 import { useI18n } from "@/lib/i18n-context"
+import { useAPIClient } from "@/lib/use-api-client"
 
 interface UploadDialogProps {
   open: boolean
@@ -38,12 +41,52 @@ export function UploadDialog({
   onOpenChange,
   onSuccess,
 }: UploadDialogProps) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
+  const client = useAPIClient()
   const [options, setOptions] = useState<TaskOptions>({
     language: "auto",
     enable_speaker_diarization: true,
     summary_style: "meeting",
+    provider: null,
+    model_id: null,
   })
+  const [llmModels, setLlmModels] = useState<LLMModel[]>([])
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    let active = true
+    const loadModels = async () => {
+      try {
+        const result = await client.getLLMModels()
+        if (active) {
+          setLlmModels(result.models || [])
+        }
+      } catch {
+        if (active) {
+          setLlmModels([])
+        }
+      }
+    }
+    loadModels()
+    return () => {
+      active = false
+    }
+  }, [client, locale, open])
+
+  const modelGroups = useMemo(() => {
+    const groups = new Map<string, LLMModel[]>()
+    llmModels.forEach((model) => {
+      const key = model.display_name || model.provider
+      const list = groups.get(key) || []
+      list.push(model)
+      groups.set(key, list)
+    })
+    return Array.from(groups.entries()).map(([label, models]) => ({
+      label,
+      models,
+    }))
+  }, [llmModels])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -72,6 +115,57 @@ export function UploadDialog({
             <h3 className="text-sm font-medium" style={{ color: "var(--app-text)" }}>
               {t("uploadDialog.optionsTitle")}
             </h3>
+
+            {/* 摘要模型 */}
+            <div className="space-y-2">
+              <Label htmlFor="summary-model">{t("uploadDialog.summaryModel")}</Label>
+              <Select
+                value={selectedModelId || "auto"}
+                onValueChange={(value) => {
+                  const nextValue = value === "auto" ? null : value
+                  setSelectedModelId(nextValue)
+                  const selectedModel = nextValue
+                    ? llmModels.find((model) =>
+                        model.model_id ? model.model_id === nextValue : model.provider === nextValue
+                      ) || null
+                    : null
+                  setOptions((prev) => ({
+                    ...prev,
+                    provider: selectedModel?.provider ?? null,
+                    model_id: selectedModel?.model_id ?? null,
+                  }))
+                }}
+                disabled={llmModels.length === 0}
+              >
+                <SelectTrigger id="summary-model">
+                  <SelectValue placeholder={t("task.summaryModelAutoOption")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">{t("task.summaryModelAutoOption")}</SelectItem>
+                  {modelGroups.map((group) => (
+                    <SelectGroup key={group.label}>
+                      <SelectLabel>{group.label}</SelectLabel>
+                      {group.models.map((model) => {
+                        const suffix = model.is_available
+                          ? (model.is_recommended ? ` ${t("task.summaryModelRecommended")}` : "")
+                          : ` ${t("task.summaryModelUnavailable")}`
+                        const label = model.model_id ? `  ${model.model_id}` : `  ${model.provider}`
+                        return (
+                          <SelectItem
+                            key={model.model_id || model.provider}
+                            value={model.model_id || model.provider}
+                            disabled={!model.is_available}
+                            className="pl-5"
+                          >
+                            {label}{suffix}
+                          </SelectItem>
+                        )
+                      })}
+                    </SelectGroup>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
             {/* 语言选择 */}
             <div className="space-y-2">

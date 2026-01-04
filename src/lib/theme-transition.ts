@@ -39,7 +39,6 @@ export function runThemeTransition(
 
   document.body.appendChild(overlay)
   overlay.getBoundingClientRect()
-  overlay.classList.add("is-fading-in")
 
   let readyFired = false
   const fireReady = () => {
@@ -48,22 +47,20 @@ export function runThemeTransition(
     onReady?.()
   }
 
-  const fadeInTimer = window.setTimeout(() => {
+  requestAnimationFrame(() => {
     fireReady()
     overlay.classList.add("is-sweeping")
-  }, 200)
+  })
 
   const fallbackTimeout = window.setTimeout(() => {
-    window.clearTimeout(fadeInTimer)
     fireReady()
     overlay.remove()
-  }, 1100)
+  }, 500)
 
   overlay.addEventListener(
     "animationend",
     () => {
       window.clearTimeout(fallbackTimeout)
-      window.clearTimeout(fadeInTimer)
       overlay.remove()
     },
     { once: true }

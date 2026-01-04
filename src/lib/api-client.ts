@@ -14,8 +14,12 @@ import {
   ApiError,
   ApiResponse,
   BatchDeleteResponse,
+  CompareSummariesRequest,
+  CompareSummariesResponse,
+  ComparisonResultsResponse,
   CreateTaskRequest,
   CreateTaskResponse,
+  LLMModelsResponse,
   NotificationListRequest,
   NotificationListResponse,
   NotificationStatsResponse,
@@ -23,6 +27,7 @@ import {
   PresignResponse,
   SummaryRegenerateRequest,
   SummaryRegenerateResponse,
+  SummaryActivateResponse,
   SummaryResponse,
   TaskDetail,
   TaskListRequest,
@@ -392,6 +397,58 @@ export class APIClient {
       },
       this.token
     )
+  }
+
+  /**
+   * 多模型对比生成摘要
+   */
+  async compareSummaries(
+    taskId: string,
+    data: CompareSummariesRequest
+  ): Promise<CompareSummariesResponse> {
+    return request(
+      `/summaries/${taskId}/compare`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+      this.token
+    )
+  }
+
+  /**
+   * 获取对比结果
+   */
+  async getSummaryComparison(
+    taskId: string,
+    comparisonId: string
+  ): Promise<ComparisonResultsResponse> {
+    return request(
+      `/summaries/${taskId}/compare/${comparisonId}`,
+      { method: "GET" },
+      this.token
+    )
+  }
+
+  /**
+   * 将摘要设置为当前版本
+   */
+  async activateSummary(
+    taskId: string,
+    summaryId: string
+  ): Promise<SummaryActivateResponse> {
+    return request(
+      `/summaries/${taskId}/${summaryId}/activate`,
+      { method: "POST" },
+      this.token
+    )
+  }
+
+  /**
+   * 获取可用 LLM 模型列表
+   */
+  async getLLMModels(): Promise<LLMModelsResponse> {
+    return request("/llm/models", { method: "GET" }, this.token)
   }
 
   // ==========================================================================

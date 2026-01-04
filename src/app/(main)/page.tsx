@@ -7,14 +7,14 @@ import Dashboard from "@/components/pages/Dashboard";
 import NewTaskModal from "@/components/task/NewTaskModal";
 import LoginModal from "@/components/auth/LoginModal";
 import { useSettings } from "@/lib/settings-context";
+import FullPageLoader from "@/components/common/FullPageLoader";
 
 export default function DashboardPage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
   const { language, setLanguage, setTheme } = useSettings();
   const { resolvedTheme } = useTheme();
-
   const openLoginModal = () => {
     setShowLoginModal(true);
   };
@@ -38,6 +38,10 @@ export default function DashboardPage() {
   const toggleTheme = () => {
     setTheme(resolvedTheme === "dark" ? "light" : "dark");
   };
+
+  if (status === "loading") {
+    return <FullPageLoader />;
+  }
 
   return (
     <>

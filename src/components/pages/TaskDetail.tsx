@@ -19,7 +19,15 @@ import { useAPIClient } from '@/lib/use-api-client';
 import { useGlobalStore } from '@/store/global-store';
 import { getToken } from '@/lib/auth-token';
 import { ApiError } from '@/types/api';
-import type { TaskDetail as ApiTaskDetail, TranscriptSegment as ApiTranscriptSegment, SummaryItem, RetryMode, SummaryRegenerateType } from '@/types/api';
+import type {
+  TaskDetail as ApiTaskDetail,
+  TranscriptSegment as ApiTranscriptSegment,
+  ComparisonResult,
+  SummaryItem,
+  RetryMode,
+  SummaryRegenerateType,
+  LLMModel
+} from '@/types/api';
 import { useI18n } from '@/lib/i18n-context';
 
 interface TaskDetailProps {
@@ -64,7 +72,7 @@ export default function TaskDetail({
   const params = useParams();
   const { data: session, status: sessionStatus } = useSession();
   const client = useAPIClient();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const id = params?.id as string;
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -85,6 +93,11 @@ export default function TaskDetail({
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const [keyPoints, setKeyPoints] = useState<KeyPoint[]>([]);
   const [summaryOverview, setSummaryOverview] = useState<string[]>([]);
+  const [summaryModelUsed, setSummaryModelUsed] = useState<Record<SummaryRegenerateType, string | null>>({
+    overview: null,
+    key_points: null,
+    action_items: null,
+  });
   const [summaryStreaming, setSummaryStreaming] = useState({
     overview: false,
     key_points: false,
@@ -115,6 +128,24 @@ export default function TaskDetail({
     key_points: null,
     action_items: null,
   });
+  const [llmModels, setLlmModels] = useState<LLMModel[]>([]);
+  const [summaryModelSelection, setSummaryModelSelection] = useState<Record<SummaryRegenerateType, string | null>>({
+    overview: null,
+    key_points: null,
+    action_items: null,
+  });
+  const [compareDialogOpen, setCompareDialogOpen] = useState(false);
+  const [compareSelectedModels, setCompareSelectedModels] = useState<string[]>([]);
+  const [compareLoading, setCompareLoading] = useState(false);
+  const [compareError, setCompareError] = useState<string | null>(null);
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareSummaryType, setCompareSummaryType] = useState<SummaryRegenerateType>("overview");
+  const [comparisonResults, setComparisonResults] = useState<ComparisonResult[]>([]);
+  const [compareActiveModel, setCompareActiveModel] = useState<string | null>(null);
+  const [compareActivating, setCompareActivating] = useState(false);
+  const comparePollRef = useRef<number | null>(null);
+  const compareStreamRef = useRef<EventSource | null>(null);
+  const compareExpectedRef = useRef<number>(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isProcessingTask = task?.status
@@ -190,6 +221,11 @@ export default function TaskDetail({
     const overview = items.find((item) => item.summary_type === 'overview' && item.is_active)?.content;
     const keyPointsContent = items.find((item) => item.summary_type === 'key_points' && item.is_active)?.content;
     const actionItemsContent = items.find((item) => item.summary_type === 'action_items' && item.is_active)?.content;
+    const modelUsed = {
+      overview: items.find((item) => item.summary_type === 'overview' && item.is_active)?.model_used ?? null,
+      key_points: items.find((item) => item.summary_type === 'key_points' && item.is_active)?.model_used ?? null,
+      action_items: items.find((item) => item.summary_type === 'action_items' && item.is_active)?.model_used ?? null,
+    };
     const latestVersions = {
       overview: items.find((item) => item.summary_type === 'overview' && item.is_active)?.version ?? 0,
       key_points: items.find((item) => item.summary_type === 'key_points' && item.is_active)?.version ?? 0,
@@ -208,6 +244,7 @@ export default function TaskDetail({
 
     setSummaryOverview(overview ? parseSummaryLines(overview) : []);
     setSummaryVersions(latestVersions);
+    setSummaryModelUsed(modelUsed);
   }, [parseActionItems, parseSummaryLines]);
 
   const loadTask = useCallback(async () => {
@@ -284,6 +321,12 @@ export default function TaskDetail({
           summaryPollRef.current[type] = null;
         }
       });
+      if (comparePollRef.current) {
+        window.clearInterval(comparePollRef.current);
+        comparePollRef.current = null;
+      }
+      compareStreamRef.current?.close();
+      compareStreamRef.current = null;
     };
   }, []);
 
@@ -309,6 +352,12 @@ export default function TaskDetail({
     async (summaryType: SummaryRegenerateType) => {
       if (!id) return;
       if (summaryStreaming[summaryType]) return;
+      const selectedModelId = summaryModelSelection[summaryType] ?? null;
+      const selectedModel = selectedModelId
+        ? llmModels.find((model) =>
+            model.model_id ? model.model_id === selectedModelId : model.provider === selectedModelId
+          ) || null
+        : null;
 
       summaryStreamRef.current[summaryType]?.close();
       summaryStreamRef.current[summaryType] = null;
@@ -370,7 +419,11 @@ export default function TaskDetail({
           const triggerRegenerate = async () => {
             if (regenerateTriggered) return;
             regenerateTriggered = true;
-            await client.regenerateSummary(id, { summary_type: summaryType });
+            await client.regenerateSummary(id, {
+              summary_type: summaryType,
+              provider: selectedModel?.provider ?? null,
+              model_id: selectedModel?.model_id ?? null,
+            });
           };
 
           const connectionTimeout = window.setTimeout(() => {
@@ -454,7 +507,11 @@ export default function TaskDetail({
             handleStreamError();
           };
         } else {
-          await client.regenerateSummary(id, { summary_type: summaryType });
+          await client.regenerateSummary(id, {
+            summary_type: summaryType,
+            provider: selectedModel?.provider ?? null,
+            model_id: selectedModel?.model_id ?? null,
+          });
           startPolling();
         }
       } catch (err) {
@@ -466,7 +523,7 @@ export default function TaskDetail({
         }
       }
     },
-    [buildSummaryState, client, id, summaryStreaming, summaryVersions, t, updateSummaryFromStream]
+    [buildSummaryState, client, id, llmModels, summaryModelSelection, summaryStreaming, summaryVersions, t, updateSummaryFromStream]
   );
 
   useEffect(() => {
@@ -474,6 +531,27 @@ export default function TaskDetail({
       loadTask();
     }
   }, [loadTask, session]);
+
+  useEffect(() => {
+    if (!session?.user) return;
+    let active = true;
+    const loadModels = async () => {
+      try {
+        const result = await client.getLLMModels();
+        if (active) {
+          setLlmModels(result.models || []);
+        }
+      } catch {
+        if (active) {
+          setLlmModels([]);
+        }
+      }
+    };
+    loadModels();
+    return () => {
+      active = false;
+    };
+  }, [client, locale, session?.user]);
 
   useEffect(() => {
     if (!task?.id || typeof window === "undefined") return;
@@ -495,6 +573,16 @@ export default function TaskDetail({
       // Ignore malformed payloads
     }
   }, [task?.id]);
+
+  useEffect(() => {
+    if (!compareMode) return;
+    const expected = compareExpectedRef.current;
+    if (!expected) return;
+    const completed = comparisonResults.filter((item) => item.status === "completed").length;
+    if (completed >= expected) {
+      setCompareLoading(false);
+    }
+  }, [compareMode, comparisonResults]);
 
   // Subscribe to global task state from WebSocket
   const globalTaskState = useGlobalStore((state) => state.tasks[id || '']);
@@ -676,11 +764,516 @@ export default function TaskDetail({
     );
   };
 
+  const getSummaryTypeByTab = useCallback((): SummaryRegenerateType => {
+    if (activeTab === "keypoints") return "key_points";
+    if (activeTab === "actions") return "action_items";
+    return "overview";
+  }, [activeTab]);
+
+  const openCompareDialog = () => {
+    setCompareSummaryType(getSummaryTypeByTab());
+    if (compareSelectedModels.length < 2) {
+      const defaults = compareDefaultSelection();
+      if (defaults.length >= 2) {
+        setCompareSelectedModels(defaults);
+      }
+    }
+    setCompareDialogOpen(true);
+  };
+
+  const toggleCompareModel = (modelValue: string) => {
+    setCompareSelectedModels((prev) =>
+      prev.includes(modelValue)
+        ? prev.filter((item) => item !== modelValue)
+        : [...prev, modelValue]
+    );
+  };
+
+  const startCompare = async () => {
+    if (!id) return;
+    if (compareSelectedModels.length < 2) {
+      setCompareError(t("task.compareMinModels"));
+      return;
+    }
+    setCompareError(null);
+    setCompareLoading(true);
+    setComparisonResults([]);
+    setCompareMode(true);
+    compareExpectedRef.current = compareSelectedModels.length;
+    setCompareActiveModel(getModelKey(compareSelectedModels[0]));
+
+    if (comparePollRef.current) {
+      window.clearInterval(comparePollRef.current);
+      comparePollRef.current = null;
+    }
+    compareStreamRef.current?.close();
+    compareStreamRef.current = null;
+
+    try {
+      const comparison = await client.compareSummaries(id, {
+        summary_type: compareSummaryType,
+        models: compareSelectedModels.map(resolveModelPayload),
+      });
+
+      const expected = compareSelectedModels.length;
+      const startPollingFallback = () => {
+        const poll = async () => {
+          try {
+            const result = await client.getSummaryComparison(id, comparison.comparison_id);
+            setComparisonResults(result.results || []);
+            const completedCount = (result.results || []).filter((item) => item.status === "completed").length;
+            if (completedCount >= expected) {
+              if (comparePollRef.current) {
+                window.clearInterval(comparePollRef.current);
+                comparePollRef.current = null;
+              }
+              setCompareLoading(false);
+              const firstModel =
+                compareSelectedModels[0] ||
+                result.models?.[0]?.model_id ||
+                result.models?.[0]?.provider;
+              setCompareActiveModel(firstModel ? getModelKey(firstModel) : null);
+            }
+          } catch {
+            // Ignore poll errors
+          }
+        };
+
+        poll();
+        comparePollRef.current = window.setInterval(poll, 2000);
+        window.setTimeout(() => {
+          if (comparePollRef.current) {
+            window.clearInterval(comparePollRef.current);
+            comparePollRef.current = null;
+            setCompareLoading(false);
+            setCompareError(t("task.compareTimeout"));
+          }
+        }, 120000);
+      };
+
+      const rawBaseUrl =
+        process.env.NEXT_PUBLIC_API_URL ||
+        process.env.NEXT_PUBLIC_API_BASE_URL ||
+        'http://localhost:8000';
+      const normalizedBaseUrl = /\/api\/v1\/?$/.test(rawBaseUrl)
+        ? rawBaseUrl.replace(/\/$/, '')
+        : `${rawBaseUrl.replace(/\/$/, '')}/api/v1`;
+      const token = await getToken();
+
+      if (token) {
+        const streamUrl = `${normalizedBaseUrl}/summaries/${id}/compare/${comparison.comparison_id}/stream?summary_type=${compareSummaryType}&token=${encodeURIComponent(token)}`;
+        const eventSource = new EventSource(streamUrl);
+        compareStreamRef.current = eventSource;
+
+        const handleStreamError = (message?: string) => {
+          eventSource.close();
+          compareStreamRef.current = null;
+          setCompareError(message || t("task.compareFailed"));
+          startPollingFallback();
+        };
+
+        eventSource.addEventListener("summary.started", (event) => {
+          try {
+            const payload = JSON.parse(event.data);
+            const modelKey = getStreamModelKey(payload);
+            if (!modelKey) return;
+            upsertComparisonResult(modelKey, (prev) => ({
+              ...prev,
+              content: "",
+              status: "generating",
+            }));
+          } catch {
+            // Ignore malformed payloads
+          }
+        });
+
+        eventSource.addEventListener("summary.delta", (event) => {
+          try {
+            const payload = JSON.parse(event.data);
+            const modelKey = getStreamModelKey(payload);
+            if (!modelKey || typeof payload.content !== "string") return;
+            upsertComparisonResult(modelKey, (prev) => ({
+              ...prev,
+              content: `${prev.content}${payload.content}`,
+              status: "generating",
+            }));
+          } catch {
+            // Ignore malformed payloads
+          }
+        });
+
+        eventSource.addEventListener("summary.completed", (event) => {
+          try {
+            const payload = JSON.parse(event.data);
+            const modelKey = getStreamModelKey(payload);
+            if (!modelKey) return;
+            setComparisonResults((prev) => {
+              const index = prev.findIndex((item) => getModelKey(item.model) === modelKey);
+              let next = prev;
+              if (index >= 0) {
+                next = [...prev];
+                next[index] = {
+                  ...next[index],
+                  status: "completed",
+                  summary_id: payload.summary_id ?? next[index].summary_id ?? null,
+                };
+              } else {
+                next = [
+                  ...prev,
+                  {
+                    model: modelKey,
+                    content: "",
+                    token_count: null,
+                    created_at: new Date().toISOString(),
+                    status: "completed",
+                    summary_id: payload.summary_id ?? null,
+                  },
+                ];
+              }
+              const completedCount = next.filter((item) => item.status === "completed").length;
+              if (completedCount >= expected) {
+                eventSource.close();
+                compareStreamRef.current = null;
+                setCompareLoading(false);
+              }
+              return next;
+            });
+          } catch {
+            // Ignore malformed payloads
+          }
+        });
+
+        eventSource.addEventListener("error", (event) => {
+          try {
+            const payload = JSON.parse((event as MessageEvent).data);
+            handleStreamError(payload?.message);
+          } catch {
+            handleStreamError();
+          }
+        });
+
+        eventSource.onerror = () => {
+          handleStreamError();
+        };
+      } else {
+        startPollingFallback();
+      }
+    } catch (err) {
+      setCompareLoading(false);
+      if (err instanceof ApiError) {
+        setCompareError(err.message);
+      } else {
+        setCompareError(t("task.compareFailed"));
+      }
+    }
+  };
+
+  const clearCompare = () => {
+    setCompareActiveModel(null);
+    setComparisonResults([]);
+    setCompareError(null);
+    setCompareLoading(false);
+    setCompareMode(false);
+    setCompareActivating(false);
+    compareExpectedRef.current = 0;
+    if (comparePollRef.current) {
+      window.clearInterval(comparePollRef.current);
+      comparePollRef.current = null;
+    }
+    compareStreamRef.current?.close();
+    compareStreamRef.current = null;
+  };
+
+  const activateComparisonResult = async (summaryId: string | null | undefined) => {
+    if (!id) return;
+    if (!summaryId) {
+      notifyError(t("task.compareMissingSummary"));
+      return;
+    }
+    setCompareActivating(true);
+    try {
+      await client.activateSummary(id, summaryId);
+      const summaryResult = await client.getSummary(id);
+      buildSummaryState(summaryResult.items);
+      notifySuccess(t("task.compareActivateSuccess"));
+      clearCompare();
+    } catch (err) {
+      if (err instanceof ApiError) {
+        notifyError(err.message);
+      } else {
+        notifyError(t("task.compareActivateFailed"));
+      }
+    } finally {
+      setCompareActivating(false);
+    }
+  };
+
+  const renderCompareView = () => (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {compareSelectedModels.map((modelValue) => {
+          const modelKey = getModelKey(modelValue);
+          const isActive = compareActiveModel === modelKey;
+          const status = getCompareStatus(modelValue);
+          const statusColor = status === "completed"
+            ? "var(--app-success)"
+            : status === "failed"
+              ? "var(--app-danger)"
+              : status === "generating"
+                ? "var(--app-primary)"
+                : "var(--app-text-subtle)";
+          return (
+            <button
+              key={modelValue}
+              onClick={() => setCompareActiveModel(modelKey)}
+              className="text-xs px-3 py-1 rounded-full transition-colors"
+              style={{
+                background: isActive ? 'var(--app-primary)' : 'var(--app-glass-bg-strong)',
+                color: isActive ? 'var(--app-button-primary-text)' : 'var(--app-text)',
+              }}
+            >
+              <span
+                className="inline-block size-2 rounded-full mr-2 align-middle"
+                style={{
+                  background: statusColor,
+                  animation: status === "generating"
+                    ? "comparePulse 1.1s ease-in-out infinite"
+                    : undefined,
+                }}
+              />
+              {getModelCompareLabel(modelKey)}
+            </button>
+          );
+        })}
+        <button
+          onClick={clearCompare}
+          className="text-xs px-3 py-1 rounded-full transition-colors"
+          style={{
+            background: 'transparent',
+            color: 'var(--app-text-subtle)',
+            border: '1px dashed var(--app-glass-border)',
+          }}
+        >
+          {t("task.compareExit")}
+        </button>
+      </div>
+      {compareLoading && (
+        <p className="text-sm" style={{ color: 'var(--app-text-subtle)' }}>
+          {t("task.compareLoading", {
+            count: comparisonResults.filter((item) => item.status === "completed").length,
+            total: compareSelectedModels.length,
+          })}
+        </p>
+      )}
+      {compareError && (
+        <p className="text-sm" style={{ color: 'var(--app-danger)' }}>
+          {compareError}
+        </p>
+      )}
+      {(() => {
+        const activeKey = compareActiveModel || getModelKey(compareSelectedModels[0]);
+        const result = comparisonResults.find((item) => {
+          const normalized = getModelKey(item.model);
+          return normalized === activeKey;
+        });
+        if (!result) {
+          return (
+            <p className="text-base leading-7" style={{ color: 'var(--app-text-subtle)' }}>
+              {t("task.comparePending")}
+            </p>
+          );
+        }
+        return (
+          <div className="space-y-3">
+            <p className="text-base leading-7" style={{ color: 'var(--app-text)' }}>
+              {result.content}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => activateComparisonResult(result.summary_id)}
+                disabled={result.status !== "completed" || compareActivating}
+                className="text-xs px-3 py-1 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ background: 'var(--app-primary)', color: 'var(--app-button-primary-text)' }}
+              >
+                {compareActivating ? t("task.compareActivating") : t("task.compareActivate")}
+              </button>
+              {result.status !== "completed" && (
+                <span className="text-xs" style={{ color: 'var(--app-text-subtle)' }}>
+                  {t("task.compareActivateHint")}
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+      <style jsx>{`
+        @keyframes comparePulse {
+          0% {
+            opacity: 0.35;
+          }
+          50% {
+            opacity: 1;
+          }
+          100% {
+            opacity: 0.35;
+          }
+        }
+      `}</style>
+    </div>
+  );
+
   const summaryTabs = [
     { id: 'summary', label: t("task.tabs.summary") },
     { id: 'keypoints', label: t("task.tabs.keypoints") },
     { id: 'actions', label: t("task.tabs.actions") }
   ];
+  const modelNameMap = useMemo(() => {
+    const map = new Map<string, { displayName: string; modelId?: string }>();
+    llmModels.forEach((model) => {
+      map.set(model.provider, { displayName: model.display_name, modelId: model.model_id });
+      if (model.model_id) {
+        map.set(model.model_id, { displayName: model.display_name, modelId: model.model_id });
+      }
+    });
+    return map;
+  }, [llmModels]);
+  const modelGroups = useMemo(() => {
+    const groups = new Map<string, LLMModel[]>();
+    llmModels.forEach((model) => {
+      const key = model.display_name || model.provider;
+      const list = groups.get(key) || [];
+      list.push(model);
+      groups.set(key, list);
+    });
+    return Array.from(groups.entries()).map(([label, models]) => ({
+      label,
+      models,
+    }));
+  }, [llmModels]);
+  const getModelLabel = useCallback(
+    (provider?: string | null) => {
+      if (!provider) return t("task.summaryModelAuto");
+      const modelMeta = modelNameMap.get(provider);
+      if (!modelMeta) return provider;
+      return modelMeta.modelId
+        ? `${modelMeta.displayName} / ${modelMeta.modelId}`
+        : modelMeta.displayName;
+    },
+    [modelNameMap, t]
+  );
+  const renderModelOptions = useCallback(
+    () =>
+      modelGroups.map((group) => (
+        <optgroup
+          key={group.label}
+          label={group.label}
+        >
+          {group.models.map((model) => {
+            const suffix = model.is_available
+              ? (model.is_recommended ? ` ${t("task.summaryModelRecommended")}` : "")
+              : ` ${t("task.summaryModelUnavailable")}`;
+            const label = model.model_id ? `  ${model.model_id}` : `  ${model.provider}`;
+            return (
+              <option
+                key={model.model_id || model.provider}
+                value={model.model_id || model.provider}
+                disabled={!model.is_available}
+              >
+                {label}{suffix}
+              </option>
+            );
+          })}
+        </optgroup>
+      )),
+    [modelGroups, t]
+  );
+  const getModelKey = useCallback(
+    (modelValue: string) => {
+      const matched = llmModels.find(
+        (model) => model.model_id === modelValue || model.provider === modelValue
+      );
+      if (matched) {
+        return matched.model_id || matched.provider;
+      }
+      return modelValue;
+    },
+    [llmModels]
+  );
+  const getModelCompareLabel = useCallback(
+    (modelKey: string) => {
+      const modelMeta = modelNameMap.get(modelKey);
+      if (!modelMeta) return modelKey;
+      return modelMeta.modelId
+        ? `${modelMeta.displayName} / ${modelMeta.modelId}`
+        : modelMeta.displayName;
+    },
+    [modelNameMap]
+  );
+  const getCompareStatus = useCallback(
+    (modelValue: string) => {
+      const modelKey = getModelKey(modelValue);
+      const result = comparisonResults.find((item) => getModelKey(item.model) === modelKey);
+      return result?.status || "pending";
+    },
+    [comparisonResults, getModelKey]
+  );
+  const resolveModelPayload = useCallback(
+    (modelValue: string) => {
+      const matched = llmModels.find(
+        (model) => model.model_id === modelValue || model.provider === modelValue
+      );
+      if (matched) {
+        return {
+          provider: matched.provider,
+          model_id: matched.model_id ?? null,
+        };
+      }
+      return {
+        provider: modelValue,
+        model_id: null,
+      };
+    },
+    [llmModels]
+  );
+  const getStreamModelKey = useCallback(
+    (payload: { provider?: string; model_id?: string } | null | undefined) => {
+      if (!payload) return "";
+      const rawKey = payload.model_id || payload.provider || "";
+      return rawKey ? getModelKey(rawKey) : "";
+    },
+    [getModelKey]
+  );
+  const upsertComparisonResult = useCallback(
+    (modelKey: string, updater: (prev: ComparisonResult) => ComparisonResult) => {
+      setComparisonResults((prev) => {
+        const index = prev.findIndex((item) => getModelKey(item.model) === modelKey);
+        if (index >= 0) {
+          const next = [...prev];
+          next[index] = updater(next[index]);
+          return next;
+        }
+        const base: ComparisonResult = {
+          model: modelKey,
+          content: "",
+          token_count: null,
+          created_at: new Date().toISOString(),
+          status: "generating",
+        };
+        return [...prev, updater(base)];
+      });
+    },
+    [getModelKey]
+  );
+  const compareDefaultSelection = useCallback(() => {
+    const available = llmModels.filter((model) => model.is_available);
+    const recommended = available.filter((model) => model.is_recommended);
+    const picked = [...recommended, ...available]
+      .map((model) => model.model_id || model.provider)
+      .filter(Boolean)
+      .filter((value, index, self) => self.indexOf(value) === index)
+      .slice(0, 2);
+    return picked;
+  }, [llmModels]);
   // 优先使用音频元素的实际 duration，如果没有则使用后端提供的 duration_seconds
   const duration = audioDuration || task?.duration_seconds || 0;
 
@@ -1130,23 +1723,61 @@ export default function TaskDetail({
                 {activeTab === 'summary' && (
                   <div className="space-y-6">
                     <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-lg" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
-                          {t("task.summaryOverview")}
-                        </h3>
-                        <button
-                          onClick={() => regenerateSummary('overview')}
-                          disabled={summaryStreaming.overview}
-                          className="text-xs px-3 py-1 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          style={{ background: 'var(--app-primary-soft)', color: 'var(--app-primary)' }}
-                        >
-                          {summaryStreaming.overview ? t("task.summaryRetrying") : t("task.summaryRetry")}
-                        </button>
+                      <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
+                        <div>
+                          <h3 className="text-lg" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
+                            {t("task.summaryOverview")}
+                          </h3>
+                          <div className="flex items-center gap-2 mt-1">
+                            <p className="text-xs" style={{ color: 'var(--app-text-subtle)' }}>
+                              {t("task.summaryModelLabel")} {getModelLabel(summaryModelUsed.overview)}
+                            </p>
+                            <button
+                              onClick={openCompareDialog}
+                              disabled={llmModels.filter((model) => model.is_available).length < 2}
+                              className="text-xs px-2 py-0.5 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              style={{
+                                background: 'var(--app-glass-bg-strong)',
+                                color: 'var(--app-text)',
+                                border: '1px solid var(--app-glass-border)',
+                              }}
+                            >
+                              {t("task.compareModels")}
+                            </button>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <select
+                            value={summaryModelSelection.overview ?? ''}
+                            onChange={(event) =>
+                              setSummaryModelSelection((prev) => ({
+                                ...prev,
+                                overview: event.target.value || null,
+                              }))
+                            }
+                            disabled={summaryStreaming.overview || llmModels.length === 0}
+                            className="text-xs px-2 py-1 rounded-md border bg-transparent disabled:opacity-50"
+                            style={{ borderColor: 'var(--app-glass-border)', color: 'var(--app-text)' }}
+                          >
+                            <option value="">{t("task.summaryModelAutoOption")}</option>
+                            {renderModelOptions()}
+                          </select>
+                          <button
+                            onClick={() => regenerateSummary('overview')}
+                            disabled={summaryStreaming.overview}
+                            className="text-xs px-3 py-1 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            style={{ background: 'var(--app-primary-soft)', color: 'var(--app-primary)' }}
+                          >
+                            {summaryStreaming.overview ? t("task.summaryRetrying") : t("task.summaryRetry")}
+                          </button>
+                        </div>
                       </div>
                       {summaryStreaming.overview && summaryStreamContent.overview ? (
                         <p className="text-base leading-7" style={{ color: 'var(--app-text)' }}>
                           {summaryStreamContent.overview}
                         </p>
+                      ) : compareMode && compareSummaryType === "overview" ? (
+                        renderCompareView()
                       ) : summaryOverview.length > 0 ? (
                         summaryOverview.map((line, index) => (
                           <p key={index} className="text-base leading-7" style={{ color: 'var(--app-text)' }}>
@@ -1166,23 +1797,61 @@ export default function TaskDetail({
                 {/* Key Points Tab */}
                 {activeTab === 'keypoints' && (
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
-                        {t("task.keyPointsTitle")}
-                      </h3>
-                      <button
-                        onClick={() => regenerateSummary('key_points')}
-                        disabled={summaryStreaming.key_points}
-                        className="text-xs px-3 py-1 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        style={{ background: 'var(--app-primary-soft)', color: 'var(--app-primary)' }}
-                      >
-                        {summaryStreaming.key_points ? t("task.summaryRetrying") : t("task.summaryRetry")}
-                      </button>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-lg" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
+                          {t("task.keyPointsTitle")}
+                        </h3>
+                        <div className="flex items-center gap-2 mt-1">
+                          <p className="text-xs" style={{ color: 'var(--app-text-subtle)' }}>
+                            {t("task.summaryModelLabel")} {getModelLabel(summaryModelUsed.key_points)}
+                          </p>
+                          <button
+                            onClick={openCompareDialog}
+                            disabled={llmModels.filter((model) => model.is_available).length < 2}
+                            className="text-xs px-2 py-0.5 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            style={{
+                              background: 'var(--app-glass-bg-strong)',
+                              color: 'var(--app-text)',
+                              border: '1px solid var(--app-glass-border)',
+                            }}
+                          >
+                            {t("task.compareModels")}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <select
+                          value={summaryModelSelection.key_points ?? ''}
+                          onChange={(event) =>
+                            setSummaryModelSelection((prev) => ({
+                              ...prev,
+                              key_points: event.target.value || null,
+                            }))
+                          }
+                          disabled={summaryStreaming.key_points || llmModels.length === 0}
+                          className="text-xs px-2 py-1 rounded-md border bg-transparent disabled:opacity-50"
+                          style={{ borderColor: 'var(--app-glass-border)', color: 'var(--app-text)' }}
+                        >
+                          <option value="">{t("task.summaryModelAutoOption")}</option>
+                          {renderModelOptions()}
+                        </select>
+                        <button
+                          onClick={() => regenerateSummary('key_points')}
+                          disabled={summaryStreaming.key_points}
+                          className="text-xs px-3 py-1 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          style={{ background: 'var(--app-primary-soft)', color: 'var(--app-primary)' }}
+                        >
+                          {summaryStreaming.key_points ? t("task.summaryRetrying") : t("task.summaryRetry")}
+                        </button>
+                      </div>
                     </div>
                     {summaryStreaming.key_points && summaryStreamContent.key_points ? (
                       <p className="text-base leading-7" style={{ color: 'var(--app-text)' }}>
                         {summaryStreamContent.key_points}
                       </p>
+                    ) : compareMode && compareSummaryType === "key_points" ? (
+                      renderCompareView()
                     ) : (
                       keyPoints.map((point, index) => (
                         <div key={index} className="flex items-start gap-3">
@@ -1210,23 +1879,61 @@ export default function TaskDetail({
                 {/* Action Items Tab */}
                 {activeTab === 'actions' && (
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
-                        {t("task.tabs.actions")}
-                      </h3>
-                      <button
-                        onClick={() => regenerateSummary('action_items')}
-                        disabled={summaryStreaming.action_items}
-                        className="text-xs px-3 py-1 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        style={{ background: 'var(--app-primary-soft)', color: 'var(--app-primary)' }}
-                      >
-                        {summaryStreaming.action_items ? t("task.summaryRetrying") : t("task.summaryRetry")}
-                      </button>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-lg" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
+                          {t("task.tabs.actions")}
+                        </h3>
+                        <div className="flex items-center gap-2 mt-1">
+                          <p className="text-xs" style={{ color: 'var(--app-text-subtle)' }}>
+                            {t("task.summaryModelLabel")} {getModelLabel(summaryModelUsed.action_items)}
+                          </p>
+                          <button
+                            onClick={openCompareDialog}
+                            disabled={llmModels.filter((model) => model.is_available).length < 2}
+                            className="text-xs px-2 py-0.5 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            style={{
+                              background: 'var(--app-glass-bg-strong)',
+                              color: 'var(--app-text)',
+                              border: '1px solid var(--app-glass-border)',
+                            }}
+                          >
+                            {t("task.compareModels")}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <select
+                          value={summaryModelSelection.action_items ?? ''}
+                          onChange={(event) =>
+                            setSummaryModelSelection((prev) => ({
+                              ...prev,
+                              action_items: event.target.value || null,
+                            }))
+                          }
+                          disabled={summaryStreaming.action_items || llmModels.length === 0}
+                          className="text-xs px-2 py-1 rounded-md border bg-transparent disabled:opacity-50"
+                          style={{ borderColor: 'var(--app-glass-border)', color: 'var(--app-text)' }}
+                        >
+                          <option value="">{t("task.summaryModelAutoOption")}</option>
+                          {renderModelOptions()}
+                        </select>
+                        <button
+                          onClick={() => regenerateSummary('action_items')}
+                          disabled={summaryStreaming.action_items}
+                          className="text-xs px-3 py-1 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          style={{ background: 'var(--app-primary-soft)', color: 'var(--app-primary)' }}
+                        >
+                          {summaryStreaming.action_items ? t("task.summaryRetrying") : t("task.summaryRetry")}
+                        </button>
+                      </div>
                     </div>
                     {summaryStreaming.action_items && summaryStreamContent.action_items ? (
                       <p className="text-base leading-7" style={{ color: 'var(--app-text)' }}>
                         {summaryStreamContent.action_items}
                       </p>
+                    ) : compareMode && compareSummaryType === "action_items" ? (
+                      renderCompareView()
                     ) : (
                       actionItems.map((item) => (
                         <div
@@ -1272,6 +1979,89 @@ export default function TaskDetail({
                   </div>
                 )}
               </div>
+
+              {compareDialogOpen && (
+                <div
+                  className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                  style={{ background: 'rgba(15, 23, 42, 0.6)' }}
+                  onClick={() => setCompareDialogOpen(false)}
+                >
+                  <div
+                    className="glass-panel-strong w-full max-w-lg rounded-2xl p-6 space-y-4"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
+                        {t("task.compareTitle")}
+                      </h3>
+                    </div>
+                    <p className="text-sm" style={{ color: 'var(--app-text-subtle)' }}>
+                      {t("task.compareHint")}
+                    </p>
+
+                    <div className="space-y-3">
+                      {modelGroups.map((group) => (
+                        <div key={group.label} className="space-y-2">
+                          <div className="text-xs uppercase tracking-wide" style={{ color: 'var(--app-text-muted)' }}>
+                            {group.label}
+                          </div>
+                          <div className="space-y-2">
+                            {group.models.map((model) => {
+                              const value = model.model_id || model.provider;
+                              const isChecked = compareSelectedModels.includes(value);
+                              const suffix = model.is_available
+                                ? (model.is_recommended ? ` ${t("task.summaryModelRecommended")}` : "")
+                                : ` ${t("task.summaryModelUnavailable")}`;
+                              return (
+                                <label
+                                  key={value}
+                                  className="flex items-center gap-2 text-sm"
+                                  style={{ color: model.is_available ? 'var(--app-text)' : 'var(--app-text-subtle)' }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    disabled={!model.is_available}
+                                    checked={isChecked}
+                                    onChange={() => toggleCompareModel(value)}
+                                  />
+                                  <span>{model.model_id ? `${model.model_id}${suffix}` : `${model.provider}${suffix}`}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {compareError && (
+                      <p className="text-sm" style={{ color: 'var(--app-danger)' }}>
+                        {compareError}
+                      </p>
+                    )}
+
+                    <div className="flex justify-end gap-2 pt-2">
+                      <button
+                        onClick={() => setCompareDialogOpen(false)}
+                        className="text-sm px-4 py-2 rounded-lg"
+                        style={{ background: 'var(--app-glass-bg-strong)', color: 'var(--app-text-muted)' }}
+                      >
+                        {t("common.cancel")}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setCompareDialogOpen(false);
+                          startCompare();
+                        }}
+                        disabled={compareSelectedModels.length < 2 || compareLoading}
+                        className="text-sm px-4 py-2 rounded-lg disabled:opacity-50"
+                        style={{ background: 'var(--app-primary)', color: 'var(--app-button-primary-text)' }}
+                      >
+                        {compareLoading ? t("task.compareLoadingButton") : t("task.compareStart")}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </main>
