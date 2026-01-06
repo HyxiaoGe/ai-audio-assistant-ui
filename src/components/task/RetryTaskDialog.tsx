@@ -97,13 +97,6 @@ export default function RetryTaskDialog({
               <RefreshCw className="w-4 h-4" />
               {t("task.retryDialog.title")}
             </h2>
-            <button
-              onClick={handleClose}
-              className="text-sm"
-              style={{ color: "var(--app-text-subtle)" }}
-            >
-              {t("common.cancel")}
-            </button>
           </div>
 
           <div className="space-y-3 mb-6">

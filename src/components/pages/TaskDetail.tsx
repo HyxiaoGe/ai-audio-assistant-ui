@@ -19,6 +19,7 @@ import { useAPIClient } from '@/lib/use-api-client';
 import { useGlobalStore } from '@/store/global-store';
 import { getToken } from '@/lib/auth-token';
 import { ApiError } from '@/types/api';
+import { formatDuration } from '@/lib/utils';
 import type {
   TaskDetail as ApiTaskDetail,
   TranscriptSegment as ApiTranscriptSegment,
@@ -29,6 +30,7 @@ import type {
   LLMModel
 } from '@/types/api';
 import { useI18n } from '@/lib/i18n-context';
+import { useDateFormatter } from '@/lib/use-date-formatter';
 
 interface TaskDetailProps {
   language?: 'zh' | 'en';
@@ -73,6 +75,7 @@ export default function TaskDetail({
   const { data: session, status: sessionStatus } = useSession();
   const client = useAPIClient();
   const { t, locale } = useI18n();
+  const { formatRelativeTime } = useDateFormatter();
   const id = params?.id as string;
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -1276,6 +1279,21 @@ export default function TaskDetail({
   }, [llmModels]);
   // 优先使用音频元素的实际 duration，如果没有则使用后端提供的 duration_seconds
   const duration = audioDuration || task?.duration_seconds || 0;
+  const formatFileSize = (bytes?: number | null) => {
+    if (!bytes) return null;
+    const sizes = ["B", "KB", "MB", "GB"];
+    const k = 1024;
+    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
+    const value = bytes / Math.pow(k, i);
+    const formatted = i === 0 ? Math.round(value).toString() : value.toFixed(1);
+    return `${formatted} ${sizes[i]}`;
+  };
+  const fileSizeLabel = formatFileSize(task?.file_size_bytes);
+  const infoItems = [
+    fileSizeLabel ? t("task.fileSizeValue", { size: fileSizeLabel }) : null,
+    duration ? t("task.durationValue", { duration: formatDuration(Math.round(duration)) }) : null,
+    task?.created_at ? formatRelativeTime(task.created_at) : null
+  ].filter(Boolean) as string[];
 
   if (sessionStatus === 'loading') {
     return (
@@ -1511,19 +1529,18 @@ export default function TaskDetail({
                     <h3 className="text-sm truncate" style={{ fontWeight: 600, color: 'var(--app-text-strong)' }}>
                       {task.title}
                     </h3>
-                    <div className="flex items-center gap-3 mt-1">
-                      <span className="text-xs" style={{ color: 'var(--app-text-subtle)' }}>
-                        {t("task.fileSizeValue", { size: "42.5 MB" })}
-                      </span>
-                      <span className="text-xs" style={{ color: 'var(--app-text-faint)' }}>·</span>
-                      <span className="text-xs" style={{ color: 'var(--app-text-subtle)' }}>
-                        {t("task.durationValue", { duration: "45:30" })}
-                      </span>
-                      <span className="text-xs" style={{ color: 'var(--app-text-faint)' }}>·</span>
-                      <span className="text-xs" style={{ color: 'var(--app-text-subtle)' }}>
-                        {t("task.uploadedJustNow")}
-                      </span>
-                    </div>
+                    {infoItems.length > 0 && (
+                      <div className="flex items-center gap-3 mt-1">
+                        {infoItems.map((item, index) => (
+                          <span key={`${item}-${index}`} className="text-xs flex items-center gap-3" style={{ color: 'var(--app-text-subtle)' }}>
+                            {item}
+                            {index < infoItems.length - 1 && (
+                              <span className="text-xs" style={{ color: 'var(--app-text-faint)' }}>·</span>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

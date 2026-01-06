@@ -193,6 +193,7 @@ export interface TaskDetail {
   source_key?: string
   source_url?: string
   audio_url?: string  // 音频播放 URL（后端生成的可访问 URL）
+  file_size_bytes?: number
   status: TaskStatus
   progress: number
   stage?: string
