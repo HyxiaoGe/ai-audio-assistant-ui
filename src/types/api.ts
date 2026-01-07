@@ -109,6 +109,37 @@ export interface PresignResponseNew {
 export type PresignResponse = PresignResponseExists | PresignResponseNew
 
 // ============================================================================
+// ASR 额度
+// ============================================================================
+
+export type AsrQuotaStatus = "active" | "inactive" | "expired" | "exhausted"
+
+export interface AsrQuotaItem {
+  provider: string
+  window_type: "day" | "month" | "week" | "year"
+  window_start: string
+  window_end: string
+  quota_seconds: number
+  used_seconds: number
+  status: AsrQuotaStatus
+}
+
+export interface AsrQuotaListResponse {
+  items: AsrQuotaItem[]
+}
+
+export interface AsrQuotaRefreshRequest {
+  provider: string
+  window_type: AsrQuotaItem["window_type"]
+  quota_seconds: number
+  reset: boolean
+}
+
+export interface AsrQuotaRefreshResponse {
+  item: AsrQuotaItem
+}
+
+// ============================================================================
 // 任务相关
 // ============================================================================
 

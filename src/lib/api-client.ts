@@ -13,6 +13,9 @@ import { translateStatic } from "@/lib/i18n-static"
 import {
   ApiError,
   ApiResponse,
+  AsrQuotaListResponse,
+  AsrQuotaRefreshRequest,
+  AsrQuotaRefreshResponse,
   BatchDeleteResponse,
   CompareSummariesRequest,
   CompareSummariesResponse,
@@ -183,6 +186,27 @@ export class APIClient {
 
   async healthCheck(): Promise<{ status: string }> {
     return request("/health", { method: "GET" })
+  }
+
+  // ==========================================================================
+  // ASR 额度
+  // ==========================================================================
+
+  async getAsrQuotas(): Promise<AsrQuotaListResponse> {
+    return request("/asr/quotas", { method: "GET" }, this.token)
+  }
+
+  async refreshAsrQuota(
+    data: AsrQuotaRefreshRequest
+  ): Promise<AsrQuotaRefreshResponse> {
+    return request(
+      "/asr/quotas/refresh",
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+      this.token
+    )
   }
 
   // ==========================================================================
