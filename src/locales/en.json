@@ -324,6 +324,9 @@
     "asrQuotaTotal": "Total {total}",
     "asrQuotaWindowLabel": "Window",
     "asrQuotaHoursLabel": "Quota (hours)",
+    "asrQuotaUsedHoursLabel": "Used (hours)",
+    "asrQuotaWindowStart": "Window start",
+    "asrQuotaWindowEnd": "Window end",
     "asrQuotaResetLabel": "Reset usage",
     "asrQuotaResetDesc": "Reset used seconds after recharge",
     "asrQuotaProvider": {
@@ -335,7 +338,8 @@
       "day": "Daily",
       "week": "Weekly",
       "month": "Monthly",
-      "year": "Yearly"
+      "year": "Yearly",
+      "total": "Total"
     },
     "asrQuotaStatus": {
       "active": "Active",

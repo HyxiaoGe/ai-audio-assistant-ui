@@ -123,7 +123,10 @@ export default function Settings({
     provider: string;
     window_type: AsrQuotaItem["window_type"];
     quota_hours: number;
+    used_hours: number;
     reset: boolean;
+    window_start?: string;
+    window_end?: string;
   } | null>(null);
 
   const languageState = locale;
@@ -138,8 +141,25 @@ export default function Settings({
   } = localSettings;
 
   const formatHours = (hours: number) => {
-    if (hours >= 10) return `${Math.round(hours)}h`;
-    return `${hours.toFixed(1)}h`;
+    return `${hours.toFixed(2)}h`;
+  };
+
+  const DEFAULT_TOTAL_START = "1970-01-01";
+  const DEFAULT_TOTAL_END = "2099-12-31";
+
+  const toDateInput = (value?: string) => {
+    if (!value) return "";
+    return value.slice(0, 10);
+  };
+
+  const normalizeDateInput = (value?: string, fallback?: string) => {
+    const normalized = toDateInput(value);
+    return normalized || fallback || "";
+  };
+
+  const toIsoDate = (value?: string, isEnd = false) => {
+    if (!value) return undefined;
+    return isEnd ? `${value}T23:59:59Z` : `${value}T00:00:00Z`;
   };
 
   const formatWindow = (start: string, end: string) => {
@@ -170,8 +190,9 @@ export default function Settings({
     const order = new Map<AsrQuotaItem["window_type"], number>([
       ["day", 0],
       ["month", 1],
-      ["week", 2],
-      ["year", 3],
+      ["total", 2],
+      ["week", 3],
+      ["year", 4],
     ]);
     const grouped = new Map<string, AsrQuotaItem[]>();
     asrQuotas.forEach((item) => {
@@ -225,17 +246,25 @@ export default function Settings({
   }, [client, t]);
 
   const canEditWindowType = (type: AsrQuotaItem["window_type"]) => {
-    return type === "day" || type === "month";
+    return type === "day" || type === "month" || type === "total";
   };
 
   const startEditQuota = (item: AsrQuotaItem) => {
     const key = `${item.provider}-${item.window_type}`;
     setEditingQuotaKey(key);
+    const isTotal = item.window_type === "total";
     setQuotaForm({
       provider: item.provider,
       window_type: canEditWindowType(item.window_type) ? item.window_type : "month",
       quota_hours: item.quota_seconds,
+      used_hours: item.used_seconds,
       reset: true,
+      window_start: isTotal
+        ? normalizeDateInput(item.window_start, DEFAULT_TOTAL_START)
+        : normalizeDateInput(item.window_start),
+      window_end: isTotal
+        ? normalizeDateInput(item.window_end, DEFAULT_TOTAL_END)
+        : normalizeDateInput(item.window_end),
     });
   };
 
@@ -249,11 +278,15 @@ export default function Settings({
     const key = `${item.provider}-${item.window_type}`;
     setAsrSaving((prev) => ({ ...prev, [key]: true }));
     try {
+      const hasTotalWindow = quotaForm.window_type === "total";
       const result = await client.refreshAsrQuota({
         provider: quotaForm.provider,
         window_type: quotaForm.window_type,
         quota_seconds: Math.max(0, quotaForm.quota_hours),
+        used_seconds: Math.max(0, quotaForm.used_hours),
         reset: quotaForm.reset,
+        window_start: hasTotalWindow ? toIsoDate(quotaForm.window_start) : undefined,
+        window_end: hasTotalWindow ? toIsoDate(quotaForm.window_end, true) : undefined,
       });
       setAsrQuotas((prev) =>
         prev.map((quota) =>
@@ -738,44 +771,117 @@ export default function Settings({
 
                                 {isEditing && quotaForm && (
                                   <div className="mt-2 space-y-4 rounded-lg border p-3" style={{ borderColor: "var(--app-glass-border)" }}>
-                                    <div className="grid gap-3 sm:grid-cols-2">
-                                      <div className="space-y-1">
-                                        <Label className="text-xs">{t("settings.asrQuotaWindowLabel")}</Label>
-                                        <Select
-                                          value={quotaForm.window_type}
-                                          onValueChange={(value) =>
-                                            setQuotaForm((prev) =>
-                                              prev
-                                                ? {
-                                                    ...prev,
-                                                    window_type: value as AsrQuotaItem["window_type"],
-                                                  }
-                                                : prev
-                                            )
-                                          }
-                                        >
-                                          <SelectTrigger className="w-full">
-                                            <SelectValue />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value="day">{windowTypeLabel("day")}</SelectItem>
-                                            <SelectItem value="month">{windowTypeLabel("month")}</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
-                                      <div className="space-y-1">
-                                        <Label className="text-xs">{t("settings.asrQuotaHoursLabel")}</Label>
+                                  <div className="grid gap-3 sm:grid-cols-2">
+                                    <div className="space-y-1">
+                                      <Label className="text-xs">{t("settings.asrQuotaWindowLabel")}</Label>
+                                      <Select
+                                        value={quotaForm.window_type}
+                                        onValueChange={(value) =>
+                                          setQuotaForm((prev) =>
+                                            prev
+                                              ? {
+                                                  ...prev,
+                                                  window_type: value as AsrQuotaItem["window_type"],
+                                                  window_start:
+                                                    value === "total"
+                                                      ? normalizeDateInput(prev.window_start, DEFAULT_TOTAL_START)
+                                                      : prev.window_start,
+                                                  window_end:
+                                                    value === "total"
+                                                      ? normalizeDateInput(prev.window_end, DEFAULT_TOTAL_END)
+                                                      : prev.window_end,
+                                                }
+                                              : prev
+                                          )
+                                        }
+                                      >
+                                        <SelectTrigger className="w-full">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="day">{windowTypeLabel("day")}</SelectItem>
+                                          <SelectItem value="month">{windowTypeLabel("month")}</SelectItem>
+                                          <SelectItem value="total">{windowTypeLabel("total")}</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <Label className="text-xs">{t("settings.asrQuotaHoursLabel")}</Label>
                                         <input
                                           type="number"
                                           min={0}
+                                          step="0.1"
                                           className="glass-control h-9 w-full rounded-md px-3 text-sm"
                                           value={quotaForm.quota_hours}
+                                          onChange={(e) =>
+                                            setQuotaForm((prev) =>
+                                            prev
+                                              ? {
+                                                  ...prev,
+                                                  quota_hours: Number(e.target.value),
+                                                }
+                                              : prev
+                                          )
+                                        }
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="grid gap-3 sm:grid-cols-2">
+                                    <div className="space-y-1">
+                                      <Label className="text-xs">{t("settings.asrQuotaUsedHoursLabel")}</Label>
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        step="0.1"
+                                        className="glass-control h-9 w-full rounded-md px-3 text-sm"
+                                        value={quotaForm.used_hours}
+                                        onChange={(e) =>
+                                          setQuotaForm((prev) =>
+                                            prev
+                                              ? {
+                                                  ...prev,
+                                                  used_hours: Number(e.target.value),
+                                                }
+                                              : prev
+                                          )
+                                        }
+                                      />
+                                    </div>
+                                  </div>
+
+                                  {quotaForm.window_type === "total" && (
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                      <div className="space-y-1">
+                                        <Label className="text-xs">{t("settings.asrQuotaWindowStart")}</Label>
+                                        <input
+                                          type="date"
+                                          className="glass-control h-9 w-full rounded-md px-3 text-sm"
+                                          value={toDateInput(quotaForm.window_start)}
                                           onChange={(e) =>
                                             setQuotaForm((prev) =>
                                               prev
                                                 ? {
                                                     ...prev,
-                                                    quota_hours: Number(e.target.value),
+                                                    window_start: e.target.value,
+                                                  }
+                                                : prev
+                                            )
+                                          }
+                                        />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label className="text-xs">{t("settings.asrQuotaWindowEnd")}</Label>
+                                        <input
+                                          type="date"
+                                          className="glass-control h-9 w-full rounded-md px-3 text-sm"
+                                          value={toDateInput(quotaForm.window_end)}
+                                          onChange={(e) =>
+                                            setQuotaForm((prev) =>
+                                              prev
+                                                ? {
+                                                    ...prev,
+                                                    window_end: e.target.value,
                                                   }
                                                 : prev
                                             )
@@ -783,6 +889,7 @@ export default function Settings({
                                         />
                                       </div>
                                     </div>
+                                  )}
 
                                     <div className="flex items-center justify-between">
                                       <div className="space-y-1">

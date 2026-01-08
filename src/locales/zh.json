@@ -324,6 +324,9 @@
     "asrQuotaTotal": "总量 {total}",
     "asrQuotaWindowLabel": "时间窗口",
     "asrQuotaHoursLabel": "额度（小时）",
+    "asrQuotaUsedHoursLabel": "已用（小时）",
+    "asrQuotaWindowStart": "窗口开始",
+    "asrQuotaWindowEnd": "窗口结束",
     "asrQuotaResetLabel": "重置已用",
     "asrQuotaResetDesc": "充值后重置已用额度",
     "asrQuotaProvider": {
@@ -335,7 +338,8 @@
       "day": "日",
       "week": "周",
       "month": "月",
-      "year": "年"
+      "year": "年",
+      "total": "总额"
     },
     "asrQuotaStatus": {
       "active": "可用",
