@@ -140,8 +140,12 @@ export default function Settings({
     summaryDetail: summaryDetailState,
   } = localSettings;
 
-  const formatHours = (hours: number) => {
-    return `${hours.toFixed(2)}h`;
+  const normalizeQuotaHours = (value: number) => {
+    return value >= 3600 ? value / 3600 : value;
+  };
+
+  const formatQuotaHours = (value: number) => {
+    return `${normalizeQuotaHours(value).toFixed(2)}h`;
   };
 
   const DEFAULT_TOTAL_START = "1970-01-01";
@@ -256,8 +260,8 @@ export default function Settings({
     setQuotaForm({
       provider: item.provider,
       window_type: canEditWindowType(item.window_type) ? item.window_type : "month",
-      quota_hours: item.quota_seconds,
-      used_hours: item.used_seconds,
+      quota_hours: Math.round(normalizeQuotaHours(item.quota_seconds) * 100) / 100,
+      used_hours: Math.round(normalizeQuotaHours(item.used_seconds) * 100) / 100,
       reset: true,
       window_start: isTotal
         ? normalizeDateInput(item.window_start, DEFAULT_TOTAL_START)
@@ -282,8 +286,8 @@ export default function Settings({
       const result = await client.refreshAsrQuota({
         provider: quotaForm.provider,
         window_type: quotaForm.window_type,
-        quota_seconds: Math.max(0, quotaForm.quota_hours),
-        used_seconds: Math.max(0, quotaForm.used_hours),
+        quota_hours: Math.max(0, quotaForm.quota_hours),
+        used_seconds: Math.max(0, quotaForm.used_hours * 3600),
         reset: quotaForm.reset,
         window_start: hasTotalWindow ? toIsoDate(quotaForm.window_start) : undefined,
         window_end: hasTotalWindow ? toIsoDate(quotaForm.window_end, true) : undefined,
@@ -726,8 +730,10 @@ export default function Settings({
                             const key = `${item.provider}-${item.window_type}`;
                             const isEditing = editingQuotaKey === key;
                             const isEditable = canEditWindowType(item.window_type);
-                            const percent = item.quota_seconds
-                              ? Math.min(100, Math.round((item.used_seconds / item.quota_seconds) * 100))
+                            const quotaHours = normalizeQuotaHours(item.quota_seconds);
+                            const usedHours = normalizeQuotaHours(item.used_seconds);
+                            const percent = quotaHours
+                              ? Math.min(100, Math.round((usedHours / quotaHours) * 100))
                               : 0;
                             return (
                               <div
@@ -763,8 +769,8 @@ export default function Settings({
 
                                 <div className="space-y-2">
                                   <div className="flex items-center justify-between text-xs text-[var(--app-text-muted)]">
-                                    <span>{t("settings.asrQuotaUsed", { used: formatHours(item.used_seconds) })}</span>
-                                    <span>{t("settings.asrQuotaTotal", { total: formatHours(item.quota_seconds) })}</span>
+                                    <span>{t("settings.asrQuotaUsed", { used: formatQuotaHours(item.used_seconds) })}</span>
+                                    <span>{t("settings.asrQuotaTotal", { total: formatQuotaHours(item.quota_seconds) })}</span>
                                   </div>
                                   <Progress value={percent} />
                                 </div>

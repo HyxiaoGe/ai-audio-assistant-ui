@@ -131,7 +131,8 @@ export interface AsrQuotaListResponse {
 export interface AsrQuotaRefreshRequest {
   provider: string
   window_type: AsrQuotaItem["window_type"]
-  quota_seconds: number
+  quota_seconds?: number
+  quota_hours?: number
   reset: boolean
   window_start?: string
   window_end?: string
