@@ -116,9 +116,10 @@ export type AsrQuotaStatus = "active" | "inactive" | "expired" | "exhausted"
 
 export interface AsrQuotaItem {
   provider: string
+  variant?: string
   window_type: "day" | "month" | "total" | "week" | "year"
-  window_start: string
-  window_end: string
+  window_start?: string
+  window_end?: string
   quota_seconds: number
   used_seconds: number
   status: AsrQuotaStatus
@@ -130,6 +131,7 @@ export interface AsrQuotaListResponse {
 
 export interface AsrQuotaRefreshRequest {
   provider: string
+  variant?: string
   window_type: AsrQuotaItem["window_type"]
   quota_seconds?: number
   quota_hours?: number

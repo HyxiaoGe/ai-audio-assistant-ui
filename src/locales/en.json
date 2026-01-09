@@ -35,6 +35,7 @@
     "speakerC": "Speaker C",
     "speakerD": "Speaker D",
     "speakerE": "Speaker E",
+    "unknownSpeaker": "Unknown speaker",
     "noMatchTitle": "No matching content",
     "noMatchDesc": "Try refining your search"
   },
@@ -329,6 +330,16 @@
     "asrQuotaWindowEnd": "Window end",
     "asrQuotaResetLabel": "Reset usage",
     "asrQuotaResetDesc": "Reset used seconds after recharge",
+    "asrQuotaRemaining": "Remaining {remaining}",
+    "asrQuotaAvailable": "Available",
+    "asrQuotaUnavailable": "Unavailable",
+    "asrQuotaPermanent": "Permanent",
+    "asrQuotaVariant": {
+      "file": "File",
+      "file_fast": "File (Fast)",
+      "stream_async": "Stream (Async)",
+      "stream_realtime": "Stream (Realtime)"
+    },
     "asrQuotaProvider": {
       "aliyun": "Aliyun",
       "tencent": "Tencent Cloud",

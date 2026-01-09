@@ -17,6 +17,7 @@ import LoginModal from '@/components/auth/LoginModal';
 import RetryCleanupToast from '@/components/task/RetryCleanupToast';
 import { useAPIClient } from '@/lib/use-api-client';
 import { useGlobalStore } from '@/store/global-store';
+import { useAudioStore } from '@/store/audio-store';
 import { getToken } from '@/lib/auth-token';
 import { ApiError } from '@/types/api';
 import { formatDuration } from '@/lib/utils';
@@ -77,10 +78,12 @@ export default function TaskDetail({
   const { t, locale } = useI18n();
   const { formatRelativeTime } = useDateFormatter();
   const id = params?.id as string;
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [audioDuration, setAudioDuration] = useState(0);
+  const isPlaying = useAudioStore((state) => state.isPlaying);
+  const currentTime = useAudioStore((state) => state.currentTime);
+  const audioDuration = useAudioStore((state) => state.duration);
+  const setSource = useAudioStore((state) => state.setSource);
+  const togglePlayback = useAudioStore((state) => state.toggle);
+  const seek = useAudioStore((state) => state.seek);
   const [activeTab, setActiveTab] = useState('summary');
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -161,7 +164,7 @@ export default function TaskDetail({
     { name: t("transcript.speakerC"), color: 'var(--app-warning)' },
     { name: t("transcript.speakerD"), color: 'var(--app-danger)' },
     { name: t("transcript.speakerE"), color: 'var(--app-purple)' },
-    { name: t("common.unknown"), color: 'var(--app-text-subtle)' }
+    { name: t("transcript.unknownSpeaker"), color: 'var(--app-text-subtle)' }
   ]), [t]);
 
   const formatTimestamp = (seconds: number) => {
@@ -169,12 +172,6 @@ export default function TaskDetail({
     const secs = Math.floor(seconds % 60);
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
-
-  const getSpeakerColor = useCallback((speaker?: string | null) => {
-    if (!speaker) return 'var(--app-text-subtle)';
-    const match = availableSpeakers.find((item) => item.name === speaker);
-    return match?.color || 'var(--app-text-subtle)';
-  }, [availableSpeakers]);
 
   const parseSummaryLines = useCallback((content?: string | null) => {
     if (!content) return [];
@@ -272,14 +269,32 @@ export default function TaskDetail({
           setTranscript([]);
         }
       } else if (transcriptResult) {
-        const mappedTranscript = transcriptResult.items.map((segment: ApiTranscriptSegment) => ({
-          id: segment.id,
-          speaker: segment.speaker_label || t("common.unknown"),
-          startTime: formatTimestamp(segment.start_time),
-          endTime: formatTimestamp(segment.end_time),
-          content: segment.content,
-          avatarColor: getSpeakerColor(segment.speaker_label),
-        }));
+        const unknownSpeakerLabel = t("transcript.unknownSpeaker");
+        const speakerPalette = availableSpeakers.filter((spk) => spk.name !== unknownSpeakerLabel);
+        const speakerMap = new Map<string, Speaker>();
+        let paletteIndex = 0;
+        transcriptResult.items.forEach((segment: ApiTranscriptSegment) => {
+          const speakerId = segment.speaker_id;
+          if (!speakerId) return;
+          if (!speakerMap.has(speakerId)) {
+            const speakerInfo = speakerPalette[paletteIndex % speakerPalette.length];
+            if (speakerInfo) {
+              speakerMap.set(speakerId, speakerInfo);
+            }
+            paletteIndex += 1;
+          }
+        });
+        const mappedTranscript = transcriptResult.items.map((segment: ApiTranscriptSegment) => {
+          const speakerInfo = segment.speaker_id ? speakerMap.get(segment.speaker_id) : null;
+          return {
+            id: segment.id,
+            speaker: speakerInfo?.name || unknownSpeakerLabel,
+            startTime: formatTimestamp(segment.start_time),
+            endTime: formatTimestamp(segment.end_time),
+            content: segment.content,
+            avatarColor: speakerInfo?.color || 'var(--app-text-subtle)',
+          };
+        });
         setTranscript(mappedTranscript);
       }
 
@@ -312,7 +327,7 @@ export default function TaskDetail({
     } finally {
       setLoading(false);
     }
-  }, [buildSummaryState, client, getSpeakerColor, id, session, t]);
+  }, [buildSummaryState, client, id, session, t, availableSpeakers]);
 
   useEffect(() => {
     return () => {
@@ -694,44 +709,20 @@ export default function TaskDetail({
     return 5;
   };
 
-  const handlePlayPause = () => {
-    if (!audioRef.current) return;
 
-    if (isPlaying) {
-      audioRef.current.pause();
-    } else {
-      audioRef.current.play();
-    }
-    setIsPlaying(!isPlaying);
+  const handlePlayPause = () => {
+    togglePlayback();
   };
 
   const handleSeek = (time: number) => {
-    if (!audioRef.current) return;
-    audioRef.current.currentTime = time;
-    setCurrentTime(time);
+    seek(time);
   };
 
-  const handleAudioTimeUpdate = () => {
-    if (!audioRef.current) return;
-    const { currentTime: time } = audioRef.current;
-    if (time !== undefined && !isNaN(time)) {
-      setCurrentTime(time);
+  useEffect(() => {
+    if (task?.audio_url) {
+      setSource(task.audio_url);
     }
-  };
-
-  const handleAudioEnded = () => setIsPlaying(false);
-
-  const handleAudioPause = () => setIsPlaying(false);
-
-  const handleAudioPlay = () => setIsPlaying(true);
-
-  const handleAudioLoadedMetadata = () => {
-    if (!audioRef.current) return;
-    const duration = audioRef.current.duration;
-    if (duration && !isNaN(duration) && isFinite(duration)) {
-      setAudioDuration(duration);
-    }
-  };
+  }, [setSource, task?.audio_url]);
 
   const handleTimeClick = (time: string) => {
     // Convert time string to seconds
@@ -745,16 +736,6 @@ export default function TaskDetail({
     setTranscript(prev =>
       prev.map(segment =>
         segment.id === segmentId ? { ...segment, content: newContent } : segment
-      )
-    );
-  };
-
-  const handleSpeakerChange = (segmentId: string, newSpeaker: string, newColor: string) => {
-    setTranscript(prev =>
-      prev.map(segment =>
-        segment.id === segmentId 
-          ? { ...segment, speaker: newSpeaker, avatarColor: newColor } 
-          : segment
       )
     );
   };
@@ -1333,11 +1314,25 @@ export default function TaskDetail({
     );
   }
 
-  if (loading) {
+  if (loading && !task) {
     return (
-      <div className="h-screen flex items-center justify-center" style={{ background: 'var(--app-bg)' }}>
-        <div className="text-sm" style={{ color: 'var(--app-text-muted)' }}>
-          {t("errors.loadTaskDetail")}
+      <div className="h-screen flex flex-col" style={{ background: 'var(--app-bg)' }}>
+        <Header
+          isAuthenticated={!!session?.user}
+          onOpenLogin={() => setLoginOpen(true)}
+          language={language}
+          onToggleLanguage={onToggleLanguage}
+          onToggleTheme={onToggleTheme}
+        />
+        <div className="flex-1 flex overflow-hidden">
+          <Sidebar />
+          <main className="flex-1 overflow-y-auto p-8">
+            <div className="glass-panel rounded-lg p-6">
+              <div className="text-sm" style={{ color: 'var(--app-text-muted)' }}>
+                {t("errors.loadTaskDetail")}
+              </div>
+            </div>
+          </main>
         </div>
       </div>
     );
@@ -1590,21 +1585,6 @@ export default function TaskDetail({
 
   return (
     <div className="h-screen flex flex-col" style={{ background: 'var(--app-bg)' }}>
-      {/* Hidden Audio Element */}
-      {task?.audio_url && (
-        <audio
-          ref={audioRef}
-          src={task.audio_url}
-          preload="metadata"
-          crossOrigin="anonymous"
-          onTimeUpdate={handleAudioTimeUpdate}
-          onEnded={handleAudioEnded}
-          onPause={handleAudioPause}
-          onPlay={handleAudioPlay}
-          onLoadedMetadata={handleAudioLoadedMetadata}
-        />
-      )}
-
       {/* Header */}
       <Header 
         isAuthenticated={!!session?.user}
@@ -1705,10 +1685,8 @@ export default function TaskDetail({
                       endTime={segment.endTime}
                       content={segment.content}
                       avatarColor={segment.avatarColor}
-                      availableSpeakers={availableSpeakers}
                       onTimeClick={handleTimeClick}
                       onEdit={(newContent) => handleEditTranscript(segment.id, newContent)}
-                      onSpeakerChange={(newSpeaker, newColor) => handleSpeakerChange(segment.id, newSpeaker, newColor)}
                     />
                   ))
                 ) : (

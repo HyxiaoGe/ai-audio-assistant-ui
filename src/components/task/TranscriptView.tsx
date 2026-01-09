@@ -5,7 +5,7 @@
 
 "use client"
 
-import { useState, useEffect } from "react"
+import { useMemo, useState, useEffect } from "react"
 import { MessageSquare, Search, Users } from "lucide-react"
 import { useAPIClient } from "@/lib/use-api-client"
 import type { TranscriptSegment } from "@/types/api"
@@ -57,10 +57,27 @@ export function TranscriptView({ taskId }: TranscriptViewProps) {
       )
     : segments
 
-  // Get unique speakers
-  const speakers = Array.from(
-    new Set(segments.map((s) => s.speaker_label).filter(Boolean))
-  )
+  const speakerLabels = useMemo(() => {
+    const ids = Array.from(
+      new Set(segments.map((s) => s.speaker_id).filter(Boolean))
+    ) as string[]
+    ids.sort()
+    const palette = [
+      t("transcript.speakerA"),
+      t("transcript.speakerB"),
+      t("transcript.speakerC"),
+      t("transcript.speakerD"),
+      t("transcript.speakerE"),
+    ]
+    const map = new Map<string, string>()
+    ids.forEach((id, index) => {
+      map.set(id, palette[index] || id)
+    })
+    return map
+  }, [segments, t])
+
+  const speakerCount = speakerLabels.size
+  const unknownSpeakerLabel = t("transcript.unknownSpeaker")
 
   if (loading) {
     return (
@@ -125,11 +142,11 @@ export function TranscriptView({ taskId }: TranscriptViewProps) {
         </div>
 
         {/* Speaker count */}
-        {speakers.length > 0 && (
+        {speakerCount > 0 && (
           <div className="flex items-center gap-2 text-sm">
             <Users className="size-4" style={{ color: "var(--app-text-muted)" }} />
             <span style={{ color: "var(--app-text-muted)" }}>
-              {t("transcript.speakerCount", { count: speakers.length })}
+              {t("transcript.speakerCount", { count: speakerCount })}
             </span>
           </div>
         )}
@@ -181,17 +198,15 @@ export function TranscriptView({ taskId }: TranscriptViewProps) {
               >
                 {formatTimestamp(segment.start_time)}
               </span>
-              {segment.speaker_label && (
-                <span
-                  className="text-xs font-medium px-2 py-1 rounded"
-                  style={{
-                    backgroundColor: "var(--app-primary-soft)",
-                    color: "var(--app-primary)",
-                  }}
-                >
-                  {segment.speaker_label}
-                </span>
-              )}
+              <span
+                className="text-xs font-medium px-2 py-1 rounded"
+                style={{
+                  backgroundColor: "var(--app-primary-soft)",
+                  color: "var(--app-primary)",
+                }}
+              >
+                {segment.speaker_id ? speakerLabels.get(segment.speaker_id) || segment.speaker_id : unknownSpeakerLabel}
+              </span>
               {segment.is_edited && (
                 <span
                   className="text-xs px-2 py-1 rounded"
