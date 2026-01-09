@@ -330,6 +330,39 @@
   color: var(--app-text);
 }
 
+.mini-player-title {
+  max-width: 120px;
+  overflow: hidden;
+  white-space: nowrap;
+  position: relative;
+  mask-image: linear-gradient(to right, transparent 0, black 12px, black calc(100% - 12px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0, black 12px, black calc(100% - 12px), transparent 100%);
+}
+
+.mini-player-title-static {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.mini-player-title-track {
+  display: inline-block;
+  white-space: nowrap;
+  padding-left: 100%;
+  animation: mini-player-marquee var(--marquee-duration, 12s) linear infinite;
+}
+
+@keyframes mini-player-marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
 .glass-chip[data-active="true"] {
   background: var(--app-primary);
   color: var(--app-button-primary-text);

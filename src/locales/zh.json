@@ -50,6 +50,9 @@
     "switchToDark": "切换到深色模式",
     "switchToLight": "切换到浅色模式"
   },
+  "audio": {
+    "untitled": "未命名音频"
+  },
   "notifications": {
     "title": "通知",
     "empty": "暂无通知",
@@ -290,6 +293,12 @@
     "previewNow": "当前时间",
     "previewUtc": "示例 UTC 时间",
     "previewRelative": "相对时间预览",
+    "playbackTitle": "播放偏好",
+    "playbackDesc": "切换任务时的音频播放行为",
+    "playbackBehaviorLabel": "打开其他任务时",
+    "playbackBehaviorKeep": "保持当前播放",
+    "playbackBehaviorSwitch": "切换为新任务（暂停）",
+    "playbackBehaviorAuto": "切换并自动播放新任务",
     "notificationsTitle": "通知设置",
     "notificationsDesc": "管理通知和提醒方式",
     "emailNotifications": "邮件通知",

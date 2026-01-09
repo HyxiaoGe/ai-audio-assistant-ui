@@ -50,6 +50,9 @@
     "switchToDark": "Switch to dark mode",
     "switchToLight": "Switch to light mode"
   },
+  "audio": {
+    "untitled": "Untitled audio"
+  },
   "notifications": {
     "title": "Notifications",
     "empty": "No notifications yet",
@@ -290,6 +293,12 @@
     "previewNow": "Current time",
     "previewUtc": "Sample UTC time",
     "previewRelative": "Relative time preview",
+    "playbackTitle": "Playback",
+    "playbackDesc": "Control how audio behaves when switching tasks",
+    "playbackBehaviorLabel": "When opening another task",
+    "playbackBehaviorKeep": "Keep current audio",
+    "playbackBehaviorSwitch": "Switch to new task (paused)",
+    "playbackBehaviorAuto": "Switch and auto play new task",
     "notificationsTitle": "Notifications",
     "notificationsDesc": "Manage how you receive alerts",
     "emailNotifications": "Email notifications",

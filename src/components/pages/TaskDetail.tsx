@@ -81,8 +81,10 @@ export default function TaskDetail({
   const isPlaying = useAudioStore((state) => state.isPlaying);
   const currentTime = useAudioStore((state) => state.currentTime);
   const audioDuration = useAudioStore((state) => state.duration);
+  const currentSrc = useAudioStore((state) => state.src);
   const setSource = useAudioStore((state) => state.setSource);
   const togglePlayback = useAudioStore((state) => state.toggle);
+  const play = useAudioStore((state) => state.play);
   const seek = useAudioStore((state) => state.seek);
   const [activeTab, setActiveTab] = useState('summary');
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -711,18 +713,45 @@ export default function TaskDetail({
 
 
   const handlePlayPause = () => {
+    if (!task?.audio_url) return;
+    if (currentSrc !== task.audio_url) {
+      setSource(task.audio_url, task.id, task.title);
+      play();
+      return;
+    }
     togglePlayback();
   };
 
   const handleSeek = (time: number) => {
+    if (task?.audio_url && currentSrc !== task.audio_url) {
+      setSource(task.audio_url, task.id, task.title);
+    }
     seek(time);
   };
 
   useEffect(() => {
-    if (task?.audio_url) {
-      setSource(task.audio_url);
+    if (!task?.audio_url) return;
+    let behavior: "keep" | "switch" | "auto" = "keep";
+    try {
+      const saved = localStorage.getItem("settings");
+      if (saved) {
+        const parsed = JSON.parse(saved) as { playbackBehavior?: "keep" | "switch" | "auto" };
+        if (parsed.playbackBehavior) behavior = parsed.playbackBehavior;
+      }
+    } catch {
+      // Ignore storage errors
     }
-  }, [setSource, task?.audio_url]);
+    if (behavior === "keep") {
+      if (!currentSrc) {
+        setSource(task.audio_url, task.id, task.title);
+      }
+      return;
+    }
+    setSource(task.audio_url, task.id, task.title);
+    if (behavior === "auto") {
+      play();
+    }
+  }, [currentSrc, play, setSource, task?.audio_url, task?.id, task?.title]);
 
   const handleTimeClick = (time: string) => {
     // Convert time string to seconds
@@ -1258,8 +1287,13 @@ export default function TaskDetail({
       .slice(0, 2);
     return picked;
   }, [llmModels]);
+  const isActiveAudio = Boolean(task?.audio_url && currentSrc === task.audio_url);
   // 优先使用音频元素的实际 duration，如果没有则使用后端提供的 duration_seconds
-  const duration = audioDuration || task?.duration_seconds || 0;
+  const duration = isActiveAudio
+    ? (audioDuration || task?.duration_seconds || 0)
+    : (task?.duration_seconds || 0);
+  const displayCurrentTime = isActiveAudio ? currentTime : 0;
+  const displayIsPlaying = isActiveAudio ? isPlaying : false;
   const formatFileSize = (bytes?: number | null) => {
     if (!bytes) return null;
     const sizes = ["B", "KB", "MB", "GB"];
@@ -1654,9 +1688,9 @@ export default function TaskDetail({
           {/* Player Bar */}
           <div className="px-6 py-4" style={{ background: 'var(--app-glass-bg)' }}>
             <PlayerBar
-              currentTime={currentTime}
+              currentTime={displayCurrentTime}
               duration={duration}
-              isPlaying={isPlaying}
+              isPlaying={displayIsPlaying}
               onPlayPause={handlePlayPause}
               onSeek={handleSeek}
             />

@@ -46,6 +46,7 @@ type LocalSettings = {
   pushNotifications: boolean;
   defaultLanguage: string;
   summaryDetail: string;
+  playbackBehavior: "keep" | "switch" | "auto";
 };
 
 const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
@@ -53,6 +54,7 @@ const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
   pushNotifications: false,
   defaultLanguage: "auto",
   summaryDetail: "medium",
+  playbackBehavior: "keep",
 };
 
 const loadLocalSettings = (): LocalSettings => {
@@ -65,6 +67,7 @@ const loadLocalSettings = (): LocalSettings => {
       pushNotifications?: boolean;
       defaultLanguage?: string;
       summaryDetail?: string;
+      playbackBehavior?: "keep" | "switch" | "auto";
     };
     const normalizedDefaultLanguage =
       parsed.defaultLanguage === "zh-CN"
@@ -83,6 +86,7 @@ const loadLocalSettings = (): LocalSettings => {
           : DEFAULT_LOCAL_SETTINGS.pushNotifications,
       defaultLanguage: normalizedDefaultLanguage || DEFAULT_LOCAL_SETTINGS.defaultLanguage,
       summaryDetail: parsed.summaryDetail || DEFAULT_LOCAL_SETTINGS.summaryDetail,
+      playbackBehavior: parsed.playbackBehavior || DEFAULT_LOCAL_SETTINGS.playbackBehavior,
     };
   } catch {
     return DEFAULT_LOCAL_SETTINGS;
@@ -140,6 +144,7 @@ export default function Settings({
     pushNotifications,
     defaultLanguage: defaultLanguageState,
     summaryDetail: summaryDetailState,
+    playbackBehavior,
   } = localSettings;
 
   const secondsToHours = (seconds: number) => seconds / 3600;
@@ -445,6 +450,11 @@ export default function Settings({
     });
   };
 
+  const handlePlaybackBehaviorChange = (value: "keep" | "switch" | "auto") => {
+    setLocalSettings((prev) => ({ ...prev, playbackBehavior: value }));
+    persistLocalSettings({ playbackBehavior: value });
+  };
+
   const handleEmailToggle = (checked: boolean) => {
     setLocalSettings((prev) => ({ ...prev, emailNotifications: checked }));
     persistLocalSettings({ emailNotifications: checked });
@@ -473,7 +483,8 @@ export default function Settings({
       emailNotifications,
       pushNotifications,
       defaultLanguage: defaultLanguageState,
-      summaryDetail: summaryDetailState
+      summaryDetail: summaryDetailState,
+      playbackBehavior
     }));
     setLocale(languageState);
     setTheme(themeState as "light" | "dark" | "system");
@@ -712,6 +723,31 @@ export default function Settings({
                   <p className="text-sm text-[var(--app-text-muted)]">
                     {t("settings.summaryDetailDesc")}
                   </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Playback Settings */}
+            <Card>
+              <CardHeader>
+                <CardTitle>{t("settings.playbackTitle")}</CardTitle>
+                <CardDescription>
+                  {t("settings.playbackDesc")}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>{t("settings.playbackBehaviorLabel")}</Label>
+                  <Select value={playbackBehavior} onValueChange={handlePlaybackBehaviorChange}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="keep">{t("settings.playbackBehaviorKeep")}</SelectItem>
+                      <SelectItem value="switch">{t("settings.playbackBehaviorSwitch")}</SelectItem>
+                      <SelectItem value="auto">{t("settings.playbackBehaviorAuto")}</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </CardContent>
             </Card>
