@@ -44,6 +44,8 @@ interface DisplayTranscriptSegment {
   speaker: string;
   startTime: string;
   endTime: string;
+  startSeconds: number;
+  endSeconds: number;
   content: string;
   avatarColor: string;
 }
@@ -98,6 +100,13 @@ export default function TaskDetail({
 
   const [task, setTask] = useState<ApiTaskDetail | null>(null);
   const [transcript, setTranscript] = useState<DisplayTranscriptSegment[]>([]);
+  const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
+  const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
+  const transcriptItemRefs = useRef(new Map<string, HTMLDivElement>());
+  const autoScrollPauseUntilRef = useRef(0);
+  const programmaticScrollRef = useRef(false);
+  const resumeScrollTimerRef = useRef<number | null>(null);
+  const activeSegmentIdRef = useRef<string | null>(null);
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const [keyPoints, setKeyPoints] = useState<KeyPoint[]>([]);
   const [summaryOverview, setSummaryOverview] = useState<string[]>([]);
@@ -293,6 +302,8 @@ export default function TaskDetail({
             speaker: speakerInfo?.name || unknownSpeakerLabel,
             startTime: formatTimestamp(segment.start_time),
             endTime: formatTimestamp(segment.end_time),
+            startSeconds: segment.start_time,
+            endSeconds: segment.end_time,
             content: segment.content,
             avatarColor: speakerInfo?.color || 'var(--app-text-subtle)',
           };
@@ -347,6 +358,10 @@ export default function TaskDetail({
       }
       compareStreamRef.current?.close();
       compareStreamRef.current = null;
+      if (resumeScrollTimerRef.current) {
+        window.clearTimeout(resumeScrollTimerRef.current);
+        resumeScrollTimerRef.current = null;
+      }
     };
   }, []);
 
@@ -768,6 +783,93 @@ export default function TaskDetail({
       )
     );
   };
+
+  const isActiveAudio = Boolean(task?.audio_url && currentSrc === task.audio_url);
+  // 优先使用音频元素的实际 duration，如果没有则使用后端提供的 duration_seconds
+  const duration = isActiveAudio
+    ? (audioDuration || task?.duration_seconds || 0)
+    : (task?.duration_seconds || 0);
+  const displayCurrentTime = isActiveAudio ? currentTime : 0;
+  const displayIsPlaying = isActiveAudio ? isPlaying : false;
+
+  const scrollToTranscriptItem = useCallback((segmentId: string) => {
+    const container = transcriptScrollRef.current;
+    const node = transcriptItemRefs.current.get(segmentId);
+    if (!container || !node) return;
+    programmaticScrollRef.current = true;
+    node.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.setTimeout(() => {
+      programmaticScrollRef.current = false;
+    }, 300);
+  }, []);
+
+  const scheduleAutoScrollResume = useCallback(() => {
+    if (resumeScrollTimerRef.current) {
+      window.clearTimeout(resumeScrollTimerRef.current);
+    }
+    resumeScrollTimerRef.current = window.setTimeout(() => {
+      const segmentId = activeSegmentIdRef.current;
+      if (!segmentId) return;
+      if (Date.now() < autoScrollPauseUntilRef.current) return;
+      scrollToTranscriptItem(segmentId);
+    }, 3000);
+  }, [scrollToTranscriptItem]);
+
+  useEffect(() => {
+    activeSegmentIdRef.current = activeSegmentId;
+  }, [activeSegmentId]);
+
+  useEffect(() => {
+    if (!isActiveAudio || transcript.length === 0) {
+      setActiveSegmentId(null);
+      return;
+    }
+    let nextSegment: DisplayTranscriptSegment | null = null;
+    for (const segment of transcript) {
+      if (currentTime < segment.startSeconds) {
+        break;
+      }
+      nextSegment = segment;
+      if (currentTime <= segment.endSeconds) {
+        break;
+      }
+    }
+    const nextId = nextSegment?.id ?? null;
+    setActiveSegmentId((prev) => (prev === nextId ? prev : nextId));
+  }, [currentTime, isActiveAudio, transcript]);
+
+  useEffect(() => {
+    if (!activeSegmentId) return;
+    if (Date.now() < autoScrollPauseUntilRef.current) return;
+    scrollToTranscriptItem(activeSegmentId);
+  }, [activeSegmentId, scrollToTranscriptItem]);
+
+  useEffect(() => {
+    const container = transcriptScrollRef.current;
+    if (!container) return;
+
+    const pauseAutoScroll = () => {
+      autoScrollPauseUntilRef.current = Date.now() + 3000;
+      scheduleAutoScrollResume();
+    };
+
+    const handleScroll = () => {
+      if (programmaticScrollRef.current) return;
+      pauseAutoScroll();
+    };
+
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    container.addEventListener("wheel", pauseAutoScroll, { passive: true });
+    container.addEventListener("touchmove", pauseAutoScroll, { passive: true });
+    container.addEventListener("pointerdown", pauseAutoScroll, { passive: true });
+
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+      container.removeEventListener("wheel", pauseAutoScroll);
+      container.removeEventListener("touchmove", pauseAutoScroll);
+      container.removeEventListener("pointerdown", pauseAutoScroll);
+    };
+  }, [scheduleAutoScrollResume]);
 
   const toggleActionItem = (itemId: string) => {
     setActionItems(prev =>
@@ -1287,13 +1389,6 @@ export default function TaskDetail({
       .slice(0, 2);
     return picked;
   }, [llmModels]);
-  const isActiveAudio = Boolean(task?.audio_url && currentSrc === task.audio_url);
-  // 优先使用音频元素的实际 duration，如果没有则使用后端提供的 duration_seconds
-  const duration = isActiveAudio
-    ? (audioDuration || task?.duration_seconds || 0)
-    : (task?.duration_seconds || 0);
-  const displayCurrentTime = isActiveAudio ? currentTime : 0;
-  const displayIsPlaying = isActiveAudio ? isPlaying : false;
   const formatFileSize = (bytes?: number | null) => {
     if (!bytes) return null;
     const sizes = ["B", "KB", "MB", "GB"];
@@ -1709,19 +1804,30 @@ export default function TaskDetail({
               </div>
 
               {/* Transcript List */}
-              <div className="flex-1 overflow-y-auto">
+              <div className="flex-1 overflow-y-auto" ref={transcriptScrollRef}>
                 {transcript.length > 0 ? (
                   transcript.map((segment) => (
-                    <TranscriptItem
+                    <div
                       key={segment.id}
-                      speaker={segment.speaker}
-                      startTime={segment.startTime}
-                      endTime={segment.endTime}
-                      content={segment.content}
-                      avatarColor={segment.avatarColor}
-                      onTimeClick={handleTimeClick}
-                      onEdit={(newContent) => handleEditTranscript(segment.id, newContent)}
-                    />
+                      ref={(node) => {
+                        if (node) {
+                          transcriptItemRefs.current.set(segment.id, node);
+                        } else {
+                          transcriptItemRefs.current.delete(segment.id);
+                        }
+                      }}
+                    >
+                      <TranscriptItem
+                        speaker={segment.speaker}
+                        startTime={segment.startTime}
+                        endTime={segment.endTime}
+                        content={segment.content}
+                        avatarColor={segment.avatarColor}
+                        isActive={segment.id === activeSegmentId}
+                        onTimeClick={handleTimeClick}
+                        onEdit={(newContent) => handleEditTranscript(segment.id, newContent)}
+                      />
+                    </div>
                   ))
                 ) : (
                   <ErrorState

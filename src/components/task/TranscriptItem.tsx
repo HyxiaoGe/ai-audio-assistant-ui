@@ -13,6 +13,7 @@ interface TranscriptItemProps {
   endTime: string;
   content: string;
   avatarColor?: string;
+  isActive?: boolean;
   onEdit?: (newContent: string) => void;
   onTimeClick?: (time: string) => void;
 }
@@ -23,6 +24,7 @@ export default function TranscriptItem({
   endTime,
   content,
   avatarColor = 'var(--app-primary)',
+  isActive = false,
   onEdit = () => {},
   onTimeClick = () => {}
 }: TranscriptItemProps) {
@@ -55,8 +57,15 @@ export default function TranscriptItem({
     <div
       className="px-4 py-4 transition-colors cursor-default border-b relative"
       style={{
-        background: isHovered || isEditing ? 'var(--app-glass-hover)' : 'var(--app-glass-bg)',
-        borderColor: 'var(--app-glass-border)'
+        background: isEditing
+          ? 'var(--app-glass-hover)'
+          : isHovered
+            ? 'var(--app-glass-hover)'
+            : isActive
+              ? 'var(--app-primary-soft-2)'
+              : 'var(--app-glass-bg)',
+        borderColor: isActive ? 'var(--app-primary)' : 'var(--app-glass-border)',
+        boxShadow: isActive ? 'inset 3px 0 0 var(--app-primary)' : 'none'
       }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
