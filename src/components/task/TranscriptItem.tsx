@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { Edit2, Check, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n-context';
+import type { TranscriptWord } from '@/types/api';
 
 interface Speaker {
   name: string;
@@ -12,8 +14,11 @@ interface TranscriptItemProps {
   startTime: string;
   endTime: string;
   content: string;
+  words?: TranscriptWord[] | null;
   avatarColor?: string;
   isActive?: boolean;
+  activeWordIndex?: number | null;
+  activeWordProgress?: number | null;
   onEdit?: (newContent: string) => void;
   onTimeClick?: (time: string) => void;
 }
@@ -23,8 +28,11 @@ export default function TranscriptItem({
   startTime,
   endTime,
   content,
+  words = null,
   avatarColor = 'var(--app-primary)',
   isActive = false,
+  activeWordIndex = null,
+  activeWordProgress = null,
   onEdit = () => {},
   onTimeClick = () => {}
 }: TranscriptItemProps) {
@@ -52,6 +60,16 @@ export default function TranscriptItem({
     setEditedContent(content);
     setIsEditing(false);
   };
+
+  const wordSpacing = useMemo(() => {
+    if (!words || words.length === 0) return [];
+    return words.map((word, index) => {
+      const nextWord = words[index + 1]?.word ?? "";
+      const endsWithAscii = /[A-Za-z0-9]$/.test(word.word);
+      const nextStartsWithAscii = /^[A-Za-z0-9]/.test(nextWord);
+      return endsWithAscii && nextStartsWithAscii ? " " : "";
+    });
+  }, [words]);
 
   return (
     <div
@@ -149,6 +167,29 @@ export default function TranscriptItem({
           }}
           autoFocus
         />
+      ) : words && words.length > 0 ? (
+        <p
+          className="text-base leading-relaxed"
+          style={{ color: 'var(--app-text)', lineHeight: '24px' }}
+        >
+          {words.map((word, index) => {
+            const isActiveWord = isActive && activeWordIndex === index;
+            const progress = isActiveWord ? (activeWordProgress ?? 0) : 0;
+            const wordStyle = isActiveWord
+              ? ({ "--word-progress": `${Math.round(progress * 100)}%` } as CSSProperties)
+              : undefined;
+            return (
+              <span
+                key={`${word.word}-${word.start_time}-${index}`}
+                className={isActiveWord ? "transcript-word transcript-word-active" : "transcript-word"}
+                style={wordStyle}
+              >
+                {word.word}
+                {wordSpacing[index]}
+              </span>
+            );
+          })}
+        </p>
       ) : (
         <p
           className="text-base leading-relaxed"

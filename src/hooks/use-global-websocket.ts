@@ -60,6 +60,7 @@ export function useGlobalWebSocket() {
   const reconnectAttemptsRef = useRef(0);
   const isAuthenticatedRef = useRef(false);
   const enabledRef = useRef(true);
+  const toastHistoryRef = useRef(new Map<string, number>());
 
   const {
     updateTask,
@@ -67,6 +68,23 @@ export function useGlobalWebSocket() {
     setWsConnected,
     setWsReconnecting,
   } = useGlobalStore();
+
+  const shouldShowToast = useCallback((taskId: string, status: "completed" | "failed") => {
+    const key = `${taskId}:${status}`;
+    const now = Date.now();
+    const history = toastHistoryRef.current;
+    const lastShown = history.get(key);
+    if (lastShown && now - lastShown < 10000) {
+      return false;
+    }
+    history.set(key, now);
+    history.forEach((timestamp, storedKey) => {
+      if (now - timestamp > 120000) {
+        history.delete(storedKey);
+      }
+    });
+    return true;
+  }, []);
 
   // Stop HTTP polling
   const stopPolling = useCallback(() => {
@@ -161,15 +179,17 @@ export function useGlobalWebSocket() {
           loadNotifications();
 
           // Show toast notification
-          toast.success(`《${taskTitle}》转写完成`, {
-            icon: createElement(CheckCircle2, { className: "w-4 h-4" }),
-            action: {
-              label: "查看详情",
-              onClick: () => {
-                window.location.href = `/tasks/${response.data.task_id}`;
+          if (shouldShowToast(response.data.task_id, "completed")) {
+            toast.success(`《${taskTitle}》转写完成`, {
+              icon: createElement(CheckCircle2, { className: "w-4 h-4" }),
+              action: {
+                label: "查看详情",
+                onClick: () => {
+                  window.location.href = `/tasks/${response.data.task_id}`;
+                },
               },
-            },
-          });
+            });
+          }
         }
 
         // Handle task error
@@ -187,16 +207,18 @@ export function useGlobalWebSocket() {
           loadNotifications();
 
           // Show error toast
-          toast.error(`《${taskTitle}》处理失败`, {
-            icon: createElement(XCircle, { className: "w-4 h-4" }),
-            description: response.message,
-            action: {
-              label: "查看详情",
-              onClick: () => {
-                window.location.href = `/tasks/${response.data.task_id}`;
+          if (shouldShowToast(response.data.task_id, "failed")) {
+            toast.error(`《${taskTitle}》处理失败`, {
+              icon: createElement(XCircle, { className: "w-4 h-4" }),
+              description: response.message,
+              action: {
+                label: "查看详情",
+                onClick: () => {
+                  window.location.href = `/tasks/${response.data.task_id}`;
+                },
               },
-            },
-          });
+            });
+          }
         }
       } catch (err) {
         console.error("[GlobalWS] Failed to parse message:", err);

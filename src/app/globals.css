@@ -363,6 +363,25 @@
   }
 }
 
+.transcript-word {
+  display: inline-block;
+  transition: color 180ms ease;
+}
+
+.transcript-word-active {
+  color: var(--app-primary-strong);
+  background-image: linear-gradient(
+    90deg,
+    var(--app-primary-soft) 0%,
+    var(--app-primary-soft) 100%
+  );
+  background-repeat: no-repeat;
+  background-size: var(--word-progress, 0%) 100%;
+  border-radius: 6px;
+  padding: 0 2px;
+  transition: background-size 120ms linear, color 160ms ease;
+}
+
 .glass-chip[data-active="true"] {
   background: var(--app-primary);
   color: var(--app-button-primary-text);

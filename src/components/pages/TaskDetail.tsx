@@ -24,6 +24,7 @@ import { formatDuration } from '@/lib/utils';
 import type {
   TaskDetail as ApiTaskDetail,
   TranscriptSegment as ApiTranscriptSegment,
+  TranscriptWord,
   ComparisonResult,
   SummaryItem,
   RetryMode,
@@ -47,6 +48,7 @@ interface DisplayTranscriptSegment {
   startSeconds: number;
   endSeconds: number;
   content: string;
+  words: TranscriptWord[] | null;
   avatarColor: string;
 }
 
@@ -101,6 +103,9 @@ export default function TaskDetail({
   const [task, setTask] = useState<ApiTaskDetail | null>(null);
   const [transcript, setTranscript] = useState<DisplayTranscriptSegment[]>([]);
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
+  const [activeWordKey, setActiveWordKey] = useState<{ segmentId: string; index: number } | null>(null);
+  const [activeWordProgress, setActiveWordProgress] = useState<number | null>(null);
+  const [transcriptLoading, setTranscriptLoading] = useState(true);
   const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
   const transcriptItemRefs = useRef(new Map<string, HTMLDivElement>());
   const autoScrollPauseUntilRef = useRef(0);
@@ -262,6 +267,11 @@ export default function TaskDetail({
     if (!id || !session?.user) return;
     setLoading(true);
     setError(null);
+    setTranscriptLoading(true);
+    setTranscript([]);
+    setActiveSegmentId(null);
+    setActiveWordKey(null);
+    setActiveWordProgress(null);
     try {
       const taskData = await client.getTask(id);
       setTask(taskData);
@@ -305,6 +315,7 @@ export default function TaskDetail({
             startSeconds: segment.start_time,
             endSeconds: segment.end_time,
             content: segment.content,
+            words: segment.words ?? null,
             avatarColor: speakerInfo?.color || 'var(--app-text-subtle)',
           };
         });
@@ -338,6 +349,7 @@ export default function TaskDetail({
         notifyError(message);
       }
     } finally {
+      setTranscriptLoading(false);
       setLoading(false);
     }
   }, [buildSummaryState, client, id, session, t, availableSpeakers]);
@@ -822,6 +834,8 @@ export default function TaskDetail({
   useEffect(() => {
     if (!isActiveAudio || transcript.length === 0) {
       setActiveSegmentId(null);
+      setActiveWordKey(null);
+      setActiveWordProgress(null);
       return;
     }
     let nextSegment: DisplayTranscriptSegment | null = null;
@@ -836,6 +850,38 @@ export default function TaskDetail({
     }
     const nextId = nextSegment?.id ?? null;
     setActiveSegmentId((prev) => (prev === nextId ? prev : nextId));
+    let nextWordIndex: number | null = null;
+    if (nextSegment?.words && nextSegment.words.length > 0) {
+      let candidate: number | null = null;
+      for (let i = 0; i < nextSegment.words.length; i += 1) {
+        const word = nextSegment.words[i];
+        if (currentTime < word.start_time) {
+          break;
+        }
+        candidate = i;
+        if (currentTime <= word.end_time) {
+          break;
+        }
+      }
+      nextWordIndex = candidate;
+    }
+    setActiveWordKey((prev) => {
+      if (!nextId || nextWordIndex === null) {
+        return prev ? null : prev;
+      }
+      if (prev?.segmentId === nextId && prev.index === nextWordIndex) {
+        return prev;
+      }
+      return { segmentId: nextId, index: nextWordIndex };
+    });
+    if (!nextId || nextWordIndex === null || !nextSegment?.words) {
+      setActiveWordProgress(null);
+      return;
+    }
+    const word = nextSegment.words[nextWordIndex];
+    const duration = Math.max(word.end_time - word.start_time, 0.001);
+    const ratio = (currentTime - word.start_time) / duration;
+    setActiveWordProgress(Math.min(1, Math.max(0, ratio)));
   }, [currentTime, isActiveAudio, transcript]);
 
   useEffect(() => {
@@ -1805,7 +1851,19 @@ export default function TaskDetail({
 
               {/* Transcript List */}
               <div className="flex-1 overflow-y-auto" ref={transcriptScrollRef}>
-                {transcript.length > 0 ? (
+                {transcriptLoading ? (
+                  <div className="flex items-center justify-center py-16">
+                    <div className="glass-panel rounded-lg px-6 py-4 flex items-center gap-3">
+                      <div
+                        className="size-4 border-2 border-[var(--app-primary)] border-t-transparent rounded-full animate-spin"
+                        style={{ borderColor: "var(--app-primary) transparent var(--app-primary) var(--app-primary)" }}
+                      />
+                      <span className="text-sm" style={{ color: "var(--app-text-muted)" }}>
+                        {t("transcript.loading")}
+                      </span>
+                    </div>
+                  </div>
+                ) : transcript.length > 0 ? (
                   transcript.map((segment) => (
                     <div
                       key={segment.id}
@@ -1822,8 +1880,15 @@ export default function TaskDetail({
                         startTime={segment.startTime}
                         endTime={segment.endTime}
                         content={segment.content}
+                        words={segment.words}
                         avatarColor={segment.avatarColor}
                         isActive={segment.id === activeSegmentId}
+                        activeWordIndex={
+                          segment.id === activeWordKey?.segmentId ? activeWordKey.index : null
+                        }
+                        activeWordProgress={
+                          segment.id === activeWordKey?.segmentId ? activeWordProgress : null
+                        }
                         onTimeClick={handleTimeClick}
                         onEdit={(newContent) => handleEditTranscript(segment.id, newContent)}
                       />

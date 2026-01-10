@@ -288,11 +288,19 @@ export interface TranscriptSegment {
   start_time: number
   end_time: number
   confidence: number | null
+  words: TranscriptWord[] | null
   sequence: number
   is_edited: boolean
   original_content: string | null
   created_at: string
   updated_at: string
+}
+
+export interface TranscriptWord {
+  word: string
+  start_time: number
+  end_time: number
+  confidence: number | null
 }
 
 export interface TranscriptRequest {
