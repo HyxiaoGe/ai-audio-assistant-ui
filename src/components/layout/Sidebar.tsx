@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { BarChart3, Settings, List } from 'lucide-react';
+import { BarChart3, Settings, List, LineChart } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useI18n } from '@/lib/i18n-context';
 
@@ -45,6 +45,11 @@ export default function Sidebar() {
       path: '/tasks'
     },
     {
+      icon: <LineChart className="w-5 h-5" />,
+      label: t("nav.stats"),
+      path: '/stats'
+    },
+    {
       icon: <Settings className="w-5 h-5" />,
       label: t("nav.settings"),
       path: '/settings'
@@ -62,6 +67,10 @@ export default function Sidebar() {
     if (itemPath === '/tasks') {
       return pathname === '/tasks' || 
              pathname.startsWith('/tasks/');
+    }
+
+    if (itemPath === '/stats') {
+      return pathname === '/stats' || pathname.startsWith('/stats/');
     }
     
     // 其他页面：精确匹配

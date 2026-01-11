@@ -32,6 +32,8 @@ import {
   SummaryRegenerateResponse,
   SummaryActivateResponse,
   SummaryResponse,
+  StatsServicesOverviewResponse,
+  StatsTasksOverviewResponse,
   TaskDetail,
   TaskListRequest,
   TaskListResponse,
@@ -92,6 +94,20 @@ async function getAuthToken(token?: string): Promise<string | null> {
 
   // 服务端：返回 null（SSR 场景暂不支持）
   return null
+}
+
+function buildStatsQuery(params?: {
+  time_range?: string
+  start_date?: string
+  end_date?: string
+  granularity?: string
+}): string {
+  const queryParams = new URLSearchParams()
+  if (params?.time_range) queryParams.set("time_range", params.time_range)
+  if (params?.start_date) queryParams.set("start_date", params.start_date)
+  if (params?.end_date) queryParams.set("end_date", params.end_date)
+  if (params?.granularity) queryParams.set("granularity", params.granularity)
+  return queryParams.toString()
 }
 
 /**
@@ -473,6 +489,32 @@ export class APIClient {
    */
   async getLLMModels(): Promise<LLMModelsResponse> {
     return request("/llm/models", { method: "GET" }, this.token)
+  }
+
+  // ==========================================================================
+  // 统计（Stats）
+  // ==========================================================================
+
+  async getServiceStatsOverview(params?: {
+    time_range?: string
+    start_date?: string
+    end_date?: string
+  }): Promise<StatsServicesOverviewResponse> {
+    const query = buildStatsQuery(params)
+    const endpoint = query
+      ? `/stats/services/overview?${query}`
+      : "/stats/services/overview"
+    return request(endpoint, { method: "GET" }, this.token)
+  }
+
+  async getTaskStatsOverview(params?: {
+    time_range?: string
+    start_date?: string
+    end_date?: string
+  }): Promise<StatsTasksOverviewResponse> {
+    const query = buildStatsQuery(params)
+    const endpoint = query ? `/stats/tasks/overview?${query}` : "/stats/tasks/overview"
+    return request(endpoint, { method: "GET" }, this.token)
   }
 
   // ==========================================================================

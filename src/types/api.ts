@@ -439,6 +439,70 @@ export interface SummaryActivateResponse {
 }
 
 // ============================================================================
+// 统计（Stats）
+// ============================================================================
+
+export type StatsTimeRange = "today" | "week" | "month" | "all"
+
+export interface StatsTimeRangeWindow {
+  start: string
+  end: string
+}
+
+export interface StatsServiceOverviewItem {
+  service_type: string
+  provider?: string | null
+  call_count: number
+  success_rate: number
+  failure_rate: number
+  success_count?: number
+  failure_count?: number
+  pending_count?: number
+  processing_count?: number
+  avg_stage_seconds: number
+  median_stage_seconds: number
+  total_audio_duration_seconds?: number
+}
+
+export interface StatsServiceProviderOverviewItem extends StatsServiceOverviewItem {
+  provider: string
+}
+
+export interface StatsServicesOverviewResponse {
+  time_range: StatsTimeRangeWindow
+  total_calls?: number
+  success_rate?: number
+  failure_rate?: number
+  usage_by_service_type:
+    | StatsServiceOverviewItem[]
+    | Record<string, StatsServiceOverviewItem>
+  asr_usage_by_provider?:
+    | StatsServiceProviderOverviewItem[]
+    | Record<string, StatsServiceProviderOverviewItem>
+  llm_usage_by_provider?:
+    | StatsServiceProviderOverviewItem[]
+    | Record<string, StatsServiceProviderOverviewItem>
+}
+
+export interface StatsTasksOverviewResponse {
+  time_range: StatsTimeRangeWindow
+  total_tasks: number
+  status_distribution: {
+    pending: number
+    processing: number
+    completed: number
+    failed: number
+  }
+  success_rate: number
+  failure_rate: number
+  avg_processing_time_seconds: number
+  median_processing_time_seconds: number
+  processing_time_by_stage: Record<string, number>
+  total_audio_duration_seconds: number
+  total_audio_duration_formatted: string
+}
+
+// ============================================================================
 // WebSocket 消息
 // ============================================================================
 

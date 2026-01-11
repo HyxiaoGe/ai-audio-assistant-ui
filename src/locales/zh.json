@@ -42,7 +42,86 @@
   "nav": {
     "overview": "概览",
     "tasks": "任务",
+    "stats": "统计",
     "settings": "设置"
+  },
+  "stats": {
+    "title": "统计",
+    "subtitle": "服务与任务表现总览",
+    "timeRangeLabel": "时间范围",
+    "timeRangeOptions": {
+      "today": "今天",
+      "week": "近7天",
+      "month": "近30天",
+      "all": "近90天",
+      "custom": "自定义"
+    },
+    "startDate": "开始日期",
+    "endDate": "结束日期",
+    "apply": "应用",
+    "granularityLabel": "趋势粒度",
+    "granularityOptions": {
+      "hour": "小时",
+      "day": "天",
+      "week": "周",
+      "month": "月"
+    },
+    "customRangeIncomplete": "请选择开始和结束日期",
+    "customRangeInvalid": "开始日期不能晚于结束日期",
+    "loadFailed": "统计数据加载失败",
+    "empty": "暂无统计数据",
+    "loginRequiredTitle": "登录后查看统计",
+    "loginRequiredDesc": "登录后查看成本与任务数据",
+    "serviceSection": "服务统计",
+    "totalCalls": "总调用次数",
+    "serviceBreakdown": "按服务类型",
+    "providerBreakdown": "按服务商",
+    "providerBreakdownAsr": "ASR 服务商",
+    "providerBreakdownLlm": "LLM 服务商",
+    "taskSection": "任务统计",
+    "totalTasks": "任务总数",
+    "successRate": "成功率",
+    "failureRate": "失败率",
+    "processingSummary": "处理概览",
+    "avgProcessingTime": "平均处理时长",
+    "medianProcessingTime": "中位处理时长",
+    "avgStageSeconds": "平均阶段耗时",
+    "medianStageSeconds": "中位阶段耗时",
+    "processingByStage": "阶段耗时",
+    "totalAudioDuration": "音频总时长",
+    "taskTrend": "任务趋势",
+    "seconds": "{count}秒",
+    "callCount": "{count}次",
+    "statusCounts": "成功 {success} / 失败 {failure} / 处理中 {processing} / 排队 {pending}",
+    "serviceType": {
+      "asr": "语音识别",
+      "llm": "大模型"
+    },
+    "provider": {
+      "tencent": "腾讯云",
+      "aliyun": "阿里云",
+      "volcengine": "火山引擎",
+      "openai": "OpenAI",
+      "deepseek": "深度求索",
+      "qwen": "通义千问",
+      "doubao": "豆包",
+      "moonshot": "Moonshot",
+      "openrouter": "OpenRouter"
+    },
+    "stage": {
+      "resolve_youtube": "解析链接",
+      "download": "下载",
+      "transcode": "转码",
+      "upload_storage": "上传存储",
+      "transcribe": "转写",
+      "summarize": "摘要"
+    },
+    "status": {
+      "pending": "待处理",
+      "processing": "处理中",
+      "completed": "已完成",
+      "failed": "失败"
+    }
   },
   "header": {
     "languageToggleZh": "中/EN",

@@ -42,7 +42,86 @@
   "nav": {
     "overview": "Overview",
     "tasks": "Tasks",
+    "stats": "Stats",
     "settings": "Settings"
+  },
+  "stats": {
+    "title": "Stats",
+    "subtitle": "Service and task performance overview",
+    "timeRangeLabel": "Time range",
+    "timeRangeOptions": {
+      "today": "Today",
+      "week": "Last 7 days",
+      "month": "Last 30 days",
+      "all": "Last 90 days",
+      "custom": "Custom"
+    },
+    "startDate": "Start date",
+    "endDate": "End date",
+    "apply": "Apply",
+    "granularityLabel": "Trend granularity",
+    "granularityOptions": {
+      "hour": "Hour",
+      "day": "Day",
+      "week": "Week",
+      "month": "Month"
+    },
+    "customRangeIncomplete": "Select both start and end dates.",
+    "customRangeInvalid": "Start date must be earlier than end date.",
+    "loadFailed": "Failed to load stats.",
+    "empty": "No stats data yet.",
+    "loginRequiredTitle": "Sign in to view stats",
+    "loginRequiredDesc": "Log in to view cost and task metrics.",
+    "serviceSection": "Service stats",
+    "totalCalls": "Total calls",
+    "serviceBreakdown": "By service type",
+    "providerBreakdown": "By provider",
+    "providerBreakdownAsr": "ASR providers",
+    "providerBreakdownLlm": "LLM providers",
+    "taskSection": "Task stats",
+    "totalTasks": "Total tasks",
+    "successRate": "Success rate",
+    "failureRate": "Failure rate",
+    "processingSummary": "Processing overview",
+    "avgProcessingTime": "Avg processing time",
+    "medianProcessingTime": "Median processing time",
+    "avgStageSeconds": "Avg stage time",
+    "medianStageSeconds": "Median stage time",
+    "processingByStage": "Stage processing time",
+    "totalAudioDuration": "Total audio duration",
+    "taskTrend": "Task trend",
+    "seconds": "{count}s",
+    "callCount": "{count} calls",
+    "statusCounts": "Success {success} / Failed {failure} / Processing {processing} / Pending {pending}",
+    "serviceType": {
+      "asr": "ASR",
+      "llm": "LLM"
+    },
+    "provider": {
+      "tencent": "Tencent",
+      "aliyun": "Alibaba Cloud",
+      "volcengine": "Volcengine",
+      "openai": "OpenAI",
+      "deepseek": "DeepSeek",
+      "qwen": "Qwen",
+      "doubao": "Doubao",
+      "moonshot": "Moonshot",
+      "openrouter": "OpenRouter"
+    },
+    "stage": {
+      "resolve_youtube": "Resolve YouTube",
+      "download": "Download",
+      "transcode": "Transcode",
+      "upload_storage": "Upload storage",
+      "transcribe": "Transcribe",
+      "summarize": "Summarize"
+    },
+    "status": {
+      "pending": "Pending",
+      "processing": "Processing",
+      "completed": "Completed",
+      "failed": "Failed"
+    }
   },
   "header": {
     "languageToggleZh": "中/EN",
