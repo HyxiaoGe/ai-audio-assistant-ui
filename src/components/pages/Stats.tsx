@@ -256,22 +256,22 @@ export default function Stats({
       {
         key: "pending",
         label: t("stats.status.pending"),
-        value: taskOverview.status_distribution.pending,
+        value: taskOverview.status_distribution.pending ?? 0,
       },
       {
         key: "processing",
         label: t("stats.status.processing"),
-        value: taskOverview.status_distribution.processing,
+        value: taskOverview.status_distribution.processing ?? 0,
       },
       {
         key: "completed",
         label: t("stats.status.completed"),
-        value: taskOverview.status_distribution.completed,
+        value: taskOverview.status_distribution.completed ?? 0,
       },
       {
         key: "failed",
         label: t("stats.status.failed"),
-        value: taskOverview.status_distribution.failed,
+        value: taskOverview.status_distribution.failed ?? 0,
       },
     ];
   }, [taskOverview, t]);
@@ -306,15 +306,41 @@ export default function Stats({
     );
   }, [serviceOverview]);
 
-  const asrProviderUsage = useMemo(
-    () => normalizeProviderUsage(serviceOverview?.asr_usage_by_provider, "asr"),
+  const getFallbackProviderUsage = useCallback(
+    (serviceType: "asr" | "llm") => {
+      const fallback = serviceOverview?.usage_by_provider;
+      if (!fallback) return [];
+      const items = Array.isArray(fallback)
+        ? fallback.filter((item) => item.service_type === serviceType)
+        : Object.entries(fallback)
+            .filter(([, value]) => value.service_type === serviceType)
+            .map(([provider, value]) => ({
+              provider: value.provider || provider,
+              service_type: value.service_type || serviceType,
+              ...value,
+            }));
+      return normalizeProviderUsage(items, serviceType);
+    },
     [serviceOverview]
   );
 
-  const llmProviderUsage = useMemo(
-    () => normalizeProviderUsage(serviceOverview?.llm_usage_by_provider, "llm"),
-    [serviceOverview]
-  );
+  const asrProviderUsage = useMemo(() => {
+    const direct = normalizeProviderUsage(
+      serviceOverview?.asr_usage_by_provider,
+      "asr"
+    );
+    if (direct.length) return direct;
+    return getFallbackProviderUsage("asr");
+  }, [getFallbackProviderUsage, serviceOverview]);
+
+  const llmProviderUsage = useMemo(() => {
+    const direct = normalizeProviderUsage(
+      serviceOverview?.llm_usage_by_provider,
+      "llm"
+    );
+    if (direct.length) return direct;
+    return getFallbackProviderUsage("llm");
+  }, [getFallbackProviderUsage, serviceOverview]);
 
   const totalServiceCalls = useMemo(() => {
     if (!serviceOverview) return 0;
@@ -362,8 +388,8 @@ export default function Stats({
       <div className="flex-1 flex overflow-hidden">
         <Sidebar />
 
-        <main className="flex-1 overflow-y-auto p-8" style={{ background: "var(--app-bg)" }}>
-          <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+        <main className="flex-1 overflow-y-auto px-8 py-6" style={{ background: "var(--app-bg)" }}>
+          <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
             <div>
               <h2 className="text-h2" style={{ color: "var(--app-text)" }}>
                 {t("stats.title")}
@@ -387,7 +413,7 @@ export default function Stats({
             />
           ) : (
             <>
-              <div className="glass-panel rounded-2xl p-4 mb-8">
+              <div className="glass-panel rounded-2xl p-4 mb-6">
                 <div className="flex flex-wrap items-end gap-4">
                   <div className="space-y-2">
                     <p className="text-xs text-[var(--app-text-muted)]">
@@ -484,7 +510,7 @@ export default function Stats({
                 </div>
               )}
 
-              <section className="space-y-4 mb-10">
+              <section className="space-y-4 mb-8">
                 <div className="flex items-center justify-between">
                   <h3 className="text-h3" style={{ color: "var(--app-text)" }}>
                     {t("stats.serviceSection")}
@@ -496,8 +522,8 @@ export default function Stats({
                   )}
                 </div>
 
-                <div className="grid gap-6 lg:grid-cols-2">
-                  <div className="glass-panel rounded-2xl p-6 space-y-4">
+                <div className="glass-panel rounded-2xl p-6 space-y-5">
+                  <div className="grid gap-4 sm:grid-cols-3">
                     <div>
                       <p className="text-xs text-[var(--app-text-muted)]">
                         {t("stats.totalCalls")}
@@ -506,43 +532,53 @@ export default function Stats({
                         {serviceOverview ? totalServiceCalls : "--"}
                       </p>
                     </div>
-
-                    <div className="space-y-2 text-xs text-[var(--app-text-muted)]">
-                      <div className="flex items-center justify-between">
-                        <span>{t("stats.successRate")}</span>
-                        <span className="text-[var(--app-text)]">
-                          {overallServiceRates
-                            ? formatPercentValue(overallServiceRates.success)
-                            : "--"}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>{t("stats.failureRate")}</span>
-                        <span className="text-[var(--app-text)]">
-                          {overallServiceRates
-                            ? formatPercentValue(overallServiceRates.failure)
-                            : "--"}
-                        </span>
-                      </div>
+                    <div>
+                      <p className="text-xs text-[var(--app-text-muted)]">
+                        {t("stats.successRate")}
+                      </p>
+                      <p className="text-xl font-semibold text-[var(--app-text)]">
+                        {overallServiceRates
+                          ? formatPercentValue(overallServiceRates.success)
+                          : "--"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[var(--app-text-muted)]">
+                        {t("stats.failureRate")}
+                      </p>
+                      <p className="text-xl font-semibold text-[var(--app-text)]">
+                        {overallServiceRates
+                          ? formatPercentValue(overallServiceRates.failure)
+                          : "--"}
+                      </p>
                     </div>
                   </div>
 
-                  <div className="glass-panel rounded-2xl p-6 space-y-4">
-                    <p className="text-sm font-medium text-[var(--app-text)]">
+                  <div className="border-t pt-4" style={{ borderColor: "var(--app-glass-border)" }}>
+                    <p className="text-sm font-medium text-[var(--app-text)] mb-3">
                       {t("stats.serviceBreakdown")}
                     </p>
                     {serviceBreakdown.length === 0 ? (
                       <p className="text-xs text-[var(--app-text-muted)]">--</p>
                     ) : (
-                      <div className="space-y-3">
+                      <div className="grid gap-3 sm:grid-cols-2">
                         {serviceBreakdown.map((item, index) => (
                           <div
                             key={`${item.service_type}-${index}`}
-                            className="rounded-xl border px-3 py-3 space-y-2"
+                            className="rounded-xl border px-4 py-3 space-y-2 relative overflow-hidden"
                             style={{ borderColor: "var(--app-glass-border)" }}
                           >
+                            <span
+                              className="absolute inset-y-0 left-0 w-1"
+                              style={{
+                                background:
+                                  item.service_type === "asr"
+                                    ? "var(--app-primary)"
+                                    : "var(--app-purple)",
+                              }}
+                            />
                             <div className="flex items-center justify-between text-xs">
-                              <span className="text-[var(--app-text)]">
+                              <span className="text-[var(--app-text)] font-semibold">
                                 {serviceTypeLabel(item.service_type)}
                               </span>
                               <span className="text-[var(--app-text-muted)]">
@@ -551,23 +587,19 @@ export default function Stats({
                                 })}
                               </span>
                             </div>
-                            <div className="flex items-center justify-between text-xs text-[var(--app-text-muted)]">
-                              <span>{t("stats.successRate")}</span>
-                              <span className="text-[var(--app-text)]">
-                                {formatPercentValue(getItemSuccessRate(item))}
+                            <div className="flex flex-wrap gap-2 text-[11px] text-[var(--app-text-muted)]">
+                              <span className="rounded-full bg-[var(--app-success-bg)] px-2 py-0.5 text-[var(--app-success)]">
+                                {t("stats.successRate")} {formatPercentValue(getItemSuccessRate(item))}
                               </span>
-                            </div>
-                            <div className="flex items-center justify-between text-xs text-[var(--app-text-muted)]">
-                              <span>{t("stats.failureRate")}</span>
-                              <span className="text-[var(--app-text)]">
-                                {formatPercentValue(getItemFailureRate(item))}
+                              <span className="rounded-full bg-[var(--app-danger-bg-soft)] px-2 py-0.5 text-[var(--app-danger-strong)]">
+                                {t("stats.failureRate")} {formatPercentValue(getItemFailureRate(item))}
                               </span>
                             </div>
                             {(item.success_count ||
                               item.failure_count ||
                               item.processing_count ||
                               item.pending_count) && (
-                              <p className="text-xs text-[var(--app-text-muted)]">
+                              <p className="text-[11px] text-[var(--app-text-muted)]">
                                 {t("stats.statusCounts", {
                                   success: item.success_count || 0,
                                   failure: item.failure_count || 0,
@@ -576,33 +608,34 @@ export default function Stats({
                                 })}
                               </p>
                             )}
-                            <div className="flex items-center justify-between text-xs text-[var(--app-text-muted)]">
-                              <span>{t("stats.avgStageSeconds")}</span>
-                              <span className="text-[var(--app-text)]">
-                                {formatSeconds(item.avg_stage_seconds)}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between text-xs text-[var(--app-text-muted)]">
-                              <span>{t("stats.medianStageSeconds")}</span>
-                              <span className="text-[var(--app-text)]">
-                                {formatSeconds(item.median_stage_seconds)}
-                              </span>
-                            </div>
-                            {Number.isFinite(item.total_audio_duration_seconds) &&
-                              item.total_audio_duration_seconds > 0 && (
-                              <div className="flex items-center justify-between text-xs text-[var(--app-text-muted)]">
-                                <span>{t("stats.totalAudioDuration")}</span>
+                            <div className="grid gap-1 text-[11px] text-[var(--app-text-muted)]">
+                              <div className="flex items-center justify-between">
+                                <span>{t("stats.avgStageSeconds")}</span>
                                 <span className="text-[var(--app-text)]">
-                                  {formatSeconds(item.total_audio_duration_seconds)}
+                                  {formatSeconds(item.avg_stage_seconds)}
                                 </span>
                               </div>
-                            )}
+                              <div className="flex items-center justify-between">
+                                <span>{t("stats.medianStageSeconds")}</span>
+                                <span className="text-[var(--app-text)]">
+                                  {formatSeconds(item.median_stage_seconds)}
+                                </span>
+                              </div>
+                              {Number.isFinite(item.total_audio_duration_seconds) &&
+                                item.total_audio_duration_seconds > 0 && (
+                                <div className="flex items-center justify-between">
+                                  <span>{t("stats.totalAudioDuration")}</span>
+                                  <span className="text-[var(--app-text)]">
+                                    {formatSeconds(item.total_audio_duration_seconds)}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
                     )}
                   </div>
-
                 </div>
 
                 <div className="glass-panel rounded-2xl p-6 space-y-4">
@@ -630,7 +663,7 @@ export default function Stats({
                         {asrProviderUsage.length === 0 ? (
                           <p className="text-xs text-[var(--app-text-muted)]">--</p>
                         ) : (
-                          <div className="space-y-3">
+                          <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
                             {asrProviderUsage.map((item, index) => (
                               <div
                                 key={`${item.provider}-${index}`}
@@ -638,7 +671,10 @@ export default function Stats({
                                 style={{ borderColor: "var(--app-glass-border)" }}
                               >
                                 <div className="flex items-center justify-between text-xs">
-                                  <span className="text-[var(--app-text)]">
+                                  <span
+                                    className="text-[var(--app-text)] truncate max-w-[180px]"
+                                    title={item.provider || "--"}
+                                  >
                                     {providerLabel(item.provider || "--")}
                                   </span>
                                   <span className="text-[var(--app-text-muted)]">
@@ -647,26 +683,50 @@ export default function Stats({
                                     })}
                                   </span>
                                 </div>
-                                <div className="flex items-center justify-between text-xs text-[var(--app-text-muted)]">
-                                  <span>{t("stats.successRate")}</span>
-                                  <span className="text-[var(--app-text)]">
-                                    {formatPercentValue(getItemSuccessRate(item))}
+                                <div className="flex flex-wrap gap-2 text-[11px] text-[var(--app-text-muted)]">
+                                  <span className="rounded-full bg-[var(--app-success-bg)] px-2 py-0.5 text-[var(--app-success)]">
+                                    {t("stats.successRate")} {formatPercentValue(getItemSuccessRate(item))}
+                                  </span>
+                                  <span className="rounded-full bg-[var(--app-danger-bg-soft)] px-2 py-0.5 text-[var(--app-danger-strong)]">
+                                    {t("stats.failureRate")} {formatPercentValue(getItemFailureRate(item))}
                                   </span>
                                 </div>
-                                <div className="flex items-center justify-between text-xs text-[var(--app-text-muted)]">
-                                  <span>{t("stats.failureRate")}</span>
-                                  <span className="text-[var(--app-text)]">
-                                    {formatPercentValue(getItemFailureRate(item))}
-                                  </span>
+                                <div className="grid gap-1 text-[11px] text-[var(--app-text-muted)]">
+                                  <div className="flex items-center justify-between">
+                                    <span>{t("stats.avgStageSeconds")}</span>
+                                    <span className="text-[var(--app-text)]">
+                                      {formatSeconds(item.avg_stage_seconds)}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <span>{t("stats.medianStageSeconds")}</span>
+                                    <span className="text-[var(--app-text)]">
+                                      {formatSeconds(item.median_stage_seconds)}
+                                    </span>
+                                  </div>
+                                  {Number.isFinite(item.total_audio_duration_seconds) &&
+                                    item.total_audio_duration_seconds > 0 && (
+                                    <div className="flex items-center justify-between">
+                                      <span>{t("stats.totalAudioDuration")}</span>
+                                      <span className="text-[var(--app-text)]">
+                                        {formatSeconds(item.total_audio_duration_seconds)}
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
-                                <p className="text-xs text-[var(--app-text-muted)]">
-                                  {t("stats.statusCounts", {
-                                    success: item.success_count || 0,
-                                    failure: item.failure_count || 0,
-                                    processing: item.processing_count || 0,
-                                    pending: item.pending_count || 0,
-                                  })}
-                                </p>
+                                {(item.success_count ||
+                                  item.failure_count ||
+                                  item.processing_count ||
+                                  item.pending_count) && (
+                                  <p className="text-[11px] text-[var(--app-text-muted)]">
+                                    {t("stats.statusCounts", {
+                                      success: item.success_count || 0,
+                                      failure: item.failure_count || 0,
+                                      processing: item.processing_count || 0,
+                                      pending: item.pending_count || 0,
+                                    })}
+                                  </p>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -690,7 +750,7 @@ export default function Stats({
                         {llmProviderUsage.length === 0 ? (
                           <p className="text-xs text-[var(--app-text-muted)]">--</p>
                         ) : (
-                          <div className="space-y-3">
+                          <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
                             {llmProviderUsage.map((item, index) => (
                               <div
                                 key={`${item.provider}-${index}`}
@@ -698,7 +758,10 @@ export default function Stats({
                                 style={{ borderColor: "var(--app-glass-border)" }}
                               >
                                 <div className="flex items-center justify-between text-xs">
-                                  <span className="text-[var(--app-text)]">
+                                  <span
+                                    className="text-[var(--app-text)] truncate max-w-[180px]"
+                                    title={item.provider || "--"}
+                                  >
                                     {providerLabel(item.provider || "--")}
                                   </span>
                                   <span className="text-[var(--app-text-muted)]">
@@ -707,26 +770,41 @@ export default function Stats({
                                     })}
                                   </span>
                                 </div>
-                                <div className="flex items-center justify-between text-xs text-[var(--app-text-muted)]">
-                                  <span>{t("stats.successRate")}</span>
-                                  <span className="text-[var(--app-text)]">
-                                    {formatPercentValue(getItemSuccessRate(item))}
+                                <div className="flex flex-wrap gap-2 text-[11px] text-[var(--app-text-muted)]">
+                                  <span className="rounded-full bg-[var(--app-success-bg)] px-2 py-0.5 text-[var(--app-success)]">
+                                    {t("stats.successRate")} {formatPercentValue(getItemSuccessRate(item))}
+                                  </span>
+                                  <span className="rounded-full bg-[var(--app-danger-bg-soft)] px-2 py-0.5 text-[var(--app-danger-strong)]">
+                                    {t("stats.failureRate")} {formatPercentValue(getItemFailureRate(item))}
                                   </span>
                                 </div>
-                                <div className="flex items-center justify-between text-xs text-[var(--app-text-muted)]">
-                                  <span>{t("stats.failureRate")}</span>
-                                  <span className="text-[var(--app-text)]">
-                                    {formatPercentValue(getItemFailureRate(item))}
-                                  </span>
+                                <div className="grid gap-1 text-[11px] text-[var(--app-text-muted)]">
+                                  <div className="flex items-center justify-between">
+                                    <span>{t("stats.avgStageSeconds")}</span>
+                                    <span className="text-[var(--app-text)]">
+                                      {formatSeconds(item.avg_stage_seconds)}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <span>{t("stats.medianStageSeconds")}</span>
+                                    <span className="text-[var(--app-text)]">
+                                      {formatSeconds(item.median_stage_seconds)}
+                                    </span>
+                                  </div>
                                 </div>
-                                <p className="text-xs text-[var(--app-text-muted)]">
-                                  {t("stats.statusCounts", {
-                                    success: item.success_count || 0,
-                                    failure: item.failure_count || 0,
-                                    processing: item.processing_count || 0,
-                                    pending: item.pending_count || 0,
-                                  })}
-                                </p>
+                                {(item.success_count ||
+                                  item.failure_count ||
+                                  item.processing_count ||
+                                  item.pending_count) && (
+                                  <p className="text-[11px] text-[var(--app-text-muted)]">
+                                    {t("stats.statusCounts", {
+                                      success: item.success_count || 0,
+                                      failure: item.failure_count || 0,
+                                      processing: item.processing_count || 0,
+                                      pending: item.pending_count || 0,
+                                    })}
+                                  </p>
+                                )}
                               </div>
                             ))}
                           </div>

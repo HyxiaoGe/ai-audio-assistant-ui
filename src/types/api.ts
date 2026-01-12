@@ -476,6 +476,9 @@ export interface StatsServicesOverviewResponse {
   usage_by_service_type:
     | StatsServiceOverviewItem[]
     | Record<string, StatsServiceOverviewItem>
+  usage_by_provider?:
+    | StatsServiceProviderOverviewItem[]
+    | Record<string, StatsServiceProviderOverviewItem>
   asr_usage_by_provider?:
     | StatsServiceProviderOverviewItem[]
     | Record<string, StatsServiceProviderOverviewItem>
