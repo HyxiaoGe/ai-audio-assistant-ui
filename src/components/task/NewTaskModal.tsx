@@ -34,7 +34,7 @@ export default function NewTaskModal({ isOpen, onClose }: NewTaskModalProps) {
   const [advancedOptions, setAdvancedOptions] = useState({
     summaryModelId: null as string | null,
     language: 'auto',
-    speakerDiarization: true,
+    speakerDiarization: false,
     summaryStyle: 'meeting'
   });
   const [llmModels, setLlmModels] = useState<LLMModel[]>([]);

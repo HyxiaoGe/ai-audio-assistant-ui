@@ -45,7 +45,7 @@ export function UploadDialog({
   const client = useAPIClient()
   const [options, setOptions] = useState<TaskOptions>({
     language: "auto",
-    enable_speaker_diarization: true,
+    enable_speaker_diarization: false,
     summary_style: "meeting",
     provider: null,
     model_id: null,
