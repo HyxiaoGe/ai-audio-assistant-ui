@@ -1,4 +1,4 @@
-import { FileText, Video, Mic } from 'lucide-react';
+import { FileText, Video, Mic, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useI18n } from '@/lib/i18n-context';
 
@@ -11,7 +11,9 @@ interface TaskCardProps {
   type?: 'video' | 'audio' | 'file';
   onClick?: () => void;
   onRetry?: () => void;
+  onDelete?: () => void;
   isRetrying?: boolean;
+  isDeleting?: boolean;
 }
 
 export default function TaskCard({ 
@@ -22,7 +24,9 @@ export default function TaskCard({
   type = 'file',
   onClick,
   onRetry,
-  isRetrying = false
+  onDelete,
+  isRetrying = false,
+  isDeleting = false
 }: TaskCardProps) {
   const { t } = useI18n();
   
@@ -99,6 +103,21 @@ export default function TaskCard({
         <Badge variant={status}>
           {getStatusText()}
         </Badge>
+        {onDelete && (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onDelete();
+            }}
+            disabled={isDeleting}
+            aria-label={t("common.delete")}
+            className="p-2 rounded-lg transition-colors hover:bg-[var(--app-glass-bg-strong)] disabled:opacity-50"
+            style={{ color: "var(--app-text-muted)" }}
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
         {status === "failed" && onRetry && (
           <button
             type="button"

@@ -7,6 +7,15 @@ import { notifyError, notifySuccess } from '@/lib/notify';
 import { ArrowLeft, ChevronDown, FileText, CheckSquare, Lightbulb } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import PlayerBar from '@/components/task/PlayerBar';
 import TranscriptItem from '@/components/task/TranscriptItem';
 import TabSwitch from '@/components/task/TabSwitch';
@@ -96,6 +105,8 @@ export default function TaskDetail({
   const [showCleanupToast, setShowCleanupToast] = useState(false);
   const [failedTaskIds, setFailedTaskIds] = useState<string[]>([]);
   const [isCleaning, setIsCleaning] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [task, setTask] = useState<ApiTaskDetail | null>(null);
   const [transcript, setTranscript] = useState<DisplayTranscriptSegment[]>([]);
@@ -688,6 +699,26 @@ export default function TaskDetail({
       }
     } finally {
       setIsRetrying(false);
+    }
+  };
+
+  const handleDeleteTask = async () => {
+    if (!task || isDeleting) return;
+
+    setIsDeleting(true);
+    try {
+      await client.deleteTask(task.id);
+      notifySuccess(t("task.deleteSuccess"));
+      setDeleteOpen(false);
+      router.push('/tasks');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        notifyError(err.message);
+      } else {
+        notifyError(t("task.deleteFailed"));
+      }
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -1525,7 +1556,7 @@ export default function TaskDetail({
             type="general"
             title={t("errors.taskNotFound")}
             description={error || t("errors.taskNotFoundDesc")}
-            onRetry={() => router.push('/')}
+            onRetry={() => router.push('/tasks')}
             retryLabel={t("errors.backHome")}
           />
         </div>
@@ -1559,7 +1590,7 @@ export default function TaskDetail({
             >
               {/* Left: Back Button */}
               <button
-                onClick={() => router.push('/')}
+                onClick={() => router.push('/tasks')}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-[var(--app-glass-bg-strong)] transition-colors"
                 style={{ color: 'var(--app-text-muted)' }}
               >
@@ -1648,7 +1679,7 @@ export default function TaskDetail({
             >
               {/* Left: Back Button */}
               <button
-                onClick={() => router.push('/')}
+                onClick={() => router.push('/tasks')}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-[var(--app-glass-bg-strong)] transition-colors"
                 style={{ color: 'var(--app-text-muted)' }}
               >
@@ -1774,7 +1805,7 @@ export default function TaskDetail({
           >
             {/* Left: Back Button */}
             <button
-              onClick={() => router.push('/')}
+              onClick={() => router.push('/tasks')}
               className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-[var(--app-glass-bg-strong)] transition-colors"
               style={{ color: 'var(--app-text-muted)' }}
             >
@@ -1786,6 +1817,15 @@ export default function TaskDetail({
             <h1 className="text-xl" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
               {task.title}
             </h1>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setDeleteOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors hover:bg-[var(--app-danger-bg-soft)]"
+                style={{ borderColor: 'var(--app-danger-border)', color: 'var(--app-danger)' }}
+              >
+                <span className="text-sm" style={{ fontWeight: 500 }}>{t("common.delete")}</span>
+              </button>
 
               {/* Right: Export */}
               <div className="relative">
@@ -1816,6 +1856,7 @@ export default function TaskDetail({
                 )}
               </div>
             </div>
+          </div>
 
           {/* Player Bar */}
           <div className="px-6 py-4" style={{ background: 'var(--app-glass-bg)' }}>
@@ -2257,6 +2298,47 @@ export default function TaskDetail({
           </div>
         </main>
       </div>
+      <Dialog
+        open={deleteOpen}
+        onOpenChange={(open) => {
+          if (!open && !isDeleting) {
+            setDeleteOpen(false);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("task.deleteConfirmTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("task.deleteConfirmDesc")}
+              {task?.title && (
+                <span
+                  className="mt-2 block text-sm font-medium"
+                  style={{ color: "var(--app-text)" }}
+                >
+                  {task.title}
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              onClick={() => setDeleteOpen(false)}
+              disabled={isDeleting}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteTask}
+              disabled={isDeleting}
+            >
+              {isDeleting ? t("task.deleteProcessing") : t("common.delete")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {showCleanupToast && (
         <RetryCleanupToast
           failedCount={failedTaskIds.length}
