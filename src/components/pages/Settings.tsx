@@ -23,7 +23,7 @@ import { useI18n } from '@/lib/i18n-context';
 import { notifyError, notifyInfo, notifySuccess } from '@/lib/notify';
 import { useAPIClient } from '@/lib/use-api-client';
 import { useDateFormatter } from '@/lib/use-date-formatter';
-import type { AsrQuotaItem } from '@/types/api';
+import type { AsrQuotaItem, UserProfile } from '@/types/api';
 import { 
   Globe,
   Palette,
@@ -114,6 +114,14 @@ export default function Settings({
   const [saved, setSaved] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<"clearTasks" | "deleteAccount" | "resetSettings" | null>(null);
+  const [accountProfile, setAccountProfile] = useState<UserProfile | null>(null);
+  const [accountStats, setAccountStats] = useState<{
+    totalTasks: number | null;
+    monthlyTasks: number | null;
+    totalDuration: string | null;
+  } | null>(null);
+  const [accountLoading, setAccountLoading] = useState(true);
+  const numberFormatter = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const { t } = useI18n();
   const client = useAPIClient();
   const { formatDateTime } = useDateFormatter();
@@ -282,6 +290,56 @@ export default function Settings({
       active = false;
     };
   }, [client, t]);
+
+  useEffect(() => {
+    let active = true;
+    const loadAccountInfo = async () => {
+      setAccountLoading(true);
+      const [profileResult, allStatsResult, monthStatsResult] = await Promise.allSettled([
+        client.getCurrentUser(),
+        client.getTaskStatsOverview({ time_range: "all" }),
+        client.getTaskStatsOverview({ time_range: "month" }),
+      ]);
+
+      if (!active) return;
+
+      if (profileResult.status === "fulfilled") {
+        setAccountProfile(profileResult.value);
+      }
+
+      const allStats =
+        allStatsResult.status === "fulfilled" ? allStatsResult.value : null;
+      const monthStats =
+        monthStatsResult.status === "fulfilled" ? monthStatsResult.value : null;
+
+      setAccountStats({
+        totalTasks: allStats?.total_tasks ?? null,
+        monthlyTasks: monthStats?.total_tasks ?? null,
+        totalDuration: allStats?.total_audio_duration_formatted ?? null,
+      });
+      setAccountLoading(false);
+    };
+
+    loadAccountInfo();
+    return () => {
+      active = false;
+    };
+  }, [client]);
+
+  const formatAccountValue = (value: number | string | null | undefined) => {
+    if (accountLoading) return t("common.loading");
+    if (value === null || value === undefined) return "--";
+    if (typeof value === "number") return numberFormatter.format(value);
+    return value;
+  };
+
+  const accountDisplayName = accountLoading
+    ? t("common.loading")
+    : accountProfile?.name || accountProfile?.email || "--";
+  const accountDisplayEmail =
+    !accountLoading && accountProfile?.name && accountProfile?.email
+      ? accountProfile.email
+      : "";
 
   const canEditWindowType = (type: AsrQuotaItem["window_type"]) => {
     return type === "day" || type === "month" || type === "total";
@@ -1068,22 +1126,28 @@ export default function Settings({
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="space-y-1">
+                  <p className="text-base font-semibold" style={{ color: "var(--app-text)" }}>
+                    {accountDisplayName}
+                  </p>
+                  {accountDisplayEmail && (
+                    <p className="text-sm" style={{ color: "var(--app-text-muted)" }}>
+                      {accountDisplayEmail}
+                    </p>
+                  )}
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <p className="text-sm text-[var(--app-text-muted)]">{t("settings.statsTotalTasks")}</p>
-                    <p className="text-2xl font-semibold">24</p>
+                    <p className="text-2xl font-semibold">{formatAccountValue(accountStats?.totalTasks)}</p>
                   </div>
                   <div className="space-y-1">
                     <p className="text-sm text-[var(--app-text-muted)]">{t("settings.statsMonthly")}</p>
-                    <p className="text-2xl font-semibold">8</p>
+                    <p className="text-2xl font-semibold">{formatAccountValue(accountStats?.monthlyTasks)}</p>
                   </div>
                   <div className="space-y-1">
                     <p className="text-sm text-[var(--app-text-muted)]">{t("settings.statsDuration")}</p>
-                    <p className="text-2xl font-semibold">12.5h</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-sm text-[var(--app-text-muted)]">{t("settings.statsStorage")}</p>
-                    <p className="text-2xl font-semibold">2.3GB</p>
+                    <p className="text-2xl font-semibold">{formatAccountValue(accountStats?.totalDuration)}</p>
                   </div>
                 </div>
               </CardContent>
@@ -1114,13 +1178,22 @@ export default function Settings({
                 <Separator />
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium">{t("settings.clearTasks")}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">{t("settings.clearTasks")}</p>
+                      <span
+                        className="text-xs px-2 py-0.5 rounded-full"
+                        style={{ color: "var(--app-text-muted)", background: "var(--app-glass-bg-strong)" }}
+                      >
+                        {t("settings.comingSoon")}
+                      </span>
+                    </div>
                     <p className="text-sm text-[var(--app-text-muted)]">{t("settings.clearTasksDesc")}</p>
                   </div>
                   <Button
                     variant="destructive"
                     size="sm"
                     onClick={() => openConfirm("clearTasks")}
+                    disabled
                   >
                     {t("settings.clearTasksAction")}
                   </Button>
@@ -1128,13 +1201,22 @@ export default function Settings({
                 <Separator />
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium">{t("settings.deleteAccount")}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">{t("settings.deleteAccount")}</p>
+                      <span
+                        className="text-xs px-2 py-0.5 rounded-full"
+                        style={{ color: "var(--app-text-muted)", background: "var(--app-glass-bg-strong)" }}
+                      >
+                        {t("settings.comingSoon")}
+                      </span>
+                    </div>
                     <p className="text-sm text-[var(--app-text-muted)]">{t("settings.deleteAccountDesc")}</p>
                   </div>
                   <Button
                     variant="destructive"
                     size="sm"
                     onClick={() => openConfirm("deleteAccount")}
+                    disabled
                   >
                     {t("settings.deleteAccount")}
                   </Button>

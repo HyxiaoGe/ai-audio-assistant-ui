@@ -540,11 +540,12 @@ export type WebSocketMessage = ApiResponse<WebSocketData>
 export interface UserProfile {
   id: string
   email: string
-  name: string
-  image_url?: string
-  locale: string
-  timezone: string
-  created_at: string
+  name: string | null
+  avatar_url?: string | null
+  image_url?: string | null
+  locale?: string
+  timezone?: string
+  created_at?: string
 }
 
 // ============================================================================

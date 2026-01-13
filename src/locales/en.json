@@ -459,6 +459,7 @@
     "statsStorage": "Storage",
     "dangerTitle": "Danger zone",
     "dangerDesc": "These actions are irreversible",
+    "comingSoon": "Coming soon",
     "clearTasks": "Clear all tasks",
     "clearTasksDesc": "Delete all tasks and data",
     "clearTasksAction": "Clear data",

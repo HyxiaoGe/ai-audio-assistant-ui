@@ -459,6 +459,7 @@
     "statsStorage": "存储空间",
     "dangerTitle": "危险操作",
     "dangerDesc": "这些操作不可逆，请谨慎操作",
+    "comingSoon": "即将上线",
     "clearTasks": "清除所有任务",
     "clearTasksDesc": "删除所有任务记录和数据",
     "clearTasksAction": "清除数据",
