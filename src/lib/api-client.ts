@@ -37,7 +37,6 @@ import {
   TaskDetail,
   TaskListRequest,
   TaskListResponse,
-  RetryMode,
   TaskRetryResponse,
   TranscriptRequest,
   TranscriptResponse,
@@ -354,23 +353,22 @@ export class APIClient {
    */
   async retryTask(
     taskId: string,
-    options?: boolean | { mode?: RetryMode }
+    options?: boolean | { force?: boolean }
   ): Promise<TaskRetryResponse> {
     const queryParams = new URLSearchParams()
-    let body = "{}"
     if (typeof options === "boolean") {
       if (options) {
         queryParams.set("force", "true")
       }
-    } else if (options?.mode) {
-      body = JSON.stringify({ mode: options.mode })
+    } else if (options?.force) {
+      queryParams.set("force", "true")
     }
     const query = queryParams.toString()
     const endpoint = query
       ? `/tasks/${taskId}/retry?${query}`
       : `/tasks/${taskId}/retry`
 
-    return request(endpoint, { method: "POST", body }, this.token)
+    return request(endpoint, { method: "POST" }, this.token)
   }
 
   /**

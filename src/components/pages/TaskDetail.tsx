@@ -8,7 +8,6 @@ import { ArrowLeft, ChevronDown, FileText, CheckSquare, Lightbulb } from 'lucide
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
 import PlayerBar from '@/components/task/PlayerBar';
-import RetryTaskDialog from '@/components/task/RetryTaskDialog';
 import TranscriptItem from '@/components/task/TranscriptItem';
 import TabSwitch from '@/components/task/TabSwitch';
 import ProcessingState from '@/components/common/ProcessingState';
@@ -27,7 +26,6 @@ import type {
   TranscriptWord,
   ComparisonResult,
   SummaryItem,
-  RetryMode,
   SummaryRegenerateType,
   LLMModel
 } from '@/types/api';
@@ -95,7 +93,6 @@ export default function TaskDetail({
   const [progress, setProgress] = useState(0);
   const [loginOpen, setLoginOpen] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
-  const [isRetryDialogOpen, setIsRetryDialogOpen] = useState(false);
   const [showCleanupToast, setShowCleanupToast] = useState(false);
   const [failedTaskIds, setFailedTaskIds] = useState<string[]>([]);
   const [isCleaning, setIsCleaning] = useState(false);
@@ -656,12 +653,12 @@ export default function TaskDetail({
     }
   }, [globalTaskState, loadTask, task?.status]);
 
-  const handleRetry = async (mode: RetryMode) => {
+  const handleRetry = async () => {
     if (!id) return;
 
     setIsRetrying(true);
     try {
-      const result = await client.retryTask(id, { mode });
+      const result = await client.retryTask(id);
       if ('action' in result && result.action === 'duplicate_found') {
         const duplicateId = result.duplicate_task_id;
         if (!duplicateId) {
@@ -1603,23 +1600,17 @@ export default function TaskDetail({
                   {task.error_message || t("task.error.transcribeUnavailable")}
                 </p>
                 <button
-                  onClick={() => setIsRetryDialogOpen(true)}
+                  onClick={handleRetry}
                   disabled={isRetrying}
                   className="px-6 py-2 rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ background: 'var(--app-danger)', color: 'var(--app-button-primary-text)' }}
                 >
-                  {isRetrying ? t("common.processing") : t("task.retryDialog.open")}
+                  {isRetrying ? t("common.processing") : t("task.retryProcessing")}
                 </button>
               </div>
             </div>
           </main>
         </div>
-        <RetryTaskDialog
-          isOpen={isRetryDialogOpen}
-          isRetrying={isRetrying}
-          onClose={() => setIsRetryDialogOpen(false)}
-          onRetry={handleRetry}
-        />
       </div>
     );
   }

@@ -242,22 +242,10 @@ export interface TaskDetail {
   error_code?: number
 }
 
-export type RetryMode =
-  | "auto"
-  | "full"
-  | "from_transcribe"
-  | "transcribe_only"
-  | "summarize_only"
-
-export interface TaskRetryRequest {
-  mode: RetryMode
-}
-
 export type TaskRetryResponse =
   | {
       task_id: string
       status: string
-      retry_mode: RetryMode
     }
   | {
       action: "retrying" | "duplicate_found"
