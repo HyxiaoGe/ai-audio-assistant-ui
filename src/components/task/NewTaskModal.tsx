@@ -131,6 +131,25 @@ export default function NewTaskModal({ isOpen, onClose }: NewTaskModalProps) {
     };
   }, [client, isOpen, locale]);
 
+  const applyPreferenceDefaults = useCallback((preferences: UserPreferences) => {
+    if (advancedTouchedRef.current) return;
+    const defaults = preferences.task_defaults || {};
+    const preferredSummaryStyle = mapSummaryStyleFromPreference(defaults.summary_style);
+    const preferredModelId = resolvePreferredModel(preferences, llmModels);
+    const fallbackLanguage = getStoredDefaultLanguage();
+
+    setAdvancedOptions((prev) => ({
+      ...prev,
+      language: defaults.language || fallbackLanguage || prev.language,
+      speakerDiarization:
+        typeof defaults.enable_speaker_diarization === "boolean"
+          ? defaults.enable_speaker_diarization
+          : prev.speakerDiarization,
+      summaryStyle: preferredSummaryStyle || prev.summaryStyle,
+      summaryModelId: preferredModelId ?? null,
+    }));
+  }, [llmModels]);
+
   useEffect(() => {
     if (!isOpen) return;
     advancedTouchedRef.current = false;
@@ -201,25 +220,6 @@ export default function NewTaskModal({ isOpen, onClose }: NewTaskModalProps) {
       )),
     [modelGroups, t]
   );
-
-  const applyPreferenceDefaults = useCallback((preferences: UserPreferences) => {
-    if (advancedTouchedRef.current) return;
-    const defaults = preferences.task_defaults || {};
-    const preferredSummaryStyle = mapSummaryStyleFromPreference(defaults.summary_style);
-    const preferredModelId = resolvePreferredModel(preferences, llmModels);
-    const fallbackLanguage = getStoredDefaultLanguage();
-
-    setAdvancedOptions((prev) => ({
-      ...prev,
-      language: defaults.language || fallbackLanguage || prev.language,
-      speakerDiarization:
-        typeof defaults.enable_speaker_diarization === "boolean"
-          ? defaults.enable_speaker_diarization
-          : prev.speakerDiarization,
-      summaryStyle: preferredSummaryStyle || prev.summaryStyle,
-      summaryModelId: preferredModelId ?? null,
-    }));
-  }, [llmModels]);
 
   const buildOptions = (): TaskOptions => {
     const summaryStyleMap: Record<string, TaskOptions["summary_style"]> = {
