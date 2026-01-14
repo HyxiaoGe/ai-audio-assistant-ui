@@ -60,8 +60,7 @@ export default function TasksPageNew() {
       <UploadDialog
         open={uploadDialogOpen}
         onOpenChange={setUploadDialogOpen}
-        onSuccess={(taskId) => {
-          console.log("任务创建成功:", taskId)
+        onSuccess={() => {
           // 可以在这里刷新任务列表
         }}
       />

@@ -372,6 +372,7 @@
     "themeSwitchedLight": "已切换为浅色模式",
     "themeSwitchedDark": "已切换为深色模式",
     "themeSwitchedSystem": "主题已设为跟随系统",
+    "preferencesSaveFailed": "偏好保存失败",
     "previewTitle": "时间预览",
     "previewDesc": "根据当前时区与时间格式实时预览显示效果",
     "previewNow": "当前时间",

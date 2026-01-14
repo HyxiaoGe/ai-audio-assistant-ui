@@ -41,6 +41,8 @@ import {
   TranscriptRequest,
   TranscriptResponse,
   UserProfile,
+  UserPreferences,
+  UserPreferencesUpdateRequest,
 } from "@/types/api"
 
 // ============================================================================
@@ -525,6 +527,23 @@ export class APIClient {
    */
   async getCurrentUser(): Promise<UserProfile> {
     return request("/users/me", { method: "GET" }, this.token)
+  }
+
+  async getUserPreferences(): Promise<UserPreferences> {
+    return request("/users/me/preferences", { method: "GET" }, this.token)
+  }
+
+  async updateUserPreferences(
+    payload: UserPreferencesUpdateRequest
+  ): Promise<UserPreferences> {
+    return request(
+      "/users/me/preferences",
+      {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      },
+      this.token
+    )
   }
 
   // ==========================================================================

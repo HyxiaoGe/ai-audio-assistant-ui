@@ -96,7 +96,6 @@ export function useTaskWebSocket({
       wsRef.current = ws
 
       ws.onopen = () => {
-        console.log(`[WebSocket] Connected to task ${taskId}`)
         isAuthenticatedRef.current = false
         if (authTimeoutRef.current) {
           clearTimeout(authTimeoutRef.current)
@@ -109,7 +108,6 @@ export function useTaskWebSocket({
         )
         authTimeoutRef.current = setTimeout(() => {
           if (!isAuthenticatedRef.current) {
-            console.error("[WebSocket] Authentication timeout")
             onError?.({
               type: "error",
               status: "failed",
@@ -128,7 +126,6 @@ export function useTaskWebSocket({
 
           // Check for API errors (code !== 0)
           if (response.code !== 0) {
-            console.error("[WebSocket] Error response:", response.message)
             // Error format: data may be WebSocketErrorData or null
             const errorData: WebSocketErrorData = response.data || {
               type: "error",
@@ -141,7 +138,6 @@ export function useTaskWebSocket({
 
           // Extract actual data (code === 0)
           const data = response.data as WebSocketMessageData | { type?: string }
-          console.log("[WebSocket] Message received:", data)
 
           if (!isAuthenticatedRef.current) {
             const isAuthAck =
@@ -178,18 +174,15 @@ export function useTaskWebSocket({
               onError?.(data as WebSocketMessageData)
               break
           }
-        } catch (err) {
-          console.error("[WebSocket] Failed to parse message:", err)
+        } catch {
         }
       }
 
-      ws.onerror = (error) => {
-        console.error("[WebSocket] Error:", error)
+      ws.onerror = () => {
         setIsConnected(false)
       }
 
-      ws.onclose = (event) => {
-        console.log(`[WebSocket] Disconnected (code: ${event.code})`)
+      ws.onclose = () => {
         if (authTimeoutRef.current) {
           clearTimeout(authTimeoutRef.current)
         }
@@ -201,9 +194,6 @@ export function useTaskWebSocket({
         const currentAttempts = reconnectAttemptsRef.current
         if (enabled && currentAttempts < MAX_RECONNECT_ATTEMPTS) {
           const delay = RECONNECT_DELAY * Math.pow(2, currentAttempts)
-          console.log(
-            `[WebSocket] Reconnecting in ${delay}ms (attempt ${currentAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})...`
-          )
           reconnectTimeoutRef.current = setTimeout(() => {
             setReconnectAttempts((prev) => prev + 1)
             // Use ref to always call latest version of connect
@@ -213,8 +203,7 @@ export function useTaskWebSocket({
           }, delay)
         }
       }
-    } catch (err) {
-      console.error("[WebSocket] Failed to create connection:", err)
+    } catch {
       setIsConnected(false)
     }
   }, [taskId, enabled, onProgress, onCompleted, onError])

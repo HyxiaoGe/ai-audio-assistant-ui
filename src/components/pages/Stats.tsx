@@ -13,7 +13,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAPIClient } from "@/lib/use-api-client";
-import { useDateFormatter } from "@/lib/use-date-formatter";
 import { useI18n } from "@/lib/i18n-context";
 import {
   ApiError,
@@ -120,7 +119,6 @@ export default function Stats({
   onToggleTheme = () => {},
 }: StatsProps) {
   const client = useAPIClient();
-  const { formatDate } = useDateFormatter();
   const { t } = useI18n();
 
   const [timeRange, setTimeRange] = useState<TimeRangeOption>("month");

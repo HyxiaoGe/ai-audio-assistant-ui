@@ -60,7 +60,7 @@ function SummaryCard({
 }) {
   const config = SUMMARY_TYPE_CONFIG[summary.summary_type]
   const Icon = config.icon
-  const { t, locale } = useI18n()
+  const { t } = useI18n()
   const { formatDateTime } = useDateFormatter()
 
   return (
@@ -151,7 +151,7 @@ function formatContent(content: string): string {
 
 export function SummaryView({ taskId }: SummaryViewProps) {
   const client = useAPIClient()
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const [summaries, setSummaries] = useState<SummaryItem[]>([])
   const [models, setModels] = useState<LLMModel[]>([])
   const [loading, setLoading] = useState(true)

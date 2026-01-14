@@ -372,6 +372,7 @@
     "themeSwitchedLight": "Switched to light mode",
     "themeSwitchedDark": "Switched to dark mode",
     "themeSwitchedSystem": "Theme set to system",
+    "preferencesSaveFailed": "Failed to save preferences",
     "previewTitle": "Time preview",
     "previewDesc": "Preview using current time settings",
     "previewNow": "Current time",

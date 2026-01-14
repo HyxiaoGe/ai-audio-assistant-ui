@@ -363,24 +363,24 @@ export default function TaskDetail({
   }, [buildSummaryState, client, id, session, t, availableSpeakers]);
 
   useEffect(() => {
+    const summaryStreams = summaryStreamRef.current;
+    const summaryPolls = summaryPollRef.current;
+    const comparePoll = comparePollRef.current;
+    const compareStream = compareStreamRef.current;
+    const resumeTimer = resumeScrollTimerRef.current;
     return () => {
-      (Object.keys(summaryStreamRef.current) as SummaryRegenerateType[]).forEach((type) => {
-        summaryStreamRef.current[type]?.close();
-        summaryStreamRef.current[type] = null;
-        if (summaryPollRef.current[type]) {
-          window.clearInterval(summaryPollRef.current[type] ?? undefined);
-          summaryPollRef.current[type] = null;
+      (Object.keys(summaryStreams) as SummaryRegenerateType[]).forEach((type) => {
+        summaryStreams[type]?.close();
+        if (summaryPolls[type]) {
+          window.clearInterval(summaryPolls[type] ?? undefined);
         }
       });
-      if (comparePollRef.current) {
-        window.clearInterval(comparePollRef.current);
-        comparePollRef.current = null;
+      if (comparePoll) {
+        window.clearInterval(comparePoll);
       }
-      compareStreamRef.current?.close();
-      compareStreamRef.current = null;
-      if (resumeScrollTimerRef.current) {
-        window.clearTimeout(resumeScrollTimerRef.current);
-        resumeScrollTimerRef.current = null;
+      compareStream?.close();
+      if (resumeTimer) {
+        window.clearTimeout(resumeTimer);
       }
     };
   }, []);

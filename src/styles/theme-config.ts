@@ -174,12 +174,10 @@ export function getColor(theme: Theme, path: string): string {
   
   for (const key of keys) {
     if (typeof value !== "object" || value === null) {
-      console.warn(`Color path "${path}" not found in theme`);
       return '';
     }
     const record = value as Record<string, unknown>;
     if (!(key in record)) {
-      console.warn(`Color path "${path}" not found in theme`);
       return '';
     }
     value = record[key];

@@ -548,6 +548,38 @@ export interface UserProfile {
   created_at?: string
 }
 
+export interface UserPreferencesTaskDefaults {
+  language?: Language
+  summary_style?: SummaryStyle
+  enable_speaker_diarization?: boolean
+  asr_provider?: string | null
+  asr_variant?: string | null
+  llm_provider?: string | null
+  llm_model_id?: string | null
+}
+
+export interface UserPreferencesUI {
+  locale?: string
+  timezone?: string
+}
+
+export interface UserPreferencesNotifications {
+  task_completed?: boolean
+  task_failed?: boolean
+}
+
+export interface UserPreferences {
+  task_defaults: UserPreferencesTaskDefaults
+  ui: UserPreferencesUI
+  notifications: UserPreferencesNotifications
+}
+
+export interface UserPreferencesUpdateRequest {
+  task_defaults?: Partial<UserPreferencesTaskDefaults>
+  ui?: Partial<UserPreferencesUI>
+  notifications?: Partial<UserPreferencesNotifications>
+}
+
 // ============================================================================
 // 通知相关
 // ============================================================================

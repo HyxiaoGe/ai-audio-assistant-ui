@@ -98,8 +98,6 @@ export function useGlobalWebSocket() {
   const startPolling = useCallback(() => {
     if (!session?.user || pollingIntervalRef.current) return;
 
-    console.log("[GlobalWS] Starting HTTP polling fallback");
-
     const poll = async () => {
       try {
         const tasks = await client.getTasks({ status: "processing" });
@@ -115,7 +113,6 @@ export function useGlobalWebSocket() {
 
         // If polling succeeds, try to reconnect WebSocket
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-          console.log("[GlobalWS] HTTP polling successful, attempting WebSocket reconnect");
           reconnectRef.current?.();
         }
       } catch {
@@ -134,11 +131,6 @@ export function useGlobalWebSocket() {
       try {
         const response: WebSocketMessage = JSON.parse(event.data);
 
-        // Log all received messages (except auth)
-        if (response.data?.type !== "authenticated") {
-          console.log("[GlobalWS] Message received:", response.data);
-        }
-
         // Handle authentication response
         if (response.data?.type === "authenticated") {
           isAuthenticatedRef.current = true;
@@ -149,7 +141,6 @@ export function useGlobalWebSocket() {
           setWsReconnecting(false);
           reconnectAttemptsRef.current = 0;
           stopPolling(); // Stop polling when WebSocket is connected
-          console.log("[GlobalWS] Authenticated successfully");
           return;
         }
 
@@ -220,11 +211,17 @@ export function useGlobalWebSocket() {
             });
           }
         }
-      } catch (err) {
-        console.error("[GlobalWS] Failed to parse message:", err);
+      } catch {
       }
     },
-    [updateTask, loadNotifications, setWsConnected, setWsReconnecting, stopPolling]
+    [
+      updateTask,
+      loadNotifications,
+      setWsConnected,
+      setWsReconnecting,
+      shouldShowToast,
+      stopPolling,
+    ]
   );
 
   // Reconnect with exponential backoff
@@ -233,7 +230,6 @@ export function useGlobalWebSocket() {
 
     const attempts = reconnectAttemptsRef.current;
     if (attempts >= MAX_RECONNECT_ATTEMPTS) {
-      console.log("[GlobalWS] Max reconnect attempts reached, starting HTTP polling");
       setWsReconnecting(false);
       startPolling();
       return;
@@ -243,10 +239,6 @@ export function useGlobalWebSocket() {
     const delay = Math.min(
       RECONNECT_BASE_DELAY * Math.pow(2, attempts),
       MAX_RECONNECT_DELAY
-    );
-
-    console.log(
-      `[GlobalWS] Reconnecting in ${delay}ms (attempt ${attempts + 1}/${MAX_RECONNECT_ATTEMPTS})...`
     );
 
     setWsReconnecting(true);
@@ -269,7 +261,6 @@ export function useGlobalWebSocket() {
     // Get authentication token
     const token = await getToken();
     if (!token) {
-      console.error("[GlobalWS] No auth token available");
       return;
     }
 
@@ -294,7 +285,6 @@ export function useGlobalWebSocket() {
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log("[GlobalWS] Connected");
         isAuthenticatedRef.current = false;
 
         if (authTimeoutRef.current) {
@@ -312,7 +302,6 @@ export function useGlobalWebSocket() {
         // Set authentication timeout
         authTimeoutRef.current = setTimeout(() => {
           if (!isAuthenticatedRef.current) {
-            console.error("[GlobalWS] Authentication timeout");
             ws.close(4001, "Authentication timeout");
           }
         }, AUTH_TIMEOUT_MS);
@@ -324,8 +313,7 @@ export function useGlobalWebSocket() {
         setWsConnected(false);
       };
 
-      ws.onclose = (event) => {
-        console.log(`[GlobalWS] Disconnected (code: ${event.code})`);
+      ws.onclose = () => {
         if (authTimeoutRef.current) {
           clearTimeout(authTimeoutRef.current);
         }
@@ -338,8 +326,7 @@ export function useGlobalWebSocket() {
           reconnect();
         }
       };
-    } catch (err) {
-      console.error("[GlobalWS] Failed to create connection:", err);
+    } catch {
       setWsConnected(false);
       reconnect();
     }

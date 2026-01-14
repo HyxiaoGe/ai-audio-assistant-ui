@@ -1,14 +1,6 @@
 "use client"
 
-import { useI18n } from "@/lib/i18n-context"
-
-interface FullPageLoaderProps {
-  labelKey?: string
-}
-
-export default function FullPageLoader({ labelKey = "common.loading" }: FullPageLoaderProps) {
-  const { t } = useI18n()
-
+export default function FullPageLoader() {
   return (
     <div
       className="h-screen flex items-center justify-center relative overflow-hidden"

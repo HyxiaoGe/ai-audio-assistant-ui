@@ -129,8 +129,7 @@ export const useGlobalStore = create<GlobalStore>((set, get) => ({
         notificationsLoaded: true,
         notificationsLoading: false,
       });
-    } catch (error) {
-      console.error('Failed to load notifications:', error);
+    } catch {
       set({
         notificationsLoading: false,
       });
@@ -144,8 +143,7 @@ export const useGlobalStore = create<GlobalStore>((set, get) => ({
     try {
       const stats = await apiClient.getNotificationStats();
       set({ unreadCount: stats.unread });
-    } catch (error) {
-      console.error('Failed to refresh notification stats:', error);
+    } catch {
     }
   },
 
@@ -188,8 +186,7 @@ export const useGlobalStore = create<GlobalStore>((set, get) => ({
         const unreadCount = Math.max(0, state.unreadCount - 1);
         return { notifications, unreadCount };
       });
-    } catch (error) {
-      console.error('Failed to mark notification as read:', error);
+    } catch {
     }
   },
 
@@ -208,8 +205,7 @@ export const useGlobalStore = create<GlobalStore>((set, get) => ({
         }));
         return { notifications, unreadCount: 0 };
       });
-    } catch (error) {
-      console.error('Failed to mark all notifications as read:', error);
+    } catch {
     }
   },
 
@@ -231,8 +227,7 @@ export const useGlobalStore = create<GlobalStore>((set, get) => ({
 
         return { notifications, unreadCount };
       });
-    } catch (error) {
-      console.error('Failed to remove notification:', error);
+    } catch {
     }
   },
 
@@ -244,8 +239,7 @@ export const useGlobalStore = create<GlobalStore>((set, get) => ({
       await apiClient.clearAllNotifications();
 
       set({ notifications: [], unreadCount: 0 });
-    } catch (error) {
-      console.error('Failed to clear notifications:', error);
+    } catch {
     }
   },
 

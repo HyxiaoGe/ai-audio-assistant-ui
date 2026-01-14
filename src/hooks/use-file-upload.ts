@@ -153,7 +153,6 @@ export function useFileUpload() {
 
         if (error instanceof ApiError) {
           errorMessage = error.message
-          console.error(`[${error.traceId}] Upload error:`, error.message)
         } else if (error instanceof Error) {
           errorMessage = error.message
         }

@@ -17,12 +17,8 @@ export function BasicUploadExample() {
     <div className="max-w-2xl mx-auto p-6">
       <h2 className="text-2xl font-bold mb-4">上传文件</h2>
       <FileUploader
-        onSuccess={(taskId) => {
-          console.log("上传成功，任务 ID:", taskId)
-        }}
-        onError={(error) => {
-          console.error("上传失败:", error)
-        }}
+        onSuccess={() => {}}
+        onError={() => {}}
       />
     </div>
   )
@@ -42,8 +38,7 @@ export function DialogUploadExample() {
       <UploadDialog
         open={open}
         onOpenChange={setOpen}
-        onSuccess={(taskId) => {
-          console.log("上传成功，任务 ID:", taskId)
+        onSuccess={() => {
           // 对话框会自动关闭并跳转到任务详情页
         }}
       />
@@ -65,8 +60,7 @@ export function CustomOptionsExample() {
           enable_speaker_diarization: false,
           summary_style: "learning",
         }}
-        onSuccess={(taskId) => {
-          console.log("上传成功，任务 ID:", taskId)
+        onSuccess={() => {
           // 默认会自动跳转到任务详情页
         }}
       />
@@ -99,8 +93,7 @@ export function IntegratedExample() {
       <UploadDialog
         open={uploadDialogOpen}
         onOpenChange={setUploadDialogOpen}
-        onSuccess={(taskId) => {
-          console.log("新任务已创建:", taskId)
+        onSuccess={() => {
           // 刷新任务列表
         }}
       />

@@ -78,7 +78,7 @@ export default function GlobalAudioPlayer() {
     } catch {
       // Ignore storage errors
     }
-  }, [cacheKey, src, setCurrentTime, setIsPlaying])
+  }, [cacheKey, clearProgress, src, setCurrentTime, setIsPlaying])
 
   useEffect(() => {
     if (!audioRef.current || !src) return

@@ -4,11 +4,6 @@ import { Edit2, Check, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n-context';
 import type { TranscriptWord } from '@/types/api';
 
-interface Speaker {
-  name: string;
-  color: string;
-}
-
 interface TranscriptItemProps {
   speaker: string;
   startTime: string;

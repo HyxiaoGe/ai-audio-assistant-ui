@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { notifyError, notifySuccess } from '@/lib/notify';
 import { X, Link as LinkIcon, ChevronDown, ChevronUp } from 'lucide-react';
@@ -10,7 +10,7 @@ import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { useAPIClient } from '@/lib/use-api-client';
 import { useFileUpload } from '@/hooks/use-file-upload';
-import type { LLMModel, TaskOptions } from '@/types/api';
+import type { LLMModel, TaskOptions, UserPreferences } from '@/types/api';
 import { useI18n } from '@/lib/i18n-context';
 
 interface NewTaskModalProps {
@@ -19,6 +19,38 @@ interface NewTaskModalProps {
 }
 
 type Platform = 'youtube' | 'bilibili';
+
+const getStoredDefaultLanguage = () => {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem("settings");
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { defaultLanguage?: string };
+    if (parsed.defaultLanguage === "auto" || parsed.defaultLanguage === "zh" || parsed.defaultLanguage === "en") {
+      return parsed.defaultLanguage;
+    }
+  } catch {
+    // ignore localStorage parse errors
+  }
+  return null;
+};
+
+const mapSummaryStyleFromPreference = (value?: TaskOptions["summary_style"]) => {
+  if (value === "learning") return "lecture";
+  if (value === "interview") return "podcast";
+  if (value === "meeting") return "meeting";
+  return null;
+};
+
+const resolvePreferredModel = (preferences: UserPreferences, models: LLMModel[]) => {
+  const preferredId =
+    preferences.task_defaults?.llm_model_id || preferences.task_defaults?.llm_provider;
+  if (!preferredId) return null;
+  const match = models.find((model) =>
+    model.model_id ? model.model_id === preferredId : model.provider === preferredId
+  );
+  return match ? (match.model_id || match.provider) : null;
+};
 
 export default function NewTaskModal({ isOpen, onClose }: NewTaskModalProps) {
   const router = useRouter();
@@ -38,6 +70,8 @@ export default function NewTaskModal({ isOpen, onClose }: NewTaskModalProps) {
     summaryStyle: 'meeting'
   });
   const [llmModels, setLlmModels] = useState<LLMModel[]>([]);
+  const preferencesRef = useRef<UserPreferences | null>(null);
+  const advancedTouchedRef = useRef(false);
 
   const tabs = [
     { id: 'upload', label: t("newTask.tabs.upload") },
@@ -97,6 +131,38 @@ export default function NewTaskModal({ isOpen, onClose }: NewTaskModalProps) {
     };
   }, [client, isOpen, locale]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    advancedTouchedRef.current = false;
+    const fallbackLanguage = getStoredDefaultLanguage();
+    if (fallbackLanguage) {
+      setAdvancedOptions((prev) => ({
+        ...prev,
+        language: fallbackLanguage,
+      }));
+    }
+    let active = true;
+    const loadPreferences = async () => {
+      try {
+        const preferences = await client.getUserPreferences();
+        if (!active) return;
+        preferencesRef.current = preferences;
+        applyPreferenceDefaults(preferences);
+      } catch {
+        // ignore preference load failures
+      }
+    };
+    loadPreferences();
+    return () => {
+      active = false;
+    };
+  }, [applyPreferenceDefaults, client, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !preferencesRef.current) return;
+    applyPreferenceDefaults(preferencesRef.current);
+  }, [applyPreferenceDefaults, isOpen, llmModels]);
+
   const modelGroups = useMemo(() => {
     const groups = new Map<string, LLMModel[]>();
     llmModels.forEach((model) => {
@@ -110,6 +176,7 @@ export default function NewTaskModal({ isOpen, onClose }: NewTaskModalProps) {
       models,
     }));
   }, [llmModels]);
+
 
   const renderModelOptions = useMemo(
     () =>
@@ -134,6 +201,25 @@ export default function NewTaskModal({ isOpen, onClose }: NewTaskModalProps) {
       )),
     [modelGroups, t]
   );
+
+  const applyPreferenceDefaults = useCallback((preferences: UserPreferences) => {
+    if (advancedTouchedRef.current) return;
+    const defaults = preferences.task_defaults || {};
+    const preferredSummaryStyle = mapSummaryStyleFromPreference(defaults.summary_style);
+    const preferredModelId = resolvePreferredModel(preferences, llmModels);
+    const fallbackLanguage = getStoredDefaultLanguage();
+
+    setAdvancedOptions((prev) => ({
+      ...prev,
+      language: defaults.language || fallbackLanguage || prev.language,
+      speakerDiarization:
+        typeof defaults.enable_speaker_diarization === "boolean"
+          ? defaults.enable_speaker_diarization
+          : prev.speakerDiarization,
+      summaryStyle: preferredSummaryStyle || prev.summaryStyle,
+      summaryModelId: preferredModelId ?? null,
+    }));
+  }, [llmModels]);
 
   const buildOptions = (): TaskOptions => {
     const summaryStyleMap: Record<string, TaskOptions["summary_style"]> = {
@@ -198,6 +284,8 @@ export default function NewTaskModal({ isOpen, onClose }: NewTaskModalProps) {
     setSelectedPlatform('youtube');
     setShowAdvanced(true);
     setIsCreating(false);
+    advancedTouchedRef.current = false;
+    preferencesRef.current = null;
     onClose();
   };
 
@@ -344,9 +432,10 @@ export default function NewTaskModal({ isOpen, onClose }: NewTaskModalProps) {
                     </label>
                     <select
                       value={advancedOptions.summaryModelId ?? ''}
-                      onChange={(e) =>
-                        setAdvancedOptions({ ...advancedOptions, summaryModelId: e.target.value || null })
-                      }
+                      onChange={(e) => {
+                        advancedTouchedRef.current = true;
+                        setAdvancedOptions({ ...advancedOptions, summaryModelId: e.target.value || null });
+                      }}
                       disabled={llmModels.length === 0}
                       className="glass-control flex-1 sm:max-w-xs px-3 py-2 rounded-lg text-sm disabled:opacity-50"
                       style={{ color: 'var(--app-text)' }}
@@ -363,7 +452,10 @@ export default function NewTaskModal({ isOpen, onClose }: NewTaskModalProps) {
                     </label>
                     <select
                       value={advancedOptions.language}
-                      onChange={(e) => setAdvancedOptions({ ...advancedOptions, language: e.target.value })}
+                      onChange={(e) => {
+                        advancedTouchedRef.current = true;
+                        setAdvancedOptions({ ...advancedOptions, language: e.target.value });
+                      }}
                       className="glass-control flex-1 sm:max-w-xs px-3 py-2 rounded-lg text-sm"
                       style={{ color: 'var(--app-text)' }}
                     >
@@ -382,7 +474,10 @@ export default function NewTaskModal({ isOpen, onClose }: NewTaskModalProps) {
                       <input
                         type="checkbox"
                         checked={advancedOptions.speakerDiarization}
-                        onChange={(e) => setAdvancedOptions({ ...advancedOptions, speakerDiarization: e.target.checked })}
+                        onChange={(e) => {
+                          advancedTouchedRef.current = true;
+                          setAdvancedOptions({ ...advancedOptions, speakerDiarization: e.target.checked });
+                        }}
                         className="w-4 h-4"
                       />
                       <span className="text-sm" style={{ color: 'var(--app-text)' }}>{t("newTask.enabled")}</span>
@@ -396,7 +491,10 @@ export default function NewTaskModal({ isOpen, onClose }: NewTaskModalProps) {
                     </label>
                     <select
                       value={advancedOptions.summaryStyle}
-                      onChange={(e) => setAdvancedOptions({ ...advancedOptions, summaryStyle: e.target.value })}
+                      onChange={(e) => {
+                        advancedTouchedRef.current = true;
+                        setAdvancedOptions({ ...advancedOptions, summaryStyle: e.target.value });
+                      }}
                       className="glass-control flex-1 sm:max-w-xs px-3 py-2 rounded-lg text-sm"
                       style={{ color: 'var(--app-text)' }}
                     >

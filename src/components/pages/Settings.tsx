@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
 import { Button } from '@/components/ui/button';
@@ -23,7 +23,7 @@ import { useI18n } from '@/lib/i18n-context';
 import { notifyError, notifyInfo, notifySuccess } from '@/lib/notify';
 import { useAPIClient } from '@/lib/use-api-client';
 import { useDateFormatter } from '@/lib/use-date-formatter';
-import type { AsrQuotaItem, UserProfile } from '@/types/api';
+import type { AsrQuotaItem, UserPreferences, UserPreferencesUpdateRequest } from '@/types/api';
 import { 
   Globe,
   Palette,
@@ -114,13 +114,14 @@ export default function Settings({
   const [saved, setSaved] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<"clearTasks" | "deleteAccount" | "resetSettings" | null>(null);
-  const [accountProfile, setAccountProfile] = useState<UserProfile | null>(null);
   const [accountStats, setAccountStats] = useState<{
     totalTasks: number | null;
     monthlyTasks: number | null;
     totalDuration: string | null;
   } | null>(null);
   const [accountLoading, setAccountLoading] = useState(true);
+  const uiTouchedRef = useRef(false);
+  const taskDefaultsTouchedRef = useRef(false);
   const numberFormatter = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const { t } = useI18n();
   const client = useAPIClient();
@@ -276,7 +277,7 @@ export default function Settings({
         if (active) {
           setAsrQuotas(result.items || []);
         }
-      } catch (error) {
+      } catch {
         if (!active) return;
         setAsrError(t("settings.asrQuotaLoadFailed"));
       } finally {
@@ -295,17 +296,12 @@ export default function Settings({
     let active = true;
     const loadAccountInfo = async () => {
       setAccountLoading(true);
-      const [profileResult, allStatsResult, monthStatsResult] = await Promise.allSettled([
-        client.getCurrentUser(),
+      const [allStatsResult, monthStatsResult] = await Promise.allSettled([
         client.getTaskStatsOverview({ time_range: "all" }),
         client.getTaskStatsOverview({ time_range: "month" }),
       ]);
 
       if (!active) return;
-
-      if (profileResult.status === "fulfilled") {
-        setAccountProfile(profileResult.value);
-      }
 
       const allStats =
         allStatsResult.status === "fulfilled" ? allStatsResult.value : null;
@@ -332,14 +328,6 @@ export default function Settings({
     if (typeof value === "number") return numberFormatter.format(value);
     return value;
   };
-
-  const accountDisplayName = accountLoading
-    ? t("common.loading")
-    : accountProfile?.name || accountProfile?.email || "--";
-  const accountDisplayEmail =
-    !accountLoading && accountProfile?.name && accountProfile?.email
-      ? accountProfile.email
-      : "";
 
   const canEditWindowType = (type: AsrQuotaItem["window_type"]) => {
     return type === "day" || type === "month" || type === "total";
@@ -402,11 +390,78 @@ export default function Settings({
     }
   };
 
-  const persistLocalSettings = (partial: Record<string, unknown>) => {
+  const persistLocalSettings = useCallback((partial: Record<string, unknown>) => {
     const saved = localStorage.getItem("settings");
     const current = saved ? JSON.parse(saved) : {};
     localStorage.setItem("settings", JSON.stringify({ ...current, ...partial }));
-  };
+  }, []);
+
+  const normalizeLocale = useCallback((value?: string) => {
+    if (!value) return null;
+    const lower = value.toLowerCase();
+    if (lower.startsWith("zh")) return "zh-CN";
+    if (lower.startsWith("en")) return "en-US";
+    return value;
+  }, []);
+
+  const applyPreferences = useCallback((nextPreferences: UserPreferences) => {
+    const taskDefaults = nextPreferences.task_defaults || {};
+    const ui = nextPreferences.ui || {};
+
+    if (!taskDefaultsTouchedRef.current && taskDefaults.language) {
+      setLocalSettings((prev) => ({
+        ...prev,
+        defaultLanguage: taskDefaults.language || prev.defaultLanguage,
+      }));
+      persistLocalSettings({ defaultLanguage: taskDefaults.language });
+    }
+
+    if (!uiTouchedRef.current) {
+      const normalizedLocale = normalizeLocale(ui.locale);
+      if (normalizedLocale && normalizedLocale !== locale) {
+        setLocale(normalizedLocale);
+      }
+      if (ui.timezone && ui.timezone !== timeZone) {
+        setTimeZone(ui.timezone);
+      }
+    }
+  }, [
+    locale,
+    normalizeLocale,
+    persistLocalSettings,
+    setLocale,
+    setLocalSettings,
+    setTimeZone,
+    timeZone,
+  ]);
+
+  const updatePreferences = useCallback(async (payload: UserPreferencesUpdateRequest) => {
+    if (!isAuthenticated) return;
+    try {
+      const updated = await client.updateUserPreferences(payload);
+      applyPreferences(updated);
+    } catch {
+      notifyError(t("settings.preferencesSaveFailed"));
+    }
+  }, [applyPreferences, client, isAuthenticated, t]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let active = true;
+    const loadPreferences = async () => {
+      try {
+        const result = await client.getUserPreferences();
+        if (!active) return;
+        applyPreferences(result);
+      } catch {
+        // ignore preference load failures
+      }
+    };
+    loadPreferences();
+    return () => {
+      active = false;
+    };
+  }, [applyPreferences, client, isAuthenticated]);
 
   const openConfirm = (action: "clearTasks" | "deleteAccount" | "resetSettings") => {
     setConfirmAction(action);
@@ -420,6 +475,19 @@ export default function Settings({
     setTheme("system");
     setTimeZone("auto");
     setHourCycle("auto");
+    if (isAuthenticated) {
+      uiTouchedRef.current = true;
+      taskDefaultsTouchedRef.current = true;
+      void updatePreferences({
+        task_defaults: {
+          language: "auto",
+        },
+        ui: {
+          locale: "zh-CN",
+          timezone: "auto",
+        },
+      });
+    }
     notifyInfo(t("settings.resetSuccess"), { persist: false });
   };
 
@@ -437,6 +505,7 @@ export default function Settings({
   };
 
   const handleLanguageChange = (value: string) => {
+    uiTouchedRef.current = true;
     setLocale(value);
     notifyInfo(
       value.toLowerCase().startsWith("zh")
@@ -444,6 +513,7 @@ export default function Settings({
         : t("settings.languageSwitchedEn"),
       { persist: false }
     );
+    void updatePreferences({ ui: { locale: value } });
   };
 
   const handleThemeChange = (value: string) => {
@@ -459,6 +529,7 @@ export default function Settings({
   };
 
   const handleTimeZoneChange = (value: string) => {
+    uiTouchedRef.current = true;
     setTimeZone(value);
     notifyInfo(
       value === "auto"
@@ -466,6 +537,7 @@ export default function Settings({
         : t("settings.timeZoneSelected", { value }),
       { persist: false }
     );
+    void updatePreferences({ ui: { timezone: value } });
   };
 
   const handleHourCycleChange = (value: string) => {
@@ -481,6 +553,7 @@ export default function Settings({
   };
 
   const handleDefaultLanguageChange = (value: string) => {
+    taskDefaultsTouchedRef.current = true;
     setLocalSettings((prev) => ({ ...prev, defaultLanguage: value }));
     persistLocalSettings({ defaultLanguage: value });
     const label =
@@ -491,6 +564,11 @@ export default function Settings({
           : t("task.languageEn");
     notifyInfo(t("settings.processingLanguageSelected", { value: label }), {
       persist: false,
+    });
+    void updatePreferences({
+      task_defaults: {
+        language: value as "auto" | "zh" | "en",
+      },
     });
   };
 
@@ -548,6 +626,16 @@ export default function Settings({
     setTheme(themeState as "light" | "dark" | "system");
     setTimeZone(timeZoneState);
     setHourCycle(hourCycleState as "auto" | "h12" | "h23");
+
+    void updatePreferences({
+      task_defaults: {
+        language: defaultLanguageState as "auto" | "zh" | "en",
+      },
+      ui: {
+        locale: languageState,
+        timezone: timeZoneState,
+      },
+    });
     
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
@@ -1126,16 +1214,6 @@ export default function Settings({
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-1">
-                  <p className="text-base font-semibold" style={{ color: "var(--app-text)" }}>
-                    {accountDisplayName}
-                  </p>
-                  {accountDisplayEmail && (
-                    <p className="text-sm" style={{ color: "var(--app-text-muted)" }}>
-                      {accountDisplayEmail}
-                    </p>
-                  )}
-                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <p className="text-sm text-[var(--app-text-muted)]">{t("settings.statsTotalTasks")}</p>
