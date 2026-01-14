@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { CheckCircle2, XCircle, Info, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, XCircle, Info, AlertTriangle, ArrowUpRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import type { Notification } from '@/store/global-store';
 import { useI18n } from '@/lib/i18n-context';
@@ -9,6 +9,7 @@ import { useI18n } from '@/lib/i18n-context';
 interface NotificationItemProps {
   notification: Notification;
   onMarkAsRead?: (id: string) => void;
+  showActions?: boolean;
 }
 
 /**
@@ -59,7 +60,11 @@ const colorMap = {
   },
 };
 
-export default function NotificationItem({ notification, onMarkAsRead }: NotificationItemProps) {
+export default function NotificationItem({
+  notification,
+  onMarkAsRead,
+  showActions = false,
+}: NotificationItemProps) {
   const router = useRouter();
   const { t, locale } = useI18n();
   const [now, setNow] = useState(() => Date.now());
@@ -115,10 +120,14 @@ export default function NotificationItem({ notification, onMarkAsRead }: Notific
     return rtf.format(diffDays, "day");
   };
 
-  const handleClick = () => {
+  const handleMarkRead = () => {
     if (!isRead && onMarkAsRead) {
       onMarkAsRead(notification.id);
     }
+  };
+
+  const handleOpen = () => {
+    handleMarkRead();
     if (notification.action_url) {
       router.push(notification.action_url);
     }
@@ -126,7 +135,7 @@ export default function NotificationItem({ notification, onMarkAsRead }: Notific
 
   return (
     <div
-      onClick={handleClick}
+      onClick={showActions ? handleMarkRead : handleOpen}
       className={`
         p-3 rounded-lg cursor-pointer transition-all
         ${isRead ? 'opacity-60' : 'opacity-100'}
@@ -142,28 +151,41 @@ export default function NotificationItem({ notification, onMarkAsRead }: Notific
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          {/* Title */}
-          <p className={`text-sm font-medium ${colors.text}`}>
-            {notification.title}
-          </p>
+          <div className="flex items-start justify-between gap-3">
+            <p className={`text-sm font-medium ${colors.text}`}>
+              {notification.title}
+            </p>
+            {!isRead && (
+              <div className="flex-shrink-0 mt-1">
+                <div className="w-2 h-2 rounded-full bg-blue-500" />
+              </div>
+            )}
+          </div>
           {/* Message (optional detail) */}
           {notification.message && notification.message !== notification.title && (
-            <p className={`text-xs ${colors.text} mt-0.5 opacity-80`}>
+            <p className={`text-xs ${colors.text} mt-1 opacity-80 leading-relaxed`}>
               {notification.message}
             </p>
           )}
-          {/* Time */}
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            {formatTime(notification.created_at)}
-          </p>
-        </div>
-
-        {/* Unread indicator */}
-        {!isRead && (
-          <div className="flex-shrink-0">
-            <div className="w-2 h-2 rounded-full bg-blue-500" />
+          <div className="flex items-center justify-between mt-3">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {formatTime(notification.created_at)}
+            </p>
+            {showActions && notification.action_url && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleOpen();
+                }}
+                className="glass-chip text-xs px-2.5 py-1 rounded-md flex items-center gap-1"
+              >
+                {t("notifications.viewDetails")}
+                <ArrowUpRight className="w-3 h-3" />
+              </button>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

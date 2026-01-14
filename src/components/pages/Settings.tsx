@@ -122,6 +122,7 @@ export default function Settings({
   const [accountLoading, setAccountLoading] = useState(true);
   const uiTouchedRef = useRef(false);
   const taskDefaultsTouchedRef = useRef(false);
+  const speakerDiarizationTouchedRef = useRef(false);
   const numberFormatter = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const { t } = useI18n();
   const client = useAPIClient();
@@ -133,6 +134,7 @@ export default function Settings({
   const [editingQuotaKey, setEditingQuotaKey] = useState<string | null>(null);
   const [expandedProviders, setExpandedProviders] = useState<Record<string, boolean>>({});
   const [expandedVariants, setExpandedVariants] = useState<Record<string, boolean>>({});
+  const [speakerDiarizationEnabled, setSpeakerDiarizationEnabled] = useState(false);
   const [quotaForm, setQuotaForm] = useState<{
     provider: string;
     variant?: string;
@@ -416,6 +418,13 @@ export default function Settings({
       persistLocalSettings({ defaultLanguage: taskDefaults.language });
     }
 
+    if (
+      !speakerDiarizationTouchedRef.current &&
+      typeof taskDefaults.enable_speaker_diarization === "boolean"
+    ) {
+      setSpeakerDiarizationEnabled(taskDefaults.enable_speaker_diarization);
+    }
+
     if (!uiTouchedRef.current) {
       const normalizedLocale = normalizeLocale(ui.locale);
       if (normalizedLocale && normalizedLocale !== locale) {
@@ -471,6 +480,7 @@ export default function Settings({
   const resetAllSettings = () => {
     localStorage.removeItem("settings");
     setLocalSettings(DEFAULT_LOCAL_SETTINGS);
+    setSpeakerDiarizationEnabled(false);
     setLocale("zh-CN");
     setTheme("system");
     setTimeZone("auto");
@@ -478,9 +488,11 @@ export default function Settings({
     if (isAuthenticated) {
       uiTouchedRef.current = true;
       taskDefaultsTouchedRef.current = true;
+      speakerDiarizationTouchedRef.current = true;
       void updatePreferences({
         task_defaults: {
           language: "auto",
+          enable_speaker_diarization: false,
         },
         ui: {
           locale: "zh-CN",
@@ -591,6 +603,22 @@ export default function Settings({
     persistLocalSettings({ playbackBehavior: value });
   };
 
+  const handleSpeakerDiarizationToggle = (checked: boolean) => {
+    speakerDiarizationTouchedRef.current = true;
+    setSpeakerDiarizationEnabled(checked);
+    notifyInfo(
+      checked
+        ? t("settings.speakerDiarizationEnabled")
+        : t("settings.speakerDiarizationDisabled"),
+      { persist: false }
+    );
+    void updatePreferences({
+      task_defaults: {
+        enable_speaker_diarization: checked,
+      },
+    });
+  };
+
   const handleEmailToggle = (checked: boolean) => {
     setLocalSettings((prev) => ({ ...prev, emailNotifications: checked }));
     persistLocalSettings({ emailNotifications: checked });
@@ -630,6 +658,7 @@ export default function Settings({
     void updatePreferences({
       task_defaults: {
         language: defaultLanguageState as "auto" | "zh" | "en",
+        enable_speaker_diarization: speakerDiarizationEnabled,
       },
       ui: {
         locale: languageState,
@@ -850,6 +879,24 @@ export default function Settings({
                   <p className="text-sm text-[var(--app-text-muted)]">
                     {t("settings.defaultLanguageDesc")}
                   </p>
+                </div>
+
+                <Separator />
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <Label htmlFor="speaker-diarization">
+                      {t("settings.speakerDiarization")}
+                    </Label>
+                    <p className="text-sm text-[var(--app-text-muted)]">
+                      {t("settings.speakerDiarizationDesc")}
+                    </p>
+                  </div>
+                  <Switch
+                    id="speaker-diarization"
+                    checked={speakerDiarizationEnabled}
+                    onCheckedChange={handleSpeakerDiarizationToggle}
+                  />
                 </div>
 
                 <Separator />

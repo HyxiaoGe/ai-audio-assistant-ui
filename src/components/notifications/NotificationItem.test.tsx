@@ -15,6 +15,7 @@ vi.mock("@/lib/i18n-context", () => ({
       if (key === "common.justNow") return "just now";
       if (key === "time.minutes") return `${vars?.count} min`;
       if (key === "time.hours") return `${vars?.count} hr`;
+      if (key === "notifications.viewDetails") return "View details";
       return key;
     },
   }),
@@ -50,7 +51,7 @@ describe("NotificationItem", () => {
     expect(screen.getByText("just now")).toBeInTheDocument();
   });
 
-  it("marks as read and navigates on click", () => {
+  it("marks as read and navigates on item click by default", () => {
     const onMarkAsRead = vi.fn();
     render(
       <NotificationItem
@@ -60,6 +61,38 @@ describe("NotificationItem", () => {
     );
 
     fireEvent.click(screen.getByText("Task completed"));
+
+    expect(onMarkAsRead).toHaveBeenCalledWith("notif-1");
+    expect(push).toHaveBeenCalledWith("/tasks/task-1");
+  });
+
+  it("only marks as read on item click when actions are shown", () => {
+    const onMarkAsRead = vi.fn();
+    render(
+      <NotificationItem
+        notification={baseNotification}
+        onMarkAsRead={onMarkAsRead}
+        showActions
+      />
+    );
+
+    fireEvent.click(screen.getByText("Task completed"));
+
+    expect(onMarkAsRead).toHaveBeenCalledWith("notif-1");
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("navigates via view details when actions are shown", () => {
+    const onMarkAsRead = vi.fn();
+    render(
+      <NotificationItem
+        notification={baseNotification}
+        onMarkAsRead={onMarkAsRead}
+        showActions
+      />
+    );
+
+    fireEvent.click(screen.getByText("View details"));
 
     expect(onMarkAsRead).toHaveBeenCalledWith("notif-1");
     expect(push).toHaveBeenCalledWith("/tasks/task-1");

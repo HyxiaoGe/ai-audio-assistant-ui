@@ -1,5 +1,6 @@
 "use client";
 
+import Link from 'next/link';
 import { Bell } from 'lucide-react';
 import { useGlobalStore } from '@/store/global-store';
 import { useI18n } from '@/lib/i18n-context';
@@ -36,14 +37,23 @@ export default function NotificationPanel({ onClose }: NotificationPanelProps) {
         <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
           {t('notifications.title')}
         </h3>
-        {notifications.length > 0 && (
-          <button
-            onClick={handleMarkAllAsRead}
-            className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+        <div className="flex items-center gap-3 text-xs">
+          <Link
+            href="/notifications"
+            className="text-blue-600 dark:text-blue-400 hover:underline"
+            onClick={() => onClose?.()}
           >
-            {t('notifications.markAllRead')}
-          </button>
-        )}
+            {t('notifications.viewAll')}
+          </Link>
+          {notifications.length > 0 && (
+            <button
+              onClick={handleMarkAllAsRead}
+              className="text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              {t('notifications.markAllRead')}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Notification List */}
@@ -62,6 +72,7 @@ export default function NotificationPanel({ onClose }: NotificationPanelProps) {
                 key={notification.id}
                 notification={notification}
                 onMarkAsRead={handleMarkAsRead}
+                showActions
               />
             ))}
           </div>
