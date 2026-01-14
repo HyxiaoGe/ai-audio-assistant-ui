@@ -1316,6 +1316,14 @@ export default function TaskDetail({
     { id: 'keypoints', label: t("task.tabs.keypoints") },
     { id: 'actions', label: t("task.tabs.actions") }
   ];
+  const getSummaryEmptyText = (
+    summaryType: SummaryRegenerateType,
+    emptyKey: string
+  ) => {
+    if (summaryStreaming[summaryType]) return t("task.summaryGenerating");
+    if (summaryVersions[summaryType] > 0) return t("task.summaryEmptyAfter");
+    return t(emptyKey);
+  };
   const modelNameMap = useMemo(() => {
     const map = new Map<string, { displayName: string; modelId?: string }>();
     llmModels.forEach((model) => {
@@ -2018,7 +2026,7 @@ export default function TaskDetail({
                         ))
                       ) : (
                         <p className="text-base leading-7" style={{ color: 'var(--app-text-subtle)' }}>
-                          {t("task.summaryEmpty")}
+                          {getSummaryEmptyText("overview", "task.summaryEmpty")}
                         </p>
                       )}
                     </div>
@@ -2084,7 +2092,7 @@ export default function TaskDetail({
                       </p>
                     ) : compareMode && compareSummaryType === "key_points" ? (
                       renderCompareView()
-                    ) : (
+                    ) : keyPoints.length > 0 ? (
                       keyPoints.map((point, index) => (
                         <div key={index} className="flex items-start gap-3">
                           <div className="flex-shrink-0 mt-1">
@@ -2104,6 +2112,10 @@ export default function TaskDetail({
                           </div>
                         </div>
                       ))
+                    ) : (
+                      <p className="text-base leading-7" style={{ color: 'var(--app-text-subtle)' }}>
+                        {getSummaryEmptyText("key_points", "task.keyPointsEmpty")}
+                      </p>
                     )}
                   </div>
                 )}
@@ -2166,7 +2178,7 @@ export default function TaskDetail({
                       </p>
                     ) : compareMode && compareSummaryType === "action_items" ? (
                       renderCompareView()
-                    ) : (
+                    ) : actionItems.length > 0 ? (
                       actionItems.map((item) => (
                         <div
                           key={item.id}
@@ -2207,6 +2219,10 @@ export default function TaskDetail({
                           </div>
                         </div>
                       ))
+                    ) : (
+                      <p className="text-base leading-7" style={{ color: 'var(--app-text-subtle)' }}>
+                        {getSummaryEmptyText("action_items", "task.actionItemsEmpty")}
+                      </p>
                     )}
                   </div>
                 )}

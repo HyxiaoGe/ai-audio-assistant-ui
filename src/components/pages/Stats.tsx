@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import Header from "@/components/layout/Header";
 import Sidebar from "@/components/layout/Sidebar";
 import EmptyState from "@/components/common/EmptyState";
@@ -132,6 +133,8 @@ export default function Stats({
     useState<StatsTasksOverviewResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [asrProvidersOpen, setAsrProvidersOpen] = useState(true);
+  const [llmProvidersOpen, setLlmProvidersOpen] = useState(true);
 
   const timeQuery = useMemo(() => {
     if (timeRange === "custom") {
@@ -339,6 +342,15 @@ export default function Stats({
     if (direct.length) return direct;
     return getFallbackProviderUsage("llm");
   }, [getFallbackProviderUsage, serviceOverview]);
+
+  const asrProviderTotal = useMemo(
+    () => asrProviderUsage.reduce((sum, item) => sum + getItemCallCount(item), 0),
+    [asrProviderUsage]
+  );
+  const llmProviderTotal = useMemo(
+    () => llmProviderUsage.reduce((sum, item) => sum + getItemCallCount(item), 0),
+    [llmProviderUsage]
+  );
 
   const totalServiceCalls = useMemo(() => {
     if (!serviceOverview) return 0;
@@ -644,23 +656,33 @@ export default function Stats({
                     <p className="text-xs text-[var(--app-text-muted)]">--</p>
                   ) : (
                     <div className="grid gap-6 md:grid-cols-2">
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-medium text-[var(--app-text)]">
-                            {t("stats.providerBreakdownAsr")}
-                          </p>
-                          <span className="text-xs text-[var(--app-text-muted)]">
-                            {t("stats.callCount", {
-                              count: asrProviderUsage.reduce(
-                                (sum, item) => sum + getItemCallCount(item),
-                                0
-                              ),
-                            })}
-                          </span>
-                        </div>
+                      <div
+                        className="rounded-2xl border p-4 space-y-3"
+                        style={{ borderColor: "var(--app-glass-border)" }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setAsrProvidersOpen((prev) => !prev)}
+                          className="w-full flex items-center justify-between text-left"
+                          aria-expanded={asrProvidersOpen}
+                        >
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-[var(--app-text)]">
+                              {t("stats.providerBreakdownAsr")}
+                            </p>
+                            <span className="text-xs text-[var(--app-text-muted)]">
+                              {t("stats.callCount", { count: asrProviderTotal })}
+                            </span>
+                          </div>
+                          {asrProvidersOpen ? (
+                            <ChevronUp className="w-4 h-4 text-[var(--app-text-muted)]" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4 text-[var(--app-text-muted)]" />
+                          )}
+                        </button>
                         {asrProviderUsage.length === 0 ? (
                           <p className="text-xs text-[var(--app-text-muted)]">--</p>
-                        ) : (
+                        ) : asrProvidersOpen ? (
                           <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
                             {asrProviderUsage.map((item, index) => (
                               <div
@@ -728,26 +750,36 @@ export default function Stats({
                               </div>
                             ))}
                           </div>
-                        )}
+                        ) : null}
                       </div>
 
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-medium text-[var(--app-text)]">
-                            {t("stats.providerBreakdownLlm")}
-                          </p>
-                          <span className="text-xs text-[var(--app-text-muted)]">
-                            {t("stats.callCount", {
-                              count: llmProviderUsage.reduce(
-                                (sum, item) => sum + getItemCallCount(item),
-                                0
-                              ),
-                            })}
-                          </span>
-                        </div>
+                      <div
+                        className="rounded-2xl border p-4 space-y-3"
+                        style={{ borderColor: "var(--app-glass-border)" }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setLlmProvidersOpen((prev) => !prev)}
+                          className="w-full flex items-center justify-between text-left"
+                          aria-expanded={llmProvidersOpen}
+                        >
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-[var(--app-text)]">
+                              {t("stats.providerBreakdownLlm")}
+                            </p>
+                            <span className="text-xs text-[var(--app-text-muted)]">
+                              {t("stats.callCount", { count: llmProviderTotal })}
+                            </span>
+                          </div>
+                          {llmProvidersOpen ? (
+                            <ChevronUp className="w-4 h-4 text-[var(--app-text-muted)]" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4 text-[var(--app-text-muted)]" />
+                          )}
+                        </button>
                         {llmProviderUsage.length === 0 ? (
                           <p className="text-xs text-[var(--app-text-muted)]">--</p>
-                        ) : (
+                        ) : llmProvidersOpen ? (
                           <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
                             {llmProviderUsage.map((item, index) => (
                               <div
@@ -806,7 +838,7 @@ export default function Stats({
                               </div>
                             ))}
                           </div>
-                        )}
+                        ) : null}
                       </div>
                     </div>
                   )}

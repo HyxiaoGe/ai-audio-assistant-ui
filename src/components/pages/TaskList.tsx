@@ -7,6 +7,7 @@ import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
 import TaskCard from '@/components/task/TaskCard';
 import EmptyState from '@/components/common/EmptyState';
+import { Button } from '@/components/ui/button';
 import { useAPIClient } from '@/lib/use-api-client';
 import { useDateFormatter } from '@/lib/use-date-formatter';
 import { ApiError } from '@/types/api';
@@ -159,6 +160,16 @@ export default function TaskList({
     router.push(`/tasks/${taskId}`);
   };
 
+  const handleNewTask = () => {
+    if (!isAuthenticated) {
+      onOpenLogin();
+      return;
+    }
+    if (onOpenNewTask) {
+      onOpenNewTask();
+    }
+  };
+
   const handleRetryTask = async (taskId: string) => {
     if (retryingTaskId) return;
 
@@ -260,16 +271,25 @@ export default function TaskList({
         {/* 主内容区 */}
         <main className="flex-1 overflow-y-auto p-8">
           {/* 标题区域 */}
-          <div className="mb-6">
-            <h2
-              className="text-h2"
-              style={{ color: "var(--app-text)" }}
+          <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+            <div>
+              <h2
+                className="text-h2"
+                style={{ color: "var(--app-text)" }}
+              >
+                {t("tasks.pageTitle")}
+              </h2>
+              <p className="text-base mt-2" style={{ color: "var(--app-text-muted)" }}>
+                {t("tasks.pageSubtitle")}
+              </p>
+            </div>
+            <Button
+              onClick={handleNewTask}
+              className="text-white"
+              style={{ background: "var(--app-action-gradient)" }}
             >
-              {t("tasks.pageTitle")}
-            </h2>
-            <p className="text-base mt-2" style={{ color: "var(--app-text-muted)" }}>
-              {t("tasks.pageSubtitle")}
-            </p>
+              {t("dashboard.createTask")}
+            </Button>
           </div>
 
           {/* 筛选器 */}

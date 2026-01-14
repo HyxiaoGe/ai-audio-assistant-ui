@@ -49,6 +49,8 @@ export default function Notifications({
   const [totalAll, setTotalAll] = useState(0);
   const [unreadOnly, setUnreadOnly] = useState(false);
 
+  const totalDisplay = totalAll || 0;
+
   const hasMore = useMemo(
     () => notifications.length > 0 && notifications.length < total,
     [notifications.length, total]
@@ -202,6 +204,36 @@ export default function Notifications({
           ) : (
             <>
               <div className="glass-panel rounded-2xl p-4 mb-6">
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div
+                      className="rounded-full px-3 py-1 text-xs border"
+                      style={{
+                        borderColor: "var(--app-glass-border)",
+                        color: "var(--app-text-muted)",
+                        background: "var(--app-glass-bg-strong)",
+                      }}
+                    >
+                      {t("notifications.totalLabel")}:{" "}
+                      <span className="text-[var(--app-text)] font-semibold">
+                        {totalDisplay}
+                      </span>
+                    </div>
+                    <div
+                      className="rounded-full px-3 py-1 text-xs border"
+                      style={{
+                        borderColor: "var(--app-glass-border)",
+                        color: "var(--app-text-muted)",
+                        background: "var(--app-glass-bg-strong)",
+                      }}
+                    >
+                      {t("notifications.unreadLabel")}:{" "}
+                      <span className="text-[var(--app-text)] font-semibold">
+                        {unreadCount}
+                      </span>
+                    </div>
+                  </div>
+                </div>
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <button

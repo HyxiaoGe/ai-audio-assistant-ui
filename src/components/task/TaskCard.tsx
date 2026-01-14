@@ -52,6 +52,12 @@ export default function TaskCard({
     }
   };
 
+  const statusDotClass = {
+    completed: "bg-[var(--app-success)]",
+    processing: "bg-[var(--app-primary)]",
+    failed: "bg-[var(--app-danger)]",
+  }[status];
+
   return (
     <div
       role="button"
@@ -101,6 +107,7 @@ export default function TaskCard({
       {/* 右侧：状态Badge + 重试 */}
       <div className="flex items-center gap-3 flex-shrink-0">
         <Badge variant={status}>
+          <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${statusDotClass}`} />
           {getStatusText()}
         </Badge>
         {onDelete && (

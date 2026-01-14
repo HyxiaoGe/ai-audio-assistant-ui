@@ -31,6 +31,7 @@ export default function Header({
 }: HeaderProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  const [hoverRatio, setHoverRatio] = useState<number | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const { data: session, status: sessionStatus, update } = useSession();
   const client = useAPIClient();
@@ -124,6 +125,18 @@ export default function Header({
     seek(ratio * duration);
   };
 
+  const handleProgressHover = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!duration || !isFinite(duration)) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const ratio = Math.max(0, Math.min(1, x / rect.width));
+    setHoverRatio(ratio);
+  };
+
+  const handleProgressLeave = () => {
+    setHoverRatio(null);
+  };
+
   const handleMiniPlayerClick = () => {
     if (!audioTaskId) return;
     router.push(`/tasks/${audioTaskId}`);
@@ -199,9 +212,29 @@ export default function Header({
                 event.stopPropagation();
                 handleSeek(event);
               }}
+              onMouseMove={handleProgressHover}
+              onMouseLeave={handleProgressLeave}
               onClick={(event) => event.stopPropagation()}
               style={{ width: '110px', height: '8px' }}
             >
+              {hoverRatio !== null && duration > 0 && isFinite(duration) && (
+                <div
+                  className="absolute -top-6"
+                  style={{ left: `${hoverRatio * 100}%`, transform: 'translateX(-50%)' }}
+                >
+                  <div
+                    className="rounded px-1.5 py-0.5 text-[10px] border"
+                    style={{
+                      background: "var(--app-glass-bg-strong)",
+                      borderColor: "var(--app-glass-border)",
+                      color: "var(--app-text)",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {formatTime(hoverRatio * duration)}
+                  </div>
+                </div>
+              )}
               <div className="absolute top-1/2 -translate-y-1/2 w-full">
                 <div
                   className="w-full rounded-full"
