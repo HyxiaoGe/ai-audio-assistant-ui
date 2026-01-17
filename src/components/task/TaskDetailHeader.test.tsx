@@ -22,15 +22,14 @@ vi.mock("@/lib/use-date-formatter", () => ({
 
 const baseTask: TaskDetail = {
   id: "task-1",
-  user_id: "user-1",
   title: "Meeting",
   status: "completed",
   source_type: "upload",
-  source_url: null,
+  source_url: undefined,
   language: "zh",
   duration_seconds: 360,
   progress: 100,
-  error_message: null,
+  error_message: undefined,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
 }

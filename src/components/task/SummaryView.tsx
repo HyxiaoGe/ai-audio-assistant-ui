@@ -11,6 +11,9 @@ import {
   Sparkles,
   List,
   CheckSquare,
+  Network,
+  Clock,
+  GitBranch,
 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -20,6 +23,7 @@ import { useAPIClient } from "@/lib/use-api-client"
 import { useDateFormatter } from "@/lib/use-date-formatter"
 import { useI18n } from "@/lib/i18n-context"
 import type { LLMModel, SummaryItem, SummaryType } from "@/types/api"
+import { VisualSummaryView } from "./VisualSummaryView"
 
 interface SummaryViewProps {
   taskId: string
@@ -51,6 +55,25 @@ const SUMMARY_TYPE_CONFIG: Record<
     icon: CheckSquare,
     color: "var(--app-success)",
     bgColor: "var(--app-success-bg)",
+  },
+  // v1.3 新增可视化类型
+  visual_mindmap: {
+    labelKey: "summary.type.mindmap",
+    icon: Network,
+    color: "var(--app-warning)",
+    bgColor: "var(--app-warning-bg)",
+  },
+  visual_timeline: {
+    labelKey: "summary.type.timeline",
+    icon: Clock,
+    color: "var(--app-info)",
+    bgColor: "var(--app-info-bg)",
+  },
+  visual_flowchart: {
+    labelKey: "summary.type.flowchart",
+    icon: GitBranch,
+    color: "var(--app-danger)",
+    bgColor: "var(--app-danger-bg)",
   },
 }
 
@@ -465,6 +488,19 @@ export function SummaryView({ taskId }: SummaryViewProps) {
               </TabsTrigger>
             )
           })}
+          {/* v1.3 新增可视化摘要标签 */}
+          <TabsTrigger value="mindmap" className="gap-2">
+            <Network className="size-4" />
+            思维导图
+          </TabsTrigger>
+          <TabsTrigger value="timeline" className="gap-2">
+            <Clock className="size-4" />
+            时间轴
+          </TabsTrigger>
+          <TabsTrigger value="flowchart" className="gap-2">
+            <GitBranch className="size-4" />
+            流程图
+          </TabsTrigger>
         </TabsList>
 
         {summaryTypes.map((type) => (
@@ -482,6 +518,31 @@ export function SummaryView({ taskId }: SummaryViewProps) {
             </div>
           </TabsContent>
         ))}
+
+        {/* v1.3 新增可视化摘要标签页 */}
+        <TabsContent value="mindmap" className="mt-4">
+          <VisualSummaryView
+            taskId={taskId}
+            visualType="mindmap"
+            renderMode="mermaid"
+          />
+        </TabsContent>
+
+        <TabsContent value="timeline" className="mt-4">
+          <VisualSummaryView
+            taskId={taskId}
+            visualType="timeline"
+            renderMode="mermaid"
+          />
+        </TabsContent>
+
+        <TabsContent value="flowchart" className="mt-4">
+          <VisualSummaryView
+            taskId={taskId}
+            visualType="flowchart"
+            renderMode="mermaid"
+          />
+        </TabsContent>
       </Tabs>
     </div>
   )

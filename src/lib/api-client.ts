@@ -43,6 +43,10 @@ import {
   UserProfile,
   UserPreferences,
   UserPreferencesUpdateRequest,
+  VisualSummaryRequest,
+  VisualSummaryResponse,
+  VisualStreamEvent,
+  VisualType,
 } from "@/types/api"
 
 // ============================================================================
@@ -611,6 +615,91 @@ export class APIClient {
    */
   async clearAllNotifications(): Promise<void> {
     return request("/notifications/clear", { method: "DELETE" }, this.token)
+  }
+
+  // ==========================================================================
+  // 可视化摘要相关 (v1.3)
+  // ==========================================================================
+
+  /**
+   * 生成可视化摘要（异步任务）
+   */
+  async generateVisualSummary(
+    taskId: string,
+    data: VisualSummaryRequest
+  ): Promise<ApiResponse<{ task_id: string; status: string }>> {
+    return request(
+      `/summaries/${taskId}/visual`,
+      { method: "POST", body: JSON.stringify(data) },
+      this.token
+    )
+  }
+
+  /**
+   * 获取已生成的可视化摘要
+   */
+  async getVisualSummary(
+    taskId: string,
+    visualType: VisualType
+  ): Promise<ApiResponse<VisualSummaryResponse>> {
+    return request(
+      `/summaries/${taskId}/visual/${visualType}`,
+      { method: "GET" },
+      this.token
+    )
+  }
+
+  /**
+   * 获取图片 URL（如果后端生成了图片）
+   * @param imageKey - Summary 对象中的 image_key 字段
+   */
+  getVisualImageUrl(imageKey: string): string {
+    const baseUrl =
+      process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+    return `${baseUrl}/api/v1/media/${imageKey}`
+  }
+
+  /**
+   * 订阅可视化摘要生成进度（SSE）
+   * @param taskId 任务 ID
+   * @param visualType 可视化类型
+   * @param onEvent 事件回调
+   * @param onError 错误回调
+   * @returns 关闭 SSE 连接的函数
+   */
+  subscribeVisualSummaryProgress(
+    taskId: string,
+    visualType: VisualType,
+    onEvent: (event: VisualStreamEvent) => void,
+    onError?: (error: Error) => void
+  ): () => void {
+    const baseUrl =
+      process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+    // Get token synchronously from instance or localStorage
+    const token = this.token || (typeof window !== "undefined" ? localStorage.getItem("auth_token") : null)
+    const url = `${baseUrl}/api/v1/summaries/${taskId}/visual/${visualType}/stream?token=${encodeURIComponent(token || "")}`
+
+    const eventSource = new EventSource(url)
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        onEvent(data)
+      } catch (error) {
+        console.error("Failed to parse SSE event:", error)
+      }
+    }
+
+    eventSource.onerror = (error) => {
+      console.error("SSE connection error:", error)
+      onError?.(new Error("SSE connection failed"))
+      eventSource.close()
+    }
+
+    // 返回关闭函数
+    return () => {
+      eventSource.close()
+    }
   }
 }
 

@@ -125,7 +125,6 @@ export default function TaskDetail({
   const activeSegmentIdRef = useRef<string | null>(null);
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const [keyPoints, setKeyPoints] = useState<KeyPoint[]>([]);
-  const [summaryOverview, setSummaryOverview] = useState<string[]>([]);
   const [summaryOverviewMarkdown, setSummaryOverviewMarkdown] = useState<string>('');
   const [keyPointsMarkdown, setKeyPointsMarkdown] = useState<string>('');
   const [actionItemsMarkdown, setActionItemsMarkdown] = useState<string>('');
@@ -826,15 +825,6 @@ export default function TaskDetail({
     const minutes = Math.ceil((remaining / 100) * 5);
     return t("task.etaMinutes", { minutes });
   };
-
-  const getCurrentStep = () => {
-    if (progress < 10) return 1;
-    if (progress < 60) return 2;
-    if (progress < 90) return 3;
-    if (progress < 100) return 4;
-    return 5;
-  };
-
 
   const handlePlayPause = () => {
     if (!task?.audio_url) return;

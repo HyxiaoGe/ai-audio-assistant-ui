@@ -18,12 +18,10 @@ const baseTask: TaskListItem = {
   id: "task-1",
   title: "New Task",
   source_type: "upload",
-  source_url: null,
   status: "processing",
   progress: 42,
   duration_seconds: 120,
-  language: "zh",
-  error_message: null,
+  error_message: undefined,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
 }
