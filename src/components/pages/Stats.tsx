@@ -74,7 +74,7 @@ const getItemFailureRate = (
 };
 
 const normalizeProviderUsage = <
-  T extends {
+  T extends ServiceUsageBase & {
     provider?: string | null;
     service_type?: string;
   }
@@ -298,8 +298,8 @@ export default function Stats({
       ? breakdown
       : breakdown && typeof breakdown === "object"
         ? Object.entries(breakdown).map(([service_type, value]) => ({
-            service_type,
             ...value,
+            service_type,
           }))
         : [];
     return [...items].sort(
@@ -316,9 +316,9 @@ export default function Stats({
         : Object.entries(fallback)
             .filter(([, value]) => value.service_type === serviceType)
             .map(([provider, value]) => ({
+              ...value,
               provider: value.provider || provider,
               service_type: value.service_type || serviceType,
-              ...value,
             }));
       return normalizeProviderUsage(items, serviceType);
     },
@@ -632,11 +632,11 @@ export default function Stats({
                                 </span>
                               </div>
                               {Number.isFinite(item.total_audio_duration_seconds) &&
-                                item.total_audio_duration_seconds > 0 && (
+                                (item.total_audio_duration_seconds ?? 0) > 0 && (
                                 <div className="flex items-center justify-between">
                                   <span>{t("stats.totalAudioDuration")}</span>
                                   <span className="text-[var(--app-text)]">
-                                    {formatSeconds(item.total_audio_duration_seconds)}
+                                    {formatSeconds(item.total_audio_duration_seconds!)}
                                   </span>
                                 </div>
                               )}
@@ -725,11 +725,11 @@ export default function Stats({
                                     </span>
                                   </div>
                                   {Number.isFinite(item.total_audio_duration_seconds) &&
-                                    item.total_audio_duration_seconds > 0 && (
+                                    (item.total_audio_duration_seconds ?? 0) > 0 && (
                                     <div className="flex items-center justify-between">
                                       <span>{t("stats.totalAudioDuration")}</span>
                                       <span className="text-[var(--app-text)]">
-                                        {formatSeconds(item.total_audio_duration_seconds)}
+                                        {formatSeconds(item.total_audio_duration_seconds!)}
                                       </span>
                                     </div>
                                   )}

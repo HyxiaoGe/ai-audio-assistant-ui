@@ -12,6 +12,9 @@ import {
   List,
   CheckSquare,
 } from "lucide-react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
+import rehypeSanitize from "rehype-sanitize"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAPIClient } from "@/lib/use-api-client"
 import { useDateFormatter } from "@/lib/use-date-formatter"
@@ -100,13 +103,158 @@ function SummaryCard({
 
       {/* Content */}
       <div
-        className="prose prose-sm max-w-none"
+        className="prose prose-sm max-w-none markdown-summary"
         style={{ color: "var(--app-text)" }}
       >
-        <div
-          className="whitespace-pre-wrap leading-relaxed"
-          dangerouslySetInnerHTML={{ __html: formatContent(summary.content) }}
-        />
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          rehypePlugins={[rehypeSanitize]}
+          components={{
+            // Custom rendering for checkboxes
+            input: ({ ...props }) => {
+              if (props.type === "checkbox") {
+                return (
+                  <input
+                    {...props}
+                    className="mr-2 align-middle"
+                    readOnly
+                    style={{ cursor: "default" }}
+                  />
+                )
+              }
+              return <input {...props} />
+            },
+            // Custom table styling
+            table: ({ ...props }) => (
+              <div className="overflow-x-auto my-4">
+                <table
+                  {...props}
+                  className="min-w-full border-collapse"
+                  style={{
+                    border: "1px solid var(--app-glass-border)",
+                  }}
+                />
+              </div>
+            ),
+            th: ({ ...props }) => (
+              <th
+                {...props}
+                className="px-4 py-2 text-left font-semibold"
+                style={{
+                  backgroundColor: "var(--app-glass-bg)",
+                  borderBottom: "2px solid var(--app-glass-border)",
+                }}
+              />
+            ),
+            td: ({ ...props }) => (
+              <td
+                {...props}
+                className="px-4 py-2"
+                style={{
+                  borderBottom: "1px solid var(--app-glass-border)",
+                }}
+              />
+            ),
+            // Enhanced list styling
+            ul: ({ ...props }) => (
+              <ul {...props} className="space-y-2 my-4" />
+            ),
+            ol: ({ ...props }) => (
+              <ol {...props} className="space-y-2 my-4" />
+            ),
+            li: ({ children, ...props }) => {
+              const content = String(children)
+              // Priority markers
+              const isHighPriority = content.includes("高优先级") || content.includes("紧急")
+              const isLowPriority = content.includes("低优先级") || content.includes("可选")
+
+              return (
+                <li
+                  {...props}
+                  className="leading-relaxed"
+                  style={
+                    isHighPriority
+                      ? { color: "var(--app-danger)" }
+                      : isLowPriority
+                      ? { color: "var(--app-text-subtle)" }
+                      : undefined
+                  }
+                >
+                  {children}
+                </li>
+              )
+            },
+            // Heading styles
+            h1: ({ ...props }) => (
+              <h1
+                {...props}
+                className="text-2xl font-bold mt-6 mb-4"
+                style={{ color: "var(--app-text)" }}
+              />
+            ),
+            h2: ({ ...props }) => (
+              <h2
+                {...props}
+                className="text-xl font-semibold mt-5 mb-3"
+                style={{ color: "var(--app-text)" }}
+              />
+            ),
+            h3: ({ ...props }) => (
+              <h3
+                {...props}
+                className="text-lg font-semibold mt-4 mb-2"
+                style={{ color: "var(--app-text)" }}
+              />
+            ),
+            // Paragraphs
+            p: ({ ...props }) => (
+              <p {...props} className="my-3 leading-relaxed" />
+            ),
+            // Code blocks
+            code: ({ className, children, ...props }) => {
+              // Check if it's inline code (no className means inline code)
+              const isInline = !className
+              if (isInline) {
+                return (
+                  <code
+                    {...props}
+                    className="px-1.5 py-0.5 rounded text-sm"
+                    style={{
+                      backgroundColor: "var(--app-glass-bg)",
+                      color: "var(--app-primary)",
+                    }}
+                  >
+                    {children}
+                  </code>
+                )
+              }
+              return (
+                <code
+                  {...props}
+                  className={`block p-3 rounded text-sm overflow-x-auto ${className || ""}`}
+                  style={{
+                    backgroundColor: "var(--app-glass-bg)",
+                  }}
+                >
+                  {children}
+                </code>
+              )
+            },
+            // Blockquotes
+            blockquote: ({ ...props }) => (
+              <blockquote
+                {...props}
+                className="border-l-4 pl-4 my-4 italic"
+                style={{
+                  borderColor: "var(--app-primary)",
+                  color: "var(--app-text-muted)",
+                }}
+              />
+            ),
+          }}
+        >
+          {summary.content}
+        </ReactMarkdown>
       </div>
 
       {/* Metadata */}
@@ -134,19 +282,28 @@ function SummaryCard({
   )
 }
 
-function formatContent(content: string): string {
-  // Convert markdown-like formatting to HTML
-  let formatted = content
-    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>") // Bold
-    .replace(/\*(.*?)\*/g, "<em>$1</em>") // Italic
-    .replace(/^- (.+)$/gm, "<li>$1</li>") // List items
-    .replace(/^## (.+)$/gm, "<h3>$1</h3>") // H3
-    .replace(/^# (.+)$/gm, "<h2>$1</h2>") // H2
+// Helper function to detect if summary is V1.2 format
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function isV12Format(content: string, createdAt?: string): boolean {
+  // Method 1: Check creation date (V1.2 launched on 2026-01-16)
+  if (createdAt) {
+    const createdDate = new Date(createdAt)
+    const v12LaunchDate = new Date("2026-01-16T00:00:00Z")
+    if (createdDate >= v12LaunchDate) {
+      return true
+    }
+  }
 
-  // Wrap consecutive list items in <ul>
-  formatted = formatted.replace(/(<li>.*?<\/li>\n?)+/g, "<ul>$&</ul>")
+  // Method 2: Check for V1.2 format markers
+  const v12Markers = [
+    /# .*概览/,
+    /## 【.*】/,
+    /\|\s*类别\s*\|/,  // Table with "类别" (Category)
+    /## 会议速览/,
+    /## 关键信息速查/,
+  ]
 
-  return formatted
+  return v12Markers.some(marker => marker.test(content))
 }
 
 export function SummaryView({ taskId }: SummaryViewProps) {

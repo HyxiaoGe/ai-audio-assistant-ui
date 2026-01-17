@@ -5,6 +5,9 @@ import { useRouter, useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { notifyError, notifySuccess } from '@/lib/notify';
 import { ArrowLeft, ChevronDown, FileText, CheckSquare, Lightbulb } from 'lucide-react';
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeSanitize from "rehype-sanitize";
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
 import { Button } from '@/components/ui/button';
@@ -123,6 +126,9 @@ export default function TaskDetail({
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const [keyPoints, setKeyPoints] = useState<KeyPoint[]>([]);
   const [summaryOverview, setSummaryOverview] = useState<string[]>([]);
+  const [summaryOverviewMarkdown, setSummaryOverviewMarkdown] = useState<string>('');
+  const [keyPointsMarkdown, setKeyPointsMarkdown] = useState<string>('');
+  const [actionItemsMarkdown, setActionItemsMarkdown] = useState<string>('');
   const [summaryModelUsed, setSummaryModelUsed] = useState<Record<SummaryRegenerateType, string | null>>({
     overview: null,
     key_points: null,
@@ -191,6 +197,63 @@ export default function TaskDetail({
     { name: t("transcript.unknownSpeaker"), color: 'var(--app-text-subtle)' }
   ]), [t]);
 
+  // Render Markdown content for summaries
+  const renderMarkdownContent = (content: string) => {
+    return (
+      <div className="prose prose-sm max-w-none markdown-summary" style={{ color: 'var(--app-text)' }}>
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          rehypePlugins={[rehypeSanitize]}
+          components={{
+            input: ({ ...props }) => {
+              if (props.type === "checkbox") {
+                return <input {...props} className="mr-2 align-middle" readOnly style={{ cursor: "default" }} />;
+              }
+              return <input {...props} />;
+            },
+            table: ({ ...props }) => (
+              <div className="overflow-x-auto my-4">
+                <table {...props} className="min-w-full border-collapse" style={{ border: "1px solid var(--app-glass-border)" }} />
+              </div>
+            ),
+            th: ({ ...props }) => (
+              <th {...props} className="px-4 py-2 text-left font-semibold" style={{ backgroundColor: "var(--app-glass-bg)", borderBottom: "2px solid var(--app-glass-border)" }} />
+            ),
+            td: ({ ...props }) => (
+              <td {...props} className="px-4 py-2" style={{ borderBottom: "1px solid var(--app-glass-border)" }} />
+            ),
+            ul: ({ ...props }) => <ul {...props} className="space-y-2 my-4" />,
+            ol: ({ ...props }) => <ol {...props} className="space-y-2 my-4" />,
+            li: ({ children, ...props }) => {
+              const content = String(children);
+              const isHighPriority = content.includes("高优先级") || content.includes("紧急");
+              const isLowPriority = content.includes("低优先级") || content.includes("可选");
+              return (
+                <li {...props} className="leading-relaxed" style={isHighPriority ? { color: "var(--app-danger)" } : isLowPriority ? { color: "var(--app-text-subtle)" } : undefined}>
+                  {children}
+                </li>
+              );
+            },
+            h1: ({ ...props }) => <h1 {...props} className="text-2xl font-bold mt-6 mb-4" style={{ color: "var(--app-text)" }} />,
+            h2: ({ ...props }) => <h2 {...props} className="text-xl font-semibold mt-5 mb-3" style={{ color: "var(--app-text)" }} />,
+            h3: ({ ...props }) => <h3 {...props} className="text-lg font-semibold mt-4 mb-2" style={{ color: "var(--app-text)" }} />,
+            p: ({ ...props }) => <p {...props} className="my-3 leading-relaxed" />,
+            code: ({ className, children, ...props }) => {
+              const isInline = !className;
+              if (isInline) {
+                return <code {...props} className="px-1.5 py-0.5 rounded text-sm" style={{ backgroundColor: "var(--app-glass-bg)", color: "var(--app-primary)" }}>{children}</code>;
+              }
+              return <code {...props} className={`block p-3 rounded text-sm overflow-x-auto ${className || ""}`} style={{ backgroundColor: "var(--app-glass-bg)" }}>{children}</code>;
+            },
+            blockquote: ({ ...props }) => <blockquote {...props} className="border-l-4 pl-4 my-4 italic" style={{ borderColor: "var(--app-primary)", color: "var(--app-text-muted)" }} />,
+          }}
+        >
+          {content}
+        </ReactMarkdown>
+      </div>
+    );
+  };
+
   const formatTimestamp = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
@@ -256,6 +319,12 @@ export default function TaskDetail({
       action_items: items.find((item) => item.summary_type === 'action_items' && item.is_active)?.version ?? 0,
     };
 
+    // Store raw Markdown content (V1.2 format)
+    setSummaryOverviewMarkdown(overview || '');
+    setKeyPointsMarkdown(keyPointsContent || '');
+    setActionItemsMarkdown(actionItemsContent || '');
+
+    // Also parse to old format for backward compatibility
     const keyPointLines = parseSummaryLines(keyPointsContent);
     const actionLines = parseActionItems(actionItemsContent);
 
@@ -1748,7 +1817,6 @@ export default function TaskDetail({
               {/* Processing State */}
               <ProcessingState
                 progress={progress}
-                currentStep={getCurrentStep()}
                 estimatedTime={getEstimatedTime()}
                 status={task?.status}
                 sourceType={task?.source_type}
@@ -2013,17 +2081,11 @@ export default function TaskDetail({
                         </div>
                       </div>
                       {summaryStreaming.overview && summaryStreamContent.overview ? (
-                        <p className="text-base leading-7" style={{ color: 'var(--app-text)' }}>
-                          {summaryStreamContent.overview}
-                        </p>
+                        renderMarkdownContent(summaryStreamContent.overview)
                       ) : compareMode && compareSummaryType === "overview" ? (
                         renderCompareView()
-                      ) : summaryOverview.length > 0 ? (
-                        summaryOverview.map((line, index) => (
-                          <p key={index} className="text-base leading-7" style={{ color: 'var(--app-text)' }}>
-                            {line}
-                          </p>
-                        ))
+                      ) : summaryOverviewMarkdown ? (
+                        renderMarkdownContent(summaryOverviewMarkdown)
                       ) : (
                         <p className="text-base leading-7" style={{ color: 'var(--app-text-subtle)' }}>
                           {getSummaryEmptyText("overview", "task.summaryEmpty")}
@@ -2087,31 +2149,33 @@ export default function TaskDetail({
                       </div>
                     </div>
                     {summaryStreaming.key_points && summaryStreamContent.key_points ? (
-                      <p className="text-base leading-7" style={{ color: 'var(--app-text)' }}>
-                        {summaryStreamContent.key_points}
-                      </p>
+                      renderMarkdownContent(summaryStreamContent.key_points)
                     ) : compareMode && compareSummaryType === "key_points" ? (
                       renderCompareView()
+                    ) : keyPointsMarkdown ? (
+                      // V1.2 format: Render full Markdown content
+                      renderMarkdownContent(keyPointsMarkdown)
                     ) : keyPoints.length > 0 ? (
+                      // Old format with time references
                       keyPoints.map((point, index) => (
-                        <div key={index} className="flex items-start gap-3">
-                          <div className="flex-shrink-0 mt-1">
-                            <Lightbulb className="w-5 h-5" style={{ color: 'var(--app-warning)' }} />
+                          <div key={index} className="flex items-start gap-3">
+                            <div className="flex-shrink-0 mt-1">
+                              <Lightbulb className="w-5 h-5" style={{ color: 'var(--app-warning)' }} />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-base mb-1" style={{ color: 'var(--app-text)' }}>
+                                {point.text}
+                              </p>
+                              <button
+                                onClick={() => handleTimeClick(point.timeReference)}
+                                className="text-sm hover:underline"
+                                style={{ color: 'var(--app-primary)' }}
+                              >
+                                ↗{point.timeReference} {t("task.keyPointDetail")}
+                              </button>
+                            </div>
                           </div>
-                          <div className="flex-1">
-                            <p className="text-base mb-1" style={{ color: 'var(--app-text)' }}>
-                              {point.text}
-                            </p>
-                            <button
-                              onClick={() => handleTimeClick(point.timeReference)}
-                              className="text-sm hover:underline"
-                              style={{ color: 'var(--app-primary)' }}
-                            >
-                              ↗{point.timeReference} {t("task.keyPointDetail")}
-                            </button>
-                          </div>
-                        </div>
-                      ))
+                        ))
                     ) : (
                       <p className="text-base leading-7" style={{ color: 'var(--app-text-subtle)' }}>
                         {getSummaryEmptyText("key_points", "task.keyPointsEmpty")}
@@ -2173,12 +2237,14 @@ export default function TaskDetail({
                       </div>
                     </div>
                     {summaryStreaming.action_items && summaryStreamContent.action_items ? (
-                      <p className="text-base leading-7" style={{ color: 'var(--app-text)' }}>
-                        {summaryStreamContent.action_items}
-                      </p>
+                      renderMarkdownContent(summaryStreamContent.action_items)
                     ) : compareMode && compareSummaryType === "action_items" ? (
                       renderCompareView()
+                    ) : actionItemsMarkdown ? (
+                      // V1.2 format: Render full Markdown content
+                      renderMarkdownContent(actionItemsMarkdown)
                     ) : actionItems.length > 0 ? (
+                      // Old format with task/assignee/deadline structure
                       actionItems.map((item) => (
                         <div
                           key={item.id}
