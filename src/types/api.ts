@@ -341,7 +341,7 @@ export interface SummaryItem {
   // v1.3 新增可视化字段
   visual_format?: "mermaid" | "json" | null
   visual_content?: string | null
-  image_key?: string | null
+  image_url?: string | null  // 修复：后端返回的是 image_url 不是 image_key
   image_format?: "png" | "svg" | null
 }
 

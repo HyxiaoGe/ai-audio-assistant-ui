@@ -66,7 +66,16 @@ export function VisualSummaryView({
 
   // 渲染 Mermaid 图表
   const renderMermaid = async () => {
-    if (!data?.content || !mermaidRef.current) return
+    console.log('[VisualSummaryView] renderMermaid called')
+    console.log('[VisualSummaryView] data:', data)
+    console.log('[VisualSummaryView] mermaidRef.current:', mermaidRef.current)
+
+    if (!data?.content || !mermaidRef.current) {
+      console.log('[VisualSummaryView] Skipping render - no data or ref')
+      return
+    }
+
+    console.log('[VisualSummaryView] Rendering Mermaid with content:', data.content)
 
     try {
       const { svg } = await mermaid.render(
@@ -74,19 +83,28 @@ export function VisualSummaryView({
         data.content
       )
 
+      console.log('[VisualSummaryView] Mermaid rendered successfully')
+
       if (mermaidRef.current) {
         mermaidRef.current.innerHTML = svg
         setMermaidRendered(true)
+        console.log('[VisualSummaryView] SVG inserted into DOM')
       }
     } catch (err) {
-      console.error("Mermaid render error:", err)
+      console.error("[VisualSummaryView] Mermaid render error:", err)
       setError("图表渲染失败，可能是 Mermaid 语法错误")
     }
   }
 
   // 处理 initialData（从父组件传入的已获取数据）
   useEffect(() => {
+    console.log('[VisualSummaryView] initialData:', initialData)
+    console.log('[VisualSummaryView] visualType:', visualType)
+
     if (initialData && initialData.content) {
+      console.log('[VisualSummaryView] Converting initialData to VisualSummaryResponse')
+      console.log('[VisualSummaryView] Content:', initialData.content)
+
       // 将 SummaryItem 转换为 VisualSummaryResponse 格式
       const convertedData: VisualSummaryResponse = {
         id: initialData.id,
@@ -94,12 +112,15 @@ export function VisualSummaryView({
         visual_type: visualType,
         format: initialData.visual_format || "mermaid",
         content: initialData.content,
-        image_url: initialData.image_key || null,
+        image_url: initialData.image_url || null,  // 修复：使用 image_url 而不是 image_key
         model_used: initialData.model_used || null,
         token_count: initialData.token_count || null,
         created_at: initialData.created_at,
       }
+      console.log('[VisualSummaryView] Converted data:', convertedData)
       setData(convertedData)
+    } else {
+      console.log('[VisualSummaryView] No initialData or content')
     }
   }, [initialData, taskId, visualType])
 
