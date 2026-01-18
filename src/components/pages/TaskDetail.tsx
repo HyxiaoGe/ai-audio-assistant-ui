@@ -334,7 +334,6 @@ export default function TaskDetail({
 
     setActionItems(actionLines);
 
-    setSummaryOverview(overview ? parseSummaryLines(overview) : []);
     setSummaryVersions(latestVersions);
     setSummaryModelUsed(modelUsed);
   }, [parseActionItems, parseSummaryLines]);
@@ -402,12 +401,12 @@ export default function TaskDetail({
         if (summaryResult.code === 40401) {
           setKeyPoints([]);
           setActionItems([]);
-          setSummaryOverview([]);
+          setSummaryOverviewMarkdown('');
         } else {
           notifyError(summaryResult.message);
           setKeyPoints([]);
           setActionItems([]);
-          setSummaryOverview([]);
+          setSummaryOverviewMarkdown('');
         }
       } else if (summaryResult) {
         buildSummaryState(summaryResult.items);
@@ -457,14 +456,16 @@ export default function TaskDetail({
     (summaryType: SummaryRegenerateType, content: string) => {
       setSummaryStreamContent((prev) => ({ ...prev, [summaryType]: content }));
       if (summaryType === 'overview') {
-        setSummaryOverview(parseSummaryLines(content));
+        setSummaryOverviewMarkdown(content);
       } else if (summaryType === 'key_points') {
+        setKeyPointsMarkdown(content);
         const keyPointLines = parseSummaryLines(content);
         setKeyPoints(keyPointLines.map((text) => ({
           text,
           timeReference: '--:--',
         })));
       } else if (summaryType === 'action_items') {
+        setActionItemsMarkdown(content);
         setActionItems(parseActionItems(content));
       }
     },
