@@ -560,7 +560,10 @@
     "type": {
       "overview": "内容概述",
       "keyPoints": "关键要点",
-      "actionItems": "行动项"
+      "actionItems": "行动项",
+      "mindmap": "思维导图",
+      "timeline": "时间轴",
+      "flowchart": "流程图"
     }
   },
   "processing": {

@@ -560,7 +560,10 @@
     "type": {
       "overview": "Overview",
       "keyPoints": "Key points",
-      "actionItems": "Action items"
+      "actionItems": "Action items",
+      "mindmap": "Mindmap",
+      "timeline": "Timeline",
+      "flowchart": "Flowchart"
     }
   },
   "processing": {
