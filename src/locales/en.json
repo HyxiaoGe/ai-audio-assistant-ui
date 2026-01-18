@@ -606,6 +606,13 @@
     "summaryMeeting": "Meeting minutes",
     "summaryLecture": "Lecture notes",
     "summaryPodcast": "Podcast summary",
+    "visualSummary": "Visual summary",
+    "autoGenerateVisualSummary": "Auto-generate visual summary",
+    "visualTypes": "Select types",
+    "visualMindmap": "Mindmap (for lectures/podcasts)",
+    "visualTimeline": "Timeline (for meetings/lectures)",
+    "visualFlowchart": "Flowchart (for meetings/tutorials)",
+    "visualSummaryHint": "Automatically generate selected visual summaries after task completion, usually takes 10-30 seconds",
     "startProcessing": "Start processing",
     "validatingVideo": "Validating video...",
     "createFailed": "Failed to create task"

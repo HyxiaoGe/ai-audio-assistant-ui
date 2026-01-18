@@ -606,6 +606,13 @@
     "summaryMeeting": "会议纪要",
     "summaryLecture": "讲座笔记",
     "summaryPodcast": "播客摘要",
+    "visualSummary": "可视化摘要",
+    "autoGenerateVisualSummary": "自动生成可视化摘要",
+    "visualTypes": "选择类型",
+    "visualMindmap": "思维导图（适合讲座/播客）",
+    "visualTimeline": "时间轴（适合会议/讲座）",
+    "visualFlowchart": "流程图（适合会议/教程）",
+    "visualSummaryHint": "任务完成后自动生成选中的可视化摘要，通常耗时 10-30 秒",
     "startProcessing": "开始处理",
     "validatingVideo": "正在验证视频...",
     "createFailed": "创建任务失败"

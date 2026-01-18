@@ -180,6 +180,8 @@ export interface TaskOptions {
   summary_style?: SummaryStyle
   provider?: string | null
   model_id?: string | null
+  enable_visual_summary?: boolean
+  visual_types?: VisualType[]
 }
 
 export interface CreateTaskRequest {
