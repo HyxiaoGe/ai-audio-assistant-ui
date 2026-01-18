@@ -22,7 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAPIClient } from "@/lib/use-api-client"
 import { useDateFormatter } from "@/lib/use-date-formatter"
 import { useI18n } from "@/lib/i18n-context"
-import type { LLMModel, SummaryItem, SummaryType } from "@/types/api"
+import type { LLMModel, SummaryItem, SummaryType, VisualType } from "@/types/api"
 import { VisualSummaryView } from "./VisualSummaryView"
 
 interface SummaryViewProps {
@@ -441,12 +441,17 @@ export function SummaryView({ taskId }: SummaryViewProps) {
 
   // Group summaries by type (only show active ones by default)
   const activeSummaries = summaries.filter((s) => s.is_active)
+
+  // 分离文本摘要和可视化摘要
+  const textSummaries = activeSummaries.filter((s) => !s.summary_type.startsWith('visual_'))
+  const visualSummaries = activeSummaries.filter((s) => s.summary_type.startsWith('visual_'))
+
   const summaryTypes = Array.from(
-    new Set(activeSummaries.map((s) => s.summary_type))
+    new Set(textSummaries.map((s) => s.summary_type))
   )
 
   // If only one type, show it directly
-  if (summaryTypes.length === 1) {
+  if (summaryTypes.length === 1 && visualSummaries.length === 0) {
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-2">
@@ -455,7 +460,7 @@ export function SummaryView({ taskId }: SummaryViewProps) {
             {t("summary.title")}
           </h2>
         </div>
-        {activeSummaries.map((summary) => (
+        {textSummaries.map((summary) => (
           <SummaryCard
             key={summary.id}
             summary={summary}
@@ -478,6 +483,7 @@ export function SummaryView({ taskId }: SummaryViewProps) {
 
       <Tabs defaultValue={summaryTypes[0]} className="w-full">
         <TabsList>
+          {/* 文本摘要标签 */}
           {summaryTypes.map((type) => {
             const config = SUMMARY_TYPE_CONFIG[type]
             const Icon = config.icon
@@ -488,25 +494,26 @@ export function SummaryView({ taskId }: SummaryViewProps) {
               </TabsTrigger>
             )
           })}
-          {/* v1.3 新增可视化摘要标签 */}
-          <TabsTrigger value="mindmap" className="gap-2">
-            <Network className="size-4" />
-            思维导图
-          </TabsTrigger>
-          <TabsTrigger value="timeline" className="gap-2">
-            <Clock className="size-4" />
-            时间轴
-          </TabsTrigger>
-          <TabsTrigger value="flowchart" className="gap-2">
-            <GitBranch className="size-4" />
-            流程图
-          </TabsTrigger>
+
+          {/* 动态生成可视化摘要标签（只显示已生成的） */}
+          {visualSummaries.map((summary) => {
+            const config = SUMMARY_TYPE_CONFIG[summary.summary_type as keyof typeof SUMMARY_TYPE_CONFIG]
+            if (!config) return null
+            const Icon = config.icon
+            return (
+              <TabsTrigger key={summary.summary_type} value={summary.summary_type} className="gap-2">
+                <Icon className="size-4" />
+                {t(config.labelKey)}
+              </TabsTrigger>
+            )
+          })}
         </TabsList>
 
+        {/* 文本摘要标签页 */}
         {summaryTypes.map((type) => (
           <TabsContent key={type} value={type} className="mt-4">
             <div className="space-y-4">
-              {activeSummaries
+              {textSummaries
                   .filter((s) => s.summary_type === type)
                   .map((summary) => (
                   <SummaryCard
@@ -519,30 +526,18 @@ export function SummaryView({ taskId }: SummaryViewProps) {
           </TabsContent>
         ))}
 
-        {/* v1.3 新增可视化摘要标签页 */}
-        <TabsContent value="mindmap" className="mt-4">
-          <VisualSummaryView
-            taskId={taskId}
-            visualType="mindmap"
-            renderMode="mermaid"
-          />
-        </TabsContent>
-
-        <TabsContent value="timeline" className="mt-4">
-          <VisualSummaryView
-            taskId={taskId}
-            visualType="timeline"
-            renderMode="mermaid"
-          />
-        </TabsContent>
-
-        <TabsContent value="flowchart" className="mt-4">
-          <VisualSummaryView
-            taskId={taskId}
-            visualType="flowchart"
-            renderMode="mermaid"
-          />
-        </TabsContent>
+        {/* 可视化摘要标签页（动态生成，直接使用已获取的数据） */}
+        {visualSummaries.map((summary) => (
+          <TabsContent key={summary.summary_type} value={summary.summary_type} className="mt-4">
+            <VisualSummaryView
+              taskId={taskId}
+              visualType={summary.summary_type.replace('visual_', '') as VisualType}
+              renderMode="mermaid"
+              autoLoad={false}
+              initialData={summary}
+            />
+          </TabsContent>
+        ))}
       </Tabs>
     </div>
   )

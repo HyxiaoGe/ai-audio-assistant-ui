@@ -5,7 +5,7 @@ import mermaid from "mermaid"
 import { Loader2, Download, Maximize2, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import type { VisualSummaryResponse, VisualType } from "@/types/api"
+import type { VisualSummaryResponse, VisualType, SummaryItem } from "@/types/api"
 import { useAPIClient } from "@/lib/use-api-client"
 
 interface VisualSummaryViewProps {
@@ -14,6 +14,7 @@ interface VisualSummaryViewProps {
   autoLoad?: boolean  // 是否自动加载
   renderMode?: "mermaid" | "image" | "both"  // 渲染模式
   className?: string
+  initialData?: SummaryItem  // 直接传入已获取的数据（从 getSummary 接口）
 }
 
 export function VisualSummaryView({
@@ -22,6 +23,7 @@ export function VisualSummaryView({
   autoLoad = true,
   renderMode = "mermaid",
   className = "",
+  initialData,
 }: VisualSummaryViewProps) {
   const [data, setData] = useState<VisualSummaryResponse | null>(null)
   const [loading, setLoading] = useState(false)
@@ -82,13 +84,32 @@ export function VisualSummaryView({
     }
   }
 
-  // 自动加载
+  // 处理 initialData（从父组件传入的已获取数据）
   useEffect(() => {
-    if (autoLoad) {
+    if (initialData && initialData.content) {
+      // 将 SummaryItem 转换为 VisualSummaryResponse 格式
+      const convertedData: VisualSummaryResponse = {
+        id: initialData.id,
+        task_id: taskId,
+        visual_type: visualType,
+        format: initialData.visual_format || "mermaid",
+        content: initialData.content,
+        image_url: initialData.image_key || null,
+        model_used: initialData.model_used || null,
+        token_count: initialData.token_count || null,
+        created_at: initialData.created_at,
+      }
+      setData(convertedData)
+    }
+  }, [initialData, taskId, visualType])
+
+  // 自动加载（仅在没有 initialData 时）
+  useEffect(() => {
+    if (autoLoad && !initialData) {
       loadVisualSummary()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskId, visualType, autoLoad])
+  }, [taskId, visualType, autoLoad, initialData])
 
   // 数据加载后渲染 Mermaid
   useEffect(() => {
