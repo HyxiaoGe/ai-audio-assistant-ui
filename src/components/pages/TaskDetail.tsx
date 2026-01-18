@@ -22,6 +22,7 @@ import {
 import PlayerBar from '@/components/task/PlayerBar';
 import TranscriptItem from '@/components/task/TranscriptItem';
 import TabSwitch from '@/components/task/TabSwitch';
+import { VisualSummaryView } from '@/components/task/VisualSummaryView';
 import ProcessingState from '@/components/common/ProcessingState';
 import ErrorState from '@/components/common/ErrorState';
 import LoginModal from '@/components/auth/LoginModal';
@@ -39,7 +40,8 @@ import type {
   ComparisonResult,
   SummaryItem,
   SummaryRegenerateType,
-  LLMModel
+  LLMModel,
+  VisualType
 } from '@/types/api';
 import { useI18n } from '@/lib/i18n-context';
 import { useDateFormatter } from '@/lib/use-date-formatter';
@@ -128,6 +130,7 @@ export default function TaskDetail({
   const [summaryOverviewMarkdown, setSummaryOverviewMarkdown] = useState<string>('');
   const [keyPointsMarkdown, setKeyPointsMarkdown] = useState<string>('');
   const [actionItemsMarkdown, setActionItemsMarkdown] = useState<string>('');
+  const [visualSummaries, setVisualSummaries] = useState<SummaryItem[]>([]);
   const [summaryModelUsed, setSummaryModelUsed] = useState<Record<SummaryRegenerateType, string | null>>({
     overview: null,
     key_points: null,
@@ -307,6 +310,13 @@ export default function TaskDetail({
     const overview = items.find((item) => item.summary_type === 'overview' && item.is_active)?.content;
     const keyPointsContent = items.find((item) => item.summary_type === 'key_points' && item.is_active)?.content;
     const actionItemsContent = items.find((item) => item.summary_type === 'action_items' && item.is_active)?.content;
+
+    // Extract visual summaries
+    const visuals = items.filter((item) =>
+      item.summary_type.startsWith('visual_') && item.is_active
+    );
+    setVisualSummaries(visuals);
+
     const modelUsed = {
       overview: items.find((item) => item.summary_type === 'overview' && item.is_active)?.model_used ?? null,
       key_points: items.find((item) => item.summary_type === 'key_points' && item.is_active)?.model_used ?? null,
@@ -1371,11 +1381,29 @@ export default function TaskDetail({
     </div>
   );
 
-  const summaryTabs = [
-    { id: 'summary', label: t("task.tabs.summary") },
-    { id: 'keypoints', label: t("task.tabs.keypoints") },
-    { id: 'actions', label: t("task.tabs.actions") }
-  ];
+  const summaryTabs = useMemo(() => {
+    const baseTabs = [
+      { id: 'summary', label: t("task.tabs.summary") },
+      { id: 'keypoints', label: t("task.tabs.keypoints") },
+      { id: 'actions', label: t("task.tabs.actions") }
+    ];
+
+    // Add visual summary tabs dynamically
+    const visualTabs = visualSummaries.map((summary) => {
+      const visualType = summary.summary_type.replace('visual_', '');
+      const labelMap: Record<string, string> = {
+        mindmap: t("summary.type.mindmap"),
+        timeline: t("summary.type.timeline"),
+        flowchart: t("summary.type.flowchart"),
+      };
+      return {
+        id: summary.summary_type,
+        label: labelMap[visualType] || visualType
+      };
+    });
+
+    return [...baseTabs, ...visualTabs];
+  }, [t, visualSummaries]);
   const getSummaryEmptyText = (
     summaryType: SummaryRegenerateType,
     emptyKey: string
@@ -2283,6 +2311,24 @@ export default function TaskDetail({
                     )}
                   </div>
                 )}
+
+                {/* Visual Summary Tabs */}
+                {visualSummaries.map((summary) => {
+                  const visualType = summary.summary_type.replace('visual_', '') as VisualType;
+                  return (
+                    activeTab === summary.summary_type && (
+                      <div key={summary.summary_type} className="space-y-4">
+                        <VisualSummaryView
+                          taskId={id}
+                          visualType={visualType}
+                          renderMode="mermaid"
+                          autoLoad={false}
+                          initialData={summary}
+                        />
+                      </div>
+                    )
+                  );
+                })}
               </div>
 
               {compareDialogOpen && (
