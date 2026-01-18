@@ -35,28 +35,30 @@
 已在 `src/lib/api-client.ts` 中实现：
 
 ```typescript
-// 生成可视化摘要
+// 1. 生成可视化摘要
 await client.generateVisualSummary(taskId, {
   visual_type: "mindmap",
   generate_image: false  // 推荐关闭
 })
 
-// 获取可视化摘要
+// 2. 获取可视化摘要
 const result = await client.getVisualSummary(taskId, "mindmap")
 
-// SSE 进度订阅
-const unsubscribe = client.subscribeVisualSummaryProgress(
-  taskId, visualType, onEvent, onError
-)
+// 3. 轮询生成状态（推荐）
+const visualSummary = await client.pollVisualSummary(taskId, "mindmap", {
+  maxAttempts: 30,
+  interval: 2000,
+  onProgress: (attempt, max) => console.log(`${attempt}/${max}`)
+})
 ```
 
 ### 3. 类型定义
 
 已在 `src/types/api.ts` 中定义：
-- `VisualType` - 可视化类型
-- `ContentStyle` - 内容风格
-- `VisualSummaryRequest/Response` - 请求/响应类型
-- `VisualStreamEvent` - SSE 事件类型
+- `VisualType` - 可视化类型 (mindmap | timeline | flowchart)
+- `ContentStyle` - 内容风格 (meeting | lecture | podcast | video | general)
+- `VisualSummaryRequest` - 生成请求类型
+- `VisualSummaryResponse` - 响应类型（包含 Mermaid 代码）
 
 ### 4. UI 组件
 
@@ -129,7 +131,7 @@ POST /api/v1/summaries/{task_id}/visual
 }
 ```
 
-**响应：**
+**响应 (202 Accepted)：**
 ```json
 {
   "code": 0,
@@ -137,10 +139,17 @@ POST /api/v1/summaries/{task_id}/visual
   "data": {
     "task_id": "uuid",
     "visual_type": "mindmap",
-    "status": "processing"
+    "content_style": "general",
+    "generate_image": false,
+    "status": "queued"
   }
 }
 ```
+
+**说明：**
+- `status: "queued"` - 任务已加入队列，等待后台 Celery 处理
+- 可视化摘要生成是**异步任务**，通常耗时 10-30 秒
+- 后端**没有 SSE 实时推送**，需要通过轮询检查生成状态
 
 ### 2. 获取可视化摘要
 
@@ -163,18 +172,32 @@ GET /api/v1/summaries/{task_id}/visual/{visual_type}
 }
 ```
 
-### 3. SSE 进度订阅
+### 3. 轮询生成状态（推荐方式）
 
-```
-GET /api/v1/summaries/{task_id}/visual/{visual_type}/stream
+由于后端没有实现 SSE 实时推送，前端使用**轮询**方式检查生成状态：
+
+```typescript
+// 使用 API Client 的轮询方法
+const result = await client.pollVisualSummary(taskId, visualType, {
+  maxAttempts: 30,  // 最多尝试 30 次（60 秒）
+  interval: 2000,   // 每 2 秒轮询一次
+  onProgress: (attempt, maxAttempts) => {
+    console.log(`轮询中... ${attempt}/${maxAttempts}`)
+  }
+})
 ```
 
-**事件类型：**
-- `visual.generating` - 生成中
-- `visual.rendering` - 渲染中
-- `visual.uploading` - 上传中
-- `visual.completed` - 完成
-- `error` - 错误
+**工作原理：**
+1. POST 请求提交生成任务，后端返回 `status: "queued"`
+2. 前端开始轮询 GET 端点
+3. 如果返回 `code: 40402`（未找到），继续轮询
+4. 如果返回 `code: 0`（成功），生成完成
+5. 超过最大尝试次数，抛出超时错误
+
+**错误码说明：**
+- `40402` - 可视化摘要不存在（还在生成中，继续轮询）
+- `40401` - 任务不存在（停止轮询）
+- `0` - 成功获取（停止轮询，显示结果）
 
 ---
 

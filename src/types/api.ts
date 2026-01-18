@@ -410,20 +410,6 @@ export interface VisualSummaryResponse {
   created_at: string
 }
 
-/**
- * SSE 流式事件类型
- */
-export interface VisualStreamEvent {
-  type: "visual.generating" | "visual.rendering" | "visual.uploading" | "visual.completed" | "error"
-  data?: {
-    visual_type?: VisualType
-    progress?: number
-    content?: string
-    image_url?: string
-    error?: string
-  }
-}
-
 // ============================================================================
 // LLM 模型相关
 // ============================================================================

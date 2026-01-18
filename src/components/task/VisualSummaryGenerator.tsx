@@ -52,52 +52,26 @@ export function VisualSummaryGenerator({
         throw new Error(response.message)
       }
 
-      // 2. 订阅 SSE 进度更新
-      const unsubscribe = client.subscribeVisualSummaryProgress(
-        taskId,
-        visualType,
-        (event) => {
-          switch (event.type) {
-            case "visual.generating":
-              setProgress(30)
-              break
-            case "visual.rendering":
-              setProgress(60)
-              break
-            case "visual.uploading":
-              setProgress(80)
-              break
-            case "visual.completed":
-              setProgress(100)
-              setLoading(false)
-              onGenerated?.(visualType)
-              unsubscribe()
-              break
-            case "error":
-              setError(event.data?.error || "生成失败")
-              setLoading(false)
-              unsubscribe()
-              break
-          }
+      // 2. 轮询检查生成状态（后端没有 SSE 端点）
+      await client.pollVisualSummary(taskId, visualType, {
+        maxAttempts: 30, // 最多尝试 30 次
+        interval: 2000,  // 每 2 秒轮询一次
+        onProgress: (attempt, maxAttempts) => {
+          // 根据尝试次数估算进度（30 次尝试，60 秒）
+          const estimatedProgress = Math.min(95, Math.floor((attempt / maxAttempts) * 100))
+          setProgress(estimatedProgress)
         },
-        (err) => {
-          setError(err.message)
-          setLoading(false)
-        }
-      )
+      })
 
-      // 超时保护（30秒）
-      setTimeout(() => {
-        if (loading) {
-          unsubscribe()
-          setLoading(false)
-          setError("生成超时，请稍后查看")
-        }
-      }, 30000)
+      // 3. 生成完成
+      setProgress(100)
+      setLoading(false)
+      onGenerated?.(visualType)
     } catch (err) {
       const message = err instanceof Error ? err.message : "生成失败"
       setError(message)
       setLoading(false)
+      setProgress(0)
     }
   }
 

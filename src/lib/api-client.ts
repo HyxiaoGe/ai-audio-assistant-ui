@@ -45,7 +45,6 @@ import {
   UserPreferencesUpdateRequest,
   VisualSummaryRequest,
   VisualSummaryResponse,
-  VisualStreamEvent,
   VisualType,
 } from "@/types/api"
 
@@ -660,46 +659,77 @@ export class APIClient {
   }
 
   /**
-   * 订阅可视化摘要生成进度（SSE）
+   * 轮询可视化摘要生成状态
+   * 由于后端没有 SSE 端点，使用轮询方式检查生成是否完成
    * @param taskId 任务 ID
    * @param visualType 可视化类型
-   * @param onEvent 事件回调
-   * @param onError 错误回调
-   * @returns 关闭 SSE 连接的函数
+   * @param options 轮询配置
+   * @returns Promise<VisualSummaryResponse> 成功获取到可视化摘要
+   * @throws ApiError 超时或获取失败
    */
-  subscribeVisualSummaryProgress(
+  async pollVisualSummary(
     taskId: string,
     visualType: VisualType,
-    onEvent: (event: VisualStreamEvent) => void,
-    onError?: (error: Error) => void
-  ): () => void {
-    const baseUrl =
-      process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
-    // Get token synchronously from instance or localStorage
-    const token = this.token || (typeof window !== "undefined" ? localStorage.getItem("auth_token") : null)
-    const url = `${baseUrl}/api/v1/summaries/${taskId}/visual/${visualType}/stream?token=${encodeURIComponent(token || "")}`
+    options: {
+      maxAttempts?: number // 最大尝试次数，默认 30
+      interval?: number // 轮询间隔（毫秒），默认 2000ms
+      onProgress?: (attempt: number, maxAttempts: number) => void // 进度回调
+    } = {}
+  ): Promise<VisualSummaryResponse> {
+    const { maxAttempts = 30, interval = 2000, onProgress } = options
 
-    const eventSource = new EventSource(url)
-
-    eventSource.onmessage = (event) => {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        const data = JSON.parse(event.data)
-        onEvent(data)
+        onProgress?.(attempt, maxAttempts)
+
+        const result = await this.getVisualSummary(taskId, visualType)
+
+        if (result.code === 0 && result.data) {
+          return result.data
+        }
+
+        // 如果是 404（未找到），继续轮询
+        if (result.code === 40402) {
+          if (attempt < maxAttempts) {
+            await new Promise((resolve) => setTimeout(resolve, interval))
+            continue
+          }
+        }
+
+        // 其他错误直接抛出
+        throw new ApiError(result.code, result.message, result.traceId)
       } catch (error) {
-        console.error("Failed to parse SSE event:", error)
+        // 最后一次尝试，抛出错误
+        if (attempt >= maxAttempts) {
+          if (error instanceof ApiError) {
+            throw error
+          }
+          throw new ApiError(
+            50001,
+            "可视化摘要生成超时，请稍后手动刷新查看",
+            ""
+          )
+        }
+
+        // 如果是 404（未生成完成），继续轮询
+        if (
+          error instanceof ApiError &&
+          (error.code === 40402 || error.code === 40401)
+        ) {
+          await new Promise((resolve) => setTimeout(resolve, interval))
+          continue
+        }
+
+        // 其他错误直接抛出
+        throw error
       }
     }
 
-    eventSource.onerror = (error) => {
-      console.error("SSE connection error:", error)
-      onError?.(new Error("SSE connection failed"))
-      eventSource.close()
-    }
-
-    // 返回关闭函数
-    return () => {
-      eventSource.close()
-    }
+    throw new ApiError(
+      50001,
+      "可视化摘要生成超时，请稍后手动刷新查看",
+      ""
+    )
   }
 }
 
