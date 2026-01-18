@@ -446,12 +446,6 @@ export function SummaryView({ taskId }: SummaryViewProps) {
   const textSummaries = activeSummaries.filter((s) => !s.summary_type.startsWith('visual_'))
   const visualSummaries = activeSummaries.filter((s) => s.summary_type.startsWith('visual_'))
 
-  // 调试日志
-  console.log('[SummaryView] All summaries:', summaries)
-  console.log('[SummaryView] Active summaries:', activeSummaries)
-  console.log('[SummaryView] Text summaries:', textSummaries)
-  console.log('[SummaryView] Visual summaries:', visualSummaries)
-
   const summaryTypes = Array.from(
     new Set(textSummaries.map((s) => s.summary_type))
   )
