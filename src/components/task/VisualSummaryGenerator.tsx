@@ -27,7 +27,7 @@ export function VisualSummaryGenerator({
 }: VisualSummaryGeneratorProps) {
   const [visualType, setVisualType] = useState<VisualType>("mindmap")
   const [contentStyle, setContentStyle] = useState<ContentStyle | "auto">("auto")
-  const [generateImage, setGenerateImage] = useState(true)
+  const [generateImage, setGenerateImage] = useState(false)
   const [imageFormat, setImageFormat] = useState<"png" | "svg">("png")
   const [loading, setLoading] = useState(false)
   const [progress, setProgress] = useState(0)
