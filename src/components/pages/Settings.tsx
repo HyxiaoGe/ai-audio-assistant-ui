@@ -20,17 +20,16 @@ import {
 } from '@/components/ui/dialog';
 import { useSettings } from '@/lib/settings-context';
 import { useI18n } from '@/lib/i18n-context';
-import { notifyError, notifyInfo, notifySuccess } from '@/lib/notify';
+import { notifyError, notifyInfo } from '@/lib/notify';
 import { useAPIClient } from '@/lib/use-api-client';
-import { useDateFormatter } from '@/lib/use-date-formatter';
-import type { AsrQuotaItem, UserPreferences, UserPreferencesUpdateRequest } from '@/types/api';
-import { 
+import { useUserStore } from '@/store/user-store';
+import type { AsrUserFreeQuotaResponse, UserPreferences, UserPreferencesUpdateRequest } from '@/types/api';
+import {
   Globe,
   Palette,
   Bell,
   Save,
-  CheckCircle2,
-  ChevronRight
+  CheckCircle2
 } from 'lucide-react';
 
 interface SettingsProps {
@@ -126,25 +125,12 @@ export default function Settings({
   const numberFormatter = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const { t } = useI18n();
   const client = useAPIClient();
-  const { formatDateTime } = useDateFormatter();
-  const [asrQuotas, setAsrQuotas] = useState<AsrQuotaItem[]>([]);
-  const [asrLoading, setAsrLoading] = useState(false);
-  const [asrError, setAsrError] = useState<string | null>(null);
-  const [asrSaving, setAsrSaving] = useState<Record<string, boolean>>({});
-  const [editingQuotaKey, setEditingQuotaKey] = useState<string | null>(null);
-  const [expandedProviders, setExpandedProviders] = useState<Record<string, boolean>>({});
-  const [expandedVariants, setExpandedVariants] = useState<Record<string, boolean>>({});
+  // ASR 免费额度（普通用户）
+  const [asrFreeQuota, setAsrFreeQuota] = useState<AsrUserFreeQuotaResponse | null>(null);
+  const [asrUsageLoading, setAsrUsageLoading] = useState(false);
+  const [asrUsageError, setAsrUsageError] = useState<string | null>(null);
   const [speakerDiarizationEnabled, setSpeakerDiarizationEnabled] = useState(false);
-  const [quotaForm, setQuotaForm] = useState<{
-    provider: string;
-    variant?: string;
-    window_type: AsrQuotaItem["window_type"];
-    quota_hours: number;
-    used_hours: number;
-    reset: boolean;
-    window_start?: string;
-    window_end?: string;
-  } | null>(null);
+  const isAdmin = useUserStore((state) => state.isAdmin);
 
   const languageState = locale;
   const themeState = currentTheme;
@@ -158,141 +144,32 @@ export default function Settings({
     playbackBehavior,
   } = localSettings;
 
-  const secondsToHours = (seconds: number) => seconds / 3600;
-
-  const formatHoursFromSeconds = (seconds: number) => {
-    return `${secondsToHours(seconds).toFixed(2)}h`;
-  };
-
-  const DEFAULT_TOTAL_START = "1970-01-01";
-  const DEFAULT_TOTAL_END = "2099-12-31";
-
-  const toDateInput = (value?: string) => {
-    if (!value) return "";
-    return value.slice(0, 10);
-  };
-
-  const normalizeDateInput = (value?: string, fallback?: string) => {
-    const normalized = toDateInput(value);
-    return normalized || fallback || "";
-  };
-
-  const toIsoDate = (value?: string, isEnd = false) => {
-    if (!value) return undefined;
-    return isEnd ? `${value}T23:59:59Z` : `${value}T00:00:00Z`;
-  };
-
-  const formatWindow = (start?: string, end?: string, isTotal?: boolean) => {
-    if (isTotal && (!start || !end)) {
-      return t("settings.asrQuotaPermanent");
-    }
-    if (!start || !end) return t("common.unknown");
-    const startLabel = formatDateTime(start, { year: "numeric", month: "2-digit", day: "2-digit" });
-    const endLabel = formatDateTime(end, { year: "numeric", month: "2-digit", day: "2-digit" });
-    return `${startLabel} - ${endLabel}`;
-  };
-
-  const windowTypeLabel = (type: AsrQuotaItem["window_type"]) => {
-    const key = `settings.asrQuotaWindow.${type}`;
-    const label = t(key);
-    return label === key ? type : label;
-  };
-
-  const statusLabel = (status: AsrQuotaItem["status"]) => {
-    const key = `settings.asrQuotaStatus.${status}`;
-    const label = t(key);
-    return label === key ? status : label;
-  };
-
-  const providerLabel = (provider: string) => {
-    const key = `settings.asrQuotaProvider.${provider}`;
-    const label = t(key);
-    return label === key ? provider : label;
-  };
-
-  const variantLabel = (variant?: string) => {
-    const key = `settings.asrQuotaVariant.${variant || "file"}`;
-    const label = t(key);
-    return label === key ? (variant || "file") : label;
-  };
-
-  const groupedAsrQuotas = useMemo(() => {
-    const order = new Map<AsrQuotaItem["window_type"], number>([
-      ["day", 0],
-      ["month", 1],
-      ["total", 2],
-      ["week", 3],
-      ["year", 4],
-    ]);
-    const grouped = new Map<string, Map<string, AsrQuotaItem[]>>();
-    asrQuotas.forEach((item) => {
-      const providerGroup = grouped.get(item.provider) || new Map<string, AsrQuotaItem[]>();
-      const variantKey = item.variant || "file";
-      const list = providerGroup.get(variantKey) || [];
-      list.push(item);
-      providerGroup.set(variantKey, list);
-      grouped.set(item.provider, providerGroup);
-    });
-    return Array.from(grouped.entries())
-      .map(([provider, variants]) => {
-        return {
-          provider,
-          variants: Array.from(variants.entries()).map(([variant, items]) => ({
-            variant,
-            items: [...items].sort((a, b) => {
-              const aOrder = order.get(a.window_type) ?? 99;
-              const bOrder = order.get(b.window_type) ?? 99;
-              if (aOrder !== bOrder) return aOrder - bOrder;
-              return a.window_type.localeCompare(b.window_type);
-            }),
-          })),
-        };
-      })
-      .sort((a, b) => {
-        return a.provider.localeCompare(b.provider);
-      });
-  }, [asrQuotas]);
-
-  const toggleProvider = (provider: string) => {
-    setExpandedProviders((prev) => {
-      const next = prev[provider];
-      return next ? {} : { [provider]: true };
-    });
-    setExpandedVariants({});
-  };
-
-  const toggleVariant = (provider: string, variant: string) => {
-    const key = `${provider}::${variant}`;
-    setExpandedVariants((prev) => {
-      const next = prev[key];
-      return next ? {} : { [key]: true };
-    });
-  };
-
+  // 加载 ASR 免费额度（管理员跳过）
   useEffect(() => {
+    if (isAdmin) return;
     let active = true;
-    const loadQuotas = async () => {
-      setAsrLoading(true);
-      setAsrError(null);
+    const loadFreeQuota = async () => {
+      setAsrUsageLoading(true);
+      setAsrUsageError(null);
       try {
-        const result = await client.getAsrQuotas();
+        const result = await client.getAsrFreeQuota();
         if (active) {
-          setAsrQuotas(result.items || []);
+          setAsrFreeQuota(result);
         }
       } catch {
         if (!active) return;
-        setAsrError(t("settings.asrQuotaLoadFailed"));
+        setAsrUsageError(t("settings.asrUsageLoadFailed"));
       } finally {
         if (active) {
-          setAsrLoading(false);
+          setAsrUsageLoading(false);
         }
       }
     };
-    loadQuotas();
+    loadFreeQuota();
     return () => {
       active = false;
     };
-  }, [client, t]);
+  }, [client, isAdmin, t]);
 
   useEffect(() => {
     let active = true;
@@ -329,67 +206,6 @@ export default function Settings({
     if (value === null || value === undefined) return "--";
     if (typeof value === "number") return numberFormatter.format(value);
     return value;
-  };
-
-  const canEditWindowType = (type: AsrQuotaItem["window_type"]) => {
-    return type === "day" || type === "month" || type === "total";
-  };
-
-  const startEditQuota = (item: AsrQuotaItem) => {
-    const key = `${item.provider}-${item.variant || "file"}-${item.window_type}`;
-    setEditingQuotaKey(key);
-    const isTotal = item.window_type === "total";
-    setQuotaForm({
-      provider: item.provider,
-      variant: item.variant,
-      window_type: canEditWindowType(item.window_type) ? item.window_type : "month",
-      quota_hours: Math.round(secondsToHours(item.quota_seconds) * 100) / 100,
-      used_hours: Math.round(secondsToHours(item.used_seconds) * 100) / 100,
-      reset: true,
-      window_start: isTotal
-        ? normalizeDateInput(item.window_start, DEFAULT_TOTAL_START)
-        : normalizeDateInput(item.window_start),
-      window_end: isTotal
-        ? normalizeDateInput(item.window_end, DEFAULT_TOTAL_END)
-        : normalizeDateInput(item.window_end),
-    });
-  };
-
-  const cancelEditQuota = () => {
-    setEditingQuotaKey(null);
-    setQuotaForm(null);
-  };
-
-  const handleSaveQuota = async (item: AsrQuotaItem) => {
-    if (!quotaForm) return;
-    const key = `${item.provider}-${item.variant || "file"}-${item.window_type}`;
-    setAsrSaving((prev) => ({ ...prev, [key]: true }));
-    try {
-      const hasTotalWindow = quotaForm.window_type === "total";
-      const result = await client.refreshAsrQuota({
-        provider: quotaForm.provider,
-        variant: quotaForm.variant,
-        window_type: quotaForm.window_type,
-        quota_hours: Math.max(0, quotaForm.quota_hours),
-        used_seconds: Math.max(0, quotaForm.used_hours * 3600),
-        reset: quotaForm.reset,
-        window_start: hasTotalWindow ? toIsoDate(quotaForm.window_start) : undefined,
-        window_end: hasTotalWindow ? toIsoDate(quotaForm.window_end, true) : undefined,
-      });
-      setAsrQuotas((prev) =>
-        prev.map((quota) =>
-          quota.provider === item.provider && (quota.variant || "file") === (item.variant || "file") && quota.window_type === item.window_type
-            ? result.item
-            : quota
-        )
-      );
-      notifySuccess(t("settings.asrQuotaRefreshSuccess"));
-      cancelEditQuota();
-    } catch {
-      notifyError(t("settings.asrQuotaRefreshFailed"));
-    } finally {
-      setAsrSaving((prev) => ({ ...prev, [key]: false }));
-    }
   };
 
   const persistLocalSettings = useCallback((partial: Record<string, unknown>) => {
@@ -945,312 +761,88 @@ export default function Settings({
               </CardContent>
             </Card>
 
-            {/* ASR Quotas */}
-            <Card>
-              <CardHeader>
-                <CardTitle>{t("settings.asrQuotaTitle")}</CardTitle>
-                <CardDescription>
-                  {t("settings.asrQuotaDesc")}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {asrLoading && (
-                  <p className="text-sm text-[var(--app-text-muted)]">{t("common.loading")}...</p>
-                )}
-                {!asrLoading && asrError && (
-                  <p className="text-sm text-[var(--app-danger)]">{asrError}</p>
-                )}
-                {!asrLoading && !asrError && groupedAsrQuotas.length === 0 && (
-                  <p className="text-sm text-[var(--app-text-muted)]">{t("settings.asrQuotaEmpty")}</p>
-                )}
-                {!asrLoading && !asrError && groupedAsrQuotas.length > 0 && (
-                  <div className="space-y-4">
-                    {groupedAsrQuotas.map((group) => {
-                      const providerKey = group.provider;
-                      const isProviderExpanded = expandedProviders[providerKey];
-                      return (
-                      <div
-                        key={providerKey}
-                        className="space-y-3 rounded-xl border p-3"
-                        style={{ borderColor: "var(--app-glass-border)", background: "var(--app-glass-bg)" }}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => toggleProvider(providerKey)}
-                          className="w-full flex items-center justify-between rounded-lg px-3 py-2 border text-sm font-semibold"
-                          style={{ borderColor: "var(--app-glass-border)", color: "var(--app-text)", background: "var(--app-surface)" }}
-                        >
-                          <div className="flex items-center gap-2">
-                            <ChevronRight
-                              className={`w-4 h-4 transition-transform ${isProviderExpanded ? "rotate-90" : ""}`}
-                              style={{ color: "var(--app-text-muted)" }}
-                            />
-                            <span>{providerLabel(group.provider)}</span>
-                          </div>
-                          <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "var(--app-glass-bg-strong)", color: "var(--app-text-muted)" }}>
-                            {group.variants.length}
-                          </span>
-                        </button>
-
-                        {isProviderExpanded && (
-                          <div className="space-y-3">
-                            {group.variants.map((variantGroup) => {
-                              const variantKey = `${group.provider}::${variantGroup.variant}`;
-                              const isVariantExpanded = expandedVariants[variantKey];
-                              const isVariantAvailable = variantGroup.items.every(
-                                (item) => item.status === "active" && item.used_seconds < item.quota_seconds
-                              );
-                              return (
-                                <div key={variantKey} className="space-y-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleVariant(group.provider, variantGroup.variant)}
-                                    className="w-full flex items-center justify-between rounded-lg px-3 py-2 border text-sm"
-                                    style={{ borderColor: "var(--app-glass-border)", color: "var(--app-text)", background: "var(--app-surface)" }}
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      <ChevronRight
-                                        className={`w-4 h-4 transition-transform ${isVariantExpanded ? "rotate-90" : ""}`}
-                                        style={{ color: "var(--app-text-muted)" }}
-                                      />
-                                      <span className="text-sm font-medium">{variantLabel(variantGroup.variant)}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: isVariantAvailable ? "var(--app-success-soft)" : "var(--app-danger-soft)", color: isVariantAvailable ? "var(--app-success)" : "var(--app-danger)" }}>
-                                        {isVariantAvailable ? t("settings.asrQuotaAvailable") : t("settings.asrQuotaUnavailable")}
-                                      </span>
-                                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "var(--app-glass-bg-strong)", color: "var(--app-text-muted)" }}>
-                                        {variantGroup.items.length}
-                                      </span>
-                                    </div>
-                                  </button>
-
-                                  {isVariantExpanded && (
-                                    <div className="space-y-3">
-                                      {variantGroup.items.map((item) => {
-                                        const key = `${item.provider}-${item.variant || "file"}-${item.window_type}`;
-                                        const isEditing = editingQuotaKey === key;
-                                        const isEditable = canEditWindowType(item.window_type);
-                                        const remainingSeconds = Math.max(0, item.quota_seconds - item.used_seconds);
-                                        const percent = item.quota_seconds
-                                          ? Math.min(100, Math.round((item.used_seconds / item.quota_seconds) * 100))
-                                          : 0;
-                                        return (
-                                          <div
-                                            key={key}
-                                            className="rounded-xl border p-4 space-y-3"
-                                            style={{ borderColor: "var(--app-glass-border)" }}
-                                          >
-                                            <div className="flex items-start justify-between gap-4">
-                                              <div className="space-y-1">
-                                                <div className="flex items-center gap-2">
-                                                  <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "var(--app-primary-soft-2)", color: "var(--app-primary)" }}>
-                                                    {windowTypeLabel(item.window_type)}
-                                                  </span>
-                                                  <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "var(--app-glass-bg-strong)", color: "var(--app-text-muted)" }}>
-                                                    {statusLabel(item.status)}
-                                                  </span>
-                                                </div>
-                                                <p className="text-xs text-[var(--app-text-muted)]">
-                                                  {formatWindow(item.window_start, item.window_end, item.window_type === "total")}
-                                                </p>
-                                              </div>
-                                              {!isEditing && (
-                                                <Button
-                                                  variant="secondary"
-                                                  size="sm"
-                                                  onClick={() => startEditQuota(item)}
-                                                  disabled={!isEditable}
-                                                >
-                                                  {t("settings.asrQuotaEdit")}
-                                                </Button>
-                                              )}
-                                            </div>
-
-                                            <div className="space-y-2">
-                                              <div className="flex items-center justify-between text-xs text-[var(--app-text-muted)]">
-                                                <span>{t("settings.asrQuotaRemaining", { remaining: formatHoursFromSeconds(remainingSeconds) })}</span>
-                                                <span>{t("settings.asrQuotaTotal", { total: formatHoursFromSeconds(item.quota_seconds) })}</span>
-                                              </div>
-                                              <Progress value={percent} />
-                                            </div>
-
-                                            {isEditing && quotaForm && (
-                                              <div className="mt-2 space-y-4 rounded-lg border p-3" style={{ borderColor: "var(--app-glass-border)" }}>
-                                              <div className="grid gap-3 sm:grid-cols-2">
-                                                <div className="space-y-1">
-                                                  <Label className="text-xs">{t("settings.asrQuotaWindowLabel")}</Label>
-                                                  <Select
-                                                    value={quotaForm.window_type}
-                                                    onValueChange={(value) =>
-                                                      setQuotaForm((prev) =>
-                                                        prev
-                                                          ? {
-                                                              ...prev,
-                                                              window_type: value as AsrQuotaItem["window_type"],
-                                                              window_start:
-                                                                value === "total"
-                                                                  ? normalizeDateInput(prev.window_start, DEFAULT_TOTAL_START)
-                                                                  : prev.window_start,
-                                                              window_end:
-                                                                value === "total"
-                                                                  ? normalizeDateInput(prev.window_end, DEFAULT_TOTAL_END)
-                                                                  : prev.window_end,
-                                                            }
-                                                          : prev
-                                                      )
-                                                    }
-                                                  >
-                                                    <SelectTrigger className="w-full">
-                                                      <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                      <SelectItem value="day">{windowTypeLabel("day")}</SelectItem>
-                                                      <SelectItem value="month">{windowTypeLabel("month")}</SelectItem>
-                                                      <SelectItem value="total">{windowTypeLabel("total")}</SelectItem>
-                                                    </SelectContent>
-                                                  </Select>
-                                                </div>
-                                                <div className="space-y-1">
-                                                  <Label className="text-xs">{t("settings.asrQuotaHoursLabel")}</Label>
-                                                    <input
-                                                      type="number"
-                                                      min={0}
-                                                      step="0.1"
-                                                      className="glass-control h-9 w-full rounded-md px-3 text-sm"
-                                                      value={quotaForm.quota_hours}
-                                                      onChange={(e) =>
-                                                        setQuotaForm((prev) =>
-                                                          prev
-                                                            ? {
-                                                                ...prev,
-                                                                quota_hours: Number(e.target.value),
-                                                              }
-                                                            : prev
-                                                        )
-                                                      }
-                                                    />
-                                                </div>
-                                              </div>
-
-                                              <div className="grid gap-3 sm:grid-cols-2">
-                                                <div className="space-y-1">
-                                                  <Label className="text-xs">{t("settings.asrQuotaUsedHoursLabel")}</Label>
-                                                  <input
-                                                    type="number"
-                                                    min={0}
-                                                    step="0.1"
-                                                    className="glass-control h-9 w-full rounded-md px-3 text-sm"
-                                                    value={quotaForm.used_hours}
-                                                    onChange={(e) =>
-                                                      setQuotaForm((prev) =>
-                                                        prev
-                                                          ? {
-                                                              ...prev,
-                                                              used_hours: Number(e.target.value),
-                                                            }
-                                                          : prev
-                                                      )
-                                                    }
-                                                  />
-                                                </div>
-                                              </div>
-
-                                              {quotaForm.window_type === "total" && (
-                                                <div className="grid gap-3 sm:grid-cols-2">
-                                                  <div className="space-y-1">
-                                                    <Label className="text-xs">{t("settings.asrQuotaWindowStart")}</Label>
-                                                    <input
-                                                      type="date"
-                                                      className="glass-control h-9 w-full rounded-md px-3 text-sm"
-                                                      value={toDateInput(quotaForm.window_start)}
-                                                      onChange={(e) =>
-                                                        setQuotaForm((prev) =>
-                                                          prev
-                                                            ? {
-                                                                ...prev,
-                                                                window_start: e.target.value,
-                                                              }
-                                                            : prev
-                                                        )
-                                                      }
-                                                    />
-                                                  </div>
-                                                  <div className="space-y-1">
-                                                    <Label className="text-xs">{t("settings.asrQuotaWindowEnd")}</Label>
-                                                    <input
-                                                      type="date"
-                                                      className="glass-control h-9 w-full rounded-md px-3 text-sm"
-                                                      value={toDateInput(quotaForm.window_end)}
-                                                      onChange={(e) =>
-                                                        setQuotaForm((prev) =>
-                                                          prev
-                                                            ? {
-                                                                ...prev,
-                                                                window_end: e.target.value,
-                                                              }
-                                                            : prev
-                                                        )
-                                                      }
-                                                    />
-                                                  </div>
-                                                </div>
-                                              )}
-
-                                              <div className="flex items-center justify-between">
-                                                <div className="space-y-1">
-                                                  <Label className="text-xs">{t("settings.asrQuotaResetLabel")}</Label>
-                                                  <p className="text-xs text-[var(--app-text-muted)]">
-                                                    {t("settings.asrQuotaResetDesc")}
-                                                  </p>
-                                                </div>
-                                                <Switch
-                                                  checked={quotaForm.reset}
-                                                  onCheckedChange={(checked) =>
-                                                    setQuotaForm((prev) =>
-                                                      prev ? { ...prev, reset: checked } : prev
-                                                    )
-                                                  }
-                                                />
-                                              </div>
-
-                                              <div className="flex justify-end gap-2">
-                                                <Button
-                                                  variant="secondary"
-                                                  size="sm"
-                                                  onClick={cancelEditQuota}
-                                                >
-                                                  {t("settings.asrQuotaCancel")}
-                                                </Button>
-                                                <Button
-                                                  size="sm"
-                                                  onClick={() => handleSaveQuota(item)}
-                                                  disabled={asrSaving[key]}
-                                                >
-                                                  {asrSaving[key]
-                                                    ? t("settings.asrQuotaSaving")
-                                                    : t("settings.asrQuotaSave")}
-                                                </Button>
-                                              </div>
-                                            </div>
-                                            )}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
+            {/* ASR 免费额度（管理员不显示） */}
+            {!isAdmin && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>{t("settings.asrFreeQuotaTitle")}</CardTitle>
+                  <CardDescription>
+                    {t("settings.asrFreeQuotaDesc")}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {asrUsageLoading && (
+                    <p className="text-sm text-[var(--app-text-muted)]">{t("common.loading")}...</p>
+                  )}
+                  {!asrUsageLoading && asrUsageError && (
+                    <p className="text-sm text-[var(--app-danger)]">{asrUsageError}</p>
+                  )}
+                  {!asrUsageLoading && !asrUsageError && !asrFreeQuota && (
+                    <p className="text-sm text-[var(--app-text-muted)]">{t("settings.asrUsageEmpty")}</p>
+                  )}
+                  {!asrUsageLoading && !asrUsageError && asrFreeQuota && (
+                    <div
+                      className="rounded-xl border p-4 space-y-4"
+                      style={{ borderColor: "var(--app-glass-border)", background: "var(--app-glass-bg)" }}
+                    >
+                      <div className="grid grid-cols-3 gap-4 text-center">
+                        <div>
+                          <p className="text-xs" style={{ color: "var(--app-text-muted)" }}>
+                            {t("settings.asrFreeQuotaTotal")}
+                          </p>
+                          <p className="text-lg font-semibold" style={{ color: "var(--app-text)" }}>
+                            {asrFreeQuota.free_quota_hours.toFixed(2)}h
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs" style={{ color: "var(--app-text-muted)" }}>
+                            {t("settings.asrFreeQuotaUsed")}
+                          </p>
+                          <p className="text-lg font-semibold" style={{ color: "var(--app-text)" }}>
+                            {asrFreeQuota.used_hours.toFixed(2)}h
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs" style={{ color: "var(--app-text-muted)" }}>
+                            {t("settings.asrFreeQuotaRemaining")}
+                          </p>
+                          <p
+                            className="text-lg font-semibold"
+                            style={{
+                              color: asrFreeQuota.remaining_hours > 0
+                                ? "var(--app-success)"
+                                : "var(--app-danger)"
+                            }}
+                          >
+                            {asrFreeQuota.remaining_hours.toFixed(2)}h
+                          </p>
+                        </div>
                       </div>
-                    );
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+
+                      {/* 进度条 */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-xs" style={{ color: "var(--app-text-muted)" }}>
+                          <span>{t("settings.asrFreeQuotaUsageLabel")}</span>
+                          <span>
+                            {asrFreeQuota.free_quota_hours > 0
+                              ? Math.round((asrFreeQuota.used_hours / asrFreeQuota.free_quota_hours) * 100)
+                              : 0}%
+                          </span>
+                        </div>
+                        <Progress
+                          value={
+                            asrFreeQuota.free_quota_hours > 0
+                              ? Math.min(100, (asrFreeQuota.used_hours / asrFreeQuota.free_quota_hours) * 100)
+                              : 0
+                          }
+                        />
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
 
             {/* Account Info */}
             <Card>

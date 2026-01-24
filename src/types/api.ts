@@ -109,17 +109,32 @@ export interface PresignResponseNew {
 export type PresignResponse = PresignResponseExists | PresignResponseNew
 
 // ============================================================================
-// ASR 额度
+// ASR 使用量
 // ============================================================================
 
-export type AsrQuotaStatus = "active" | "inactive" | "expired" | "exhausted"
+// 用户免费额度信息
+export interface AsrUserFreeQuotaResponse {
+  free_quota_seconds: number    // 总免费额度（秒），-1 表示无限制
+  free_quota_hours: number      // 总免费额度（小时），-1 表示无限制
+  used_seconds: number          // 已消耗（秒）
+  used_hours: number            // 已消耗（小时）
+  remaining_seconds: number     // 剩余免费额度（秒），-1 表示无限制
+  remaining_hours: number       // 剩余免费额度（小时），-1 表示无限制
+  is_unlimited: boolean         // 是否不受配额限制（管理员）
+}
+
+// ============================================================================
+// ASR 配额（管理员）
+// ============================================================================
+
+export type AsrQuotaStatus = "active" | "exhausted"
 
 export interface AsrQuotaItem {
   provider: string
-  variant?: string
-  window_type: "day" | "month" | "total" | "week" | "year"
-  window_start?: string
-  window_end?: string
+  variant: string
+  window_type: "day" | "month" | "total"
+  window_start: string
+  window_end: string
   quota_seconds: number
   used_seconds: number
   status: AsrQuotaStatus
@@ -135,7 +150,7 @@ export interface AsrQuotaRefreshRequest {
   window_type: AsrQuotaItem["window_type"]
   quota_seconds?: number
   quota_hours?: number
-  reset: boolean
+  reset?: boolean
   window_start?: string
   window_end?: string
   used_seconds?: number
@@ -143,6 +158,46 @@ export interface AsrQuotaRefreshRequest {
 
 export interface AsrQuotaRefreshResponse {
   item: AsrQuotaItem
+}
+
+// 管理员 ASR 概览
+
+// 免费额度状态（只关心免费额度本身）
+export interface AsrFreeQuotaStatus {
+  provider: string              // 提供商 ID
+  variant: string               // 变体 (file, file_fast)
+  display_name: string          // 显示名称
+  free_quota_hours: number      // 免费额度（小时）
+  used_hours: number            // 已使用（小时）
+  remaining_hours: number       // 剩余（小时）
+  usage_percent: number         // 使用百分比 0-100
+  reset_period: string          // 刷新周期 (monthly, yearly)
+  period_start: string          // 当前周期开始时间
+  period_end: string            // 当前周期结束时间
+}
+
+// 提供商付费使用统计（所有提供商）
+export interface AsrProviderUsage {
+  provider: string              // 提供商 ID
+  variant: string               // 变体 (file, file_fast)
+  display_name: string          // 显示名称
+  cost_per_hour: number         // 单价（元/小时）
+  paid_hours: number            // 付费时长（小时）
+  paid_cost: number             // 付费金额（元）
+  is_enabled: boolean           // 是否启用
+}
+
+export interface AsrUsageSummary {
+  total_used_hours: number      // 总使用量（小时）
+  total_free_hours: number      // 免费额度消耗（小时）
+  total_paid_hours: number      // 付费时长（小时）
+  total_cost: number            // 总成本（元）
+}
+
+export interface AsrAdminOverviewResponse {
+  summary: AsrUsageSummary
+  free_quota_status: AsrFreeQuotaStatus[]    // 免费额度状态
+  providers_usage: AsrProviderUsage[]        // 所有提供商付费使用统计
 }
 
 // ============================================================================
@@ -590,7 +645,6 @@ export type WebSocketMessage = ApiResponse<WebSocketData>
 
 /**
  * 用户信息
- * 注意：/users/me 接口可能尚未实现
  */
 export interface UserProfile {
   id: string
@@ -600,6 +654,7 @@ export interface UserProfile {
   image_url?: string | null
   locale?: string
   timezone?: string
+  is_admin?: boolean
   created_at?: string
 }
 

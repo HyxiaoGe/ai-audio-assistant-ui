@@ -429,6 +429,37 @@
 }
 
 /* ============================================================================
+ * Admin Avatar Glow Effect
+ * ============================================================================ */
+
+.admin-avatar-glow {
+  position: relative;
+}
+
+.admin-avatar-glow::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #fbbf24, #f59e0b, #d97706);
+  opacity: 0.6;
+  filter: blur(4px);
+  animation: admin-glow 2s ease-in-out infinite;
+  z-index: -1;
+}
+
+@keyframes admin-glow {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.05);
+  }
+}
+
+/* ============================================================================
  * Markdown Summary Styles (V1.2 Format Support)
  * ============================================================================ */
 

@@ -13,9 +13,8 @@ import { translateStatic } from "@/lib/i18n-static"
 import {
   ApiError,
   ApiResponse,
-  AsrQuotaListResponse,
-  AsrQuotaRefreshRequest,
-  AsrQuotaRefreshResponse,
+  AsrUserFreeQuotaResponse,
+  AsrAdminOverviewResponse,
   BatchDeleteResponse,
   CompareSummariesRequest,
   CompareSummariesResponse,
@@ -209,24 +208,19 @@ export class APIClient {
   }
 
   // ==========================================================================
-  // ASR 额度
+  // ASR 使用量
   // ==========================================================================
 
-  async getAsrQuotas(): Promise<AsrQuotaListResponse> {
+  async getAsrFreeQuota(): Promise<AsrUserFreeQuotaResponse> {
     return request("/asr/quotas", { method: "GET" }, this.token)
   }
 
-  async refreshAsrQuota(
-    data: AsrQuotaRefreshRequest
-  ): Promise<AsrQuotaRefreshResponse> {
-    return request(
-      "/asr/quotas/refresh",
-      {
-        method: "POST",
-        body: JSON.stringify(data),
-      },
-      this.token
-    )
+  // ==========================================================================
+  // ASR 配额（管理员）
+  // ==========================================================================
+
+  async getAsrAdminOverview(): Promise<AsrAdminOverviewResponse> {
+    return request("/asr/quotas/admin/overview", { method: "GET" }, this.token)
   }
 
   // ==========================================================================

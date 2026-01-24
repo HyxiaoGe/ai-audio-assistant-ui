@@ -6,13 +6,13 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import { clearToken } from '@/lib/auth-token';
-import { Moon, Sun, ChevronDown, Mic, LogOut, Play, Pause, X } from 'lucide-react';
+import { Moon, Sun, ChevronDown, Mic, LogOut, Play, Pause, X, Shield } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useI18n } from '@/lib/i18n-context';
 import { useTheme } from "next-themes";
-import { useAPIClient } from "@/lib/use-api-client";
 import NotificationBell from '@/components/notifications/NotificationBell';
 import { useAudioStore } from '@/store/audio-store';
+import { useUserStore } from '@/store/user-store';
 
 interface HeaderProps {
   isAuthenticated: boolean;
@@ -34,7 +34,6 @@ export default function Header({
   const [hoverRatio, setHoverRatio] = useState<number | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const { data: session, status: sessionStatus, update } = useSession();
-  const client = useAPIClient();
   const { t } = useI18n();
   const { resolvedTheme } = useTheme();
   const pathname = usePathname();
@@ -58,28 +57,29 @@ export default function Header({
     setIsMounted(true);
   }, []);
 
+  const loadUserProfile = useUserStore((state) => state.loadProfile);
+  const userProfile = useUserStore((state) => state.profile);
+  const profileLoaded = useUserStore((state) => state.profileLoaded);
+  const isAdmin = useUserStore((state) => state.isAdmin);
+
   useEffect(() => {
     if (!session?.user) return;
-    let isMounted = true;
-    const loadProfile = async () => {
-      try {
-        const profile = await client.getCurrentUser();
-        if (!isMounted) return;
-        if (profile?.image_url) {
-          setAvatarSrc(profile.image_url);
-          if (!session.user?.image && typeof update === "function") {
-            await update({ user: { image: profile.image_url } });
-          }
-        }
-      } catch {
-        // Fallback to session user image if profile fetch fails.
+    // Load profile into global store
+    if (!profileLoaded) {
+      loadUserProfile();
+    }
+  }, [session?.user, profileLoaded, loadUserProfile]);
+
+  useEffect(() => {
+    // Update avatar from user profile
+    if (userProfile?.image_url) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAvatarSrc(userProfile.image_url);
+      if (!session?.user?.image && typeof update === "function") {
+        update({ user: { image: userProfile.image_url } });
       }
-    };
-    loadProfile();
-    return () => {
-      isMounted = false;
-    };
-  }, [client, session?.user, update]);
+    }
+  }, [userProfile, session?.user?.image, update]);
 
   useEffect(() => {
     if (!isMenuOpen) return;
@@ -312,22 +312,44 @@ export default function Header({
               onClick={() => setIsMenuOpen((prev) => !prev)}
               className="flex items-center gap-2 hover:opacity-70 transition-opacity"
             >
-              <Avatar size="sm">
-                <AvatarImage
-                  src={resolvedAvatarSrc || undefined}
-                  referrerPolicy="no-referrer"
-                  onError={() => setAvatarSrc("")}
-                />
-                <AvatarFallback>{avatarName.charAt(0).toUpperCase()}</AvatarFallback>
-              </Avatar>
+              <div className={`relative ${isAdmin ? "admin-avatar-glow" : ""}`}>
+                <Avatar
+                  size="sm"
+                  className={isAdmin ? "ring-2 ring-amber-400" : ""}
+                >
+                  <AvatarImage
+                    src={resolvedAvatarSrc || undefined}
+                    referrerPolicy="no-referrer"
+                    onError={() => setAvatarSrc("")}
+                  />
+                  <AvatarFallback>{avatarName.charAt(0).toUpperCase()}</AvatarFallback>
+                </Avatar>
+              </div>
               <ChevronDown className="w-4 h-4" style={{ color: "var(--app-text-subtle)" }} />
             </button>
 
             {isMenuOpen && (
               <div
-                className="glass-panel-strong absolute right-0 mt-2 w-36 rounded-lg border z-10"
+                className="glass-panel-strong absolute right-0 mt-2 w-40 rounded-lg border z-10 overflow-hidden"
                 style={{ borderColor: "var(--app-glass-border)" }}
               >
+                {isAdmin && (
+                  <>
+                    <Link
+                      href="/admin"
+                      className="w-full px-3 py-2 flex items-center gap-2 text-sm transition-colors hover:bg-[var(--app-glass-hover)]"
+                      style={{ color: "var(--app-text)" }}
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      <Shield className="w-4 h-4" />
+                      {t("admin.console")}
+                    </Link>
+                    <div
+                      className="border-t"
+                      style={{ borderColor: "var(--app-glass-border)" }}
+                    />
+                  </>
+                )}
                 <button
                   onClick={handleLogout}
                   className="w-full px-3 py-2 flex items-center gap-2 text-sm transition-colors hover:bg-[var(--app-glass-hover)]"
