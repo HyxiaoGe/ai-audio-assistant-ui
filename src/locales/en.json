@@ -394,6 +394,15 @@
     },
     "actions": {
       "backToList": "Back to tasks"
+    },
+    "youtubeInfo": {
+      "title": "YouTube Video Info",
+      "publishedAt": "Published",
+      "views": "{count} views",
+      "likes": "{count} likes",
+      "openOnYouTube": "Open on YouTube",
+      "hideInfo": "Hide",
+      "showInfo": "Show"
     }
   },
   "status": {

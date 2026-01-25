@@ -287,6 +287,25 @@ export interface TaskListResponse {
   page_size: number
 }
 
+/**
+ * YouTube 视频信息
+ * 当任务来源是 YouTube 时返回
+ */
+export interface YouTubeVideoInfo {
+  video_id: string            // YouTube 视频 ID
+  channel_id: string          // 频道 ID
+  channel_title?: string      // 频道名称
+  channel_thumbnail?: string  // 频道头像 URL
+  title: string               // 视频标题
+  description?: string        // 视频描述
+  thumbnail_url?: string      // 视频缩略图 URL
+  published_at?: string       // 发布时间 (ISO 8601)
+  duration_seconds?: number   // 视频时长（秒）
+  view_count?: number         // 播放量
+  like_count?: number         // 点赞数
+  comment_count?: number      // 评论数
+}
+
 export interface TaskDetail {
   id: string
   title: string
@@ -304,6 +323,7 @@ export interface TaskDetail {
   updated_at: string
   error_message?: string
   error_code?: number
+  youtube_info?: YouTubeVideoInfo  // YouTube 视频元数据（仅 YouTube 来源任务）
 }
 
 export type TaskRetryResponse =

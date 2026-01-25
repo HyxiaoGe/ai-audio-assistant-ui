@@ -394,6 +394,15 @@
     },
     "actions": {
       "backToList": "返回任务列表"
+    },
+    "youtubeInfo": {
+      "title": "YouTube 视频信息",
+      "publishedAt": "发布于",
+      "views": "{count} 次播放",
+      "likes": "{count} 点赞",
+      "openOnYouTube": "在 YouTube 打开",
+      "hideInfo": "收起",
+      "showInfo": "展开"
     }
   },
   "status": {

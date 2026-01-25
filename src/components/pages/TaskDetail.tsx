@@ -22,6 +22,7 @@ import {
 import PlayerBar from '@/components/task/PlayerBar';
 import TranscriptItem from '@/components/task/TranscriptItem';
 import TabSwitch from '@/components/task/TabSwitch';
+import YouTubePlayerCard from '@/components/task/YouTubePlayerCard';
 import { VisualSummaryView } from '@/components/task/VisualSummaryView';
 import ProcessingState from '@/components/common/ProcessingState';
 import ErrorState from '@/components/common/ErrorState';
@@ -1386,19 +1387,26 @@ export default function TaskDetail({
       { id: 'actions', label: t("task.tabs.actions") }
     ];
 
-    // Add visual summary tabs dynamically
-    const visualTabs = visualSummaries.map((summary) => {
-      const visualType = summary.summary_type.replace('visual_', '');
-      const labelMap: Record<string, string> = {
-        mindmap: t("summary.type.mindmap"),
-        timeline: t("summary.type.timeline"),
-        flowchart: t("summary.type.flowchart"),
-      };
-      return {
-        id: summary.summary_type,
-        label: labelMap[visualType] || visualType
-      };
-    });
+    // Add visual summary tabs dynamically (deduplicated by summary_type)
+    const seenTypes = new Set<string>();
+    const visualTabs = visualSummaries
+      .filter((summary) => {
+        if (seenTypes.has(summary.summary_type)) return false;
+        seenTypes.add(summary.summary_type);
+        return true;
+      })
+      .map((summary) => {
+        const visualType = summary.summary_type.replace('visual_', '');
+        const labelMap: Record<string, string> = {
+          mindmap: t("summary.type.mindmap"),
+          timeline: t("summary.type.timeline"),
+          flowchart: t("summary.type.flowchart"),
+        };
+        return {
+          id: summary.summary_type,
+          label: labelMap[visualType] || visualType
+        };
+      });
 
     return [...baseTabs, ...visualTabs];
   }, [t, visualSummaries]);
@@ -1939,16 +1947,28 @@ export default function TaskDetail({
             </div>
           </div>
 
-          {/* Player Bar */}
-          <div className="px-6 py-4" style={{ background: 'var(--app-glass-bg)' }}>
-            <PlayerBar
+          {/* Player Section - YouTube integrated card or standard PlayerBar */}
+          {task.source_type === 'youtube' && task.youtube_info ? (
+            <YouTubePlayerCard
+              youtubeInfo={task.youtube_info}
+              sourceUrl={task.source_url}
               currentTime={displayCurrentTime}
               duration={duration}
               isPlaying={displayIsPlaying}
               onPlayPause={handlePlayPause}
               onSeek={handleSeek}
             />
-          </div>
+          ) : (
+            <div className="px-6 py-4" style={{ background: 'var(--app-glass-bg)' }}>
+              <PlayerBar
+                currentTime={displayCurrentTime}
+                duration={duration}
+                isPlaying={displayIsPlaying}
+                onPlayPause={handlePlayPause}
+                onSeek={handleSeek}
+              />
+            </div>
+          )}
 
           {/* Two Column Layout */}
           <div className="flex-1 flex overflow-hidden border-t" style={{ borderColor: 'var(--app-glass-border)' }}>
