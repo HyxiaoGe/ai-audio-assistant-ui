@@ -58,7 +58,6 @@ interface SubscriptionsProps {
   isAuthenticated: boolean;
   onOpenLogin: () => void;
   language?: "zh" | "en";
-  onToggleLanguage?: () => void;
   onToggleTheme?: () => void;
   searchParams: ReadonlyURLSearchParams;
 }
@@ -67,7 +66,6 @@ export default function Subscriptions({
   isAuthenticated,
   onOpenLogin,
   language = "zh",
-  onToggleLanguage,
   onToggleTheme,
   searchParams,
 }: SubscriptionsProps) {
@@ -706,8 +704,6 @@ export default function Subscriptions({
       <Header
         isAuthenticated={isAuthenticated}
         onOpenLogin={onOpenLogin}
-        language={language}
-        onToggleLanguage={onToggleLanguage}
         onToggleTheme={onToggleTheme}
       />
       <div className="flex-1 flex overflow-hidden">

@@ -129,8 +129,8 @@
   --app-glass-blur: 22px;
   --app-glass-hover: rgba(255, 255, 255, 0.7);
   --app-glass-glow: 0 10px 20px rgba(59, 130, 246, 0.18);
-  --app-sidebar-item-hover: rgba(15, 23, 42, 0.03);
-  --app-sidebar-item-active: rgba(59, 130, 246, 0.1);
+  --app-sidebar-item-hover: rgba(15, 23, 42, 0.08);
+  --app-sidebar-item-active: rgba(59, 130, 246, 0.12);
   --app-sidebar-hover-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
   --app-sidebar-inner-glow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
   --app-sidebar-ambient-glow: 0 8px 18px rgba(59, 130, 246, 0.14);
@@ -217,8 +217,8 @@
   --app-glass-blur: 26px;
   --app-glass-hover: rgba(15, 23, 42, 0.6);
   --app-glass-glow: 0 12px 24px rgba(96, 165, 250, 0.2);
-  --app-sidebar-item-hover: rgba(148, 163, 184, 0.16);
-  --app-sidebar-item-active: rgba(59, 130, 246, 0.22);
+  --app-sidebar-item-hover: rgba(148, 163, 184, 0.22);
+  --app-sidebar-item-active: rgba(59, 130, 246, 0.28);
   --app-sidebar-hover-shadow: 0 14px 30px rgba(2, 6, 23, 0.6);
   --app-sidebar-inner-glow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
   --app-sidebar-ambient-glow: 0 10px 22px rgba(96, 165, 250, 0.18);
@@ -256,7 +256,8 @@
   box-shadow: var(--app-sidebar-inner-glow), var(--app-sidebar-hover-shadow),
     var(--app-sidebar-ambient-glow);
   border-color: var(--app-glass-border);
-  transform: translateX(2px);
+  border-left: 3px solid var(--app-primary);
+  transform: translateX(4px);
   color: var(--app-text);
 }
 

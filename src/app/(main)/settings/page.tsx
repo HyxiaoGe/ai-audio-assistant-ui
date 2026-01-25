@@ -11,7 +11,7 @@ import FullPageLoader from "@/components/common/FullPageLoader";
 
 function SettingsContent() {
   const { data: session, status } = useSession();
-  const { language, setLanguage, setTheme } = useSettings();
+  const { setTheme } = useSettings();
   const { resolvedTheme } = useTheme();
   const [loginOpen, setLoginOpen] = useState(false);
   const searchParams = useSearchParams();
@@ -30,9 +30,6 @@ function SettingsContent() {
     }
   }, [searchParams, router]);
 
-  const toggleLanguage = () => {
-    setLanguage(language === "zh" ? "en" : "zh");
-  };
 
   const toggleTheme = () => {
     setTheme(resolvedTheme === "dark" ? "light" : "dark");
@@ -47,8 +44,6 @@ function SettingsContent() {
       <Settings
         isAuthenticated={!!session?.user}
         onOpenLogin={() => setLoginOpen(true)}
-        language={language}
-        onToggleLanguage={toggleLanguage}
         onToggleTheme={toggleTheme}
       />
       <LoginModal

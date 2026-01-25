@@ -48,7 +48,6 @@ import { useDateFormatter } from '@/lib/use-date-formatter';
 
 interface TaskDetailProps {
   language?: 'zh' | 'en';
-  onToggleLanguage?: () => void;
   onToggleTheme?: () => void;
 }
 
@@ -84,7 +83,6 @@ interface Speaker {
 
 export default function TaskDetail({
   language = 'zh',
-  onToggleLanguage = () => {},
   onToggleTheme = () => {}
 }: TaskDetailProps) {
   const router = useRouter();
@@ -1591,8 +1589,6 @@ export default function TaskDetail({
         <Header
           isAuthenticated={false}
           onOpenLogin={() => setLoginOpen(true)}
-          language={language}
-          onToggleLanguage={onToggleLanguage}
           onToggleTheme={onToggleTheme}
         />
         <div className="flex-1 flex items-center justify-center">
@@ -1619,8 +1615,6 @@ export default function TaskDetail({
         <Header
           isAuthenticated={!!session?.user}
           onOpenLogin={() => setLoginOpen(true)}
-          language={language}
-          onToggleLanguage={onToggleLanguage}
           onToggleTheme={onToggleTheme}
         />
         <div className="flex-1 flex overflow-hidden">
@@ -1643,8 +1637,6 @@ export default function TaskDetail({
         <Header
           isAuthenticated={!!session?.user}
           onOpenLogin={() => setLoginOpen(true)}
-          language={language}
-          onToggleLanguage={onToggleLanguage}
           onToggleTheme={onToggleTheme}
         />
         <div className="flex-1 flex items-center justify-center">
@@ -1667,8 +1659,6 @@ export default function TaskDetail({
         <Header
           isAuthenticated={!!session?.user}
           onOpenLogin={() => setLoginOpen(true)}
-          language={language}
-          onToggleLanguage={onToggleLanguage}
           onToggleTheme={onToggleTheme}
         />
 
@@ -1749,8 +1739,6 @@ export default function TaskDetail({
         <Header
           isAuthenticated={!!session?.user}
           onOpenLogin={() => setLoginOpen(true)}
-          language={language}
-          onToggleLanguage={onToggleLanguage}
           onToggleTheme={onToggleTheme}
         />
 
@@ -1881,8 +1869,6 @@ export default function TaskDetail({
       <Header 
         isAuthenticated={!!session?.user}
         onOpenLogin={() => setLoginOpen(true)}
-        language={language}
-        onToggleLanguage={onToggleLanguage}
         onToggleTheme={onToggleTheme}
       />
 

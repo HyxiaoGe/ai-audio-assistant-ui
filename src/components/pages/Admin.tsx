@@ -16,7 +16,6 @@ interface AdminProps {
   isAuthenticated?: boolean;
   onOpenLogin?: () => void;
   language?: 'zh' | 'en';
-  onToggleLanguage?: () => void;
   onToggleTheme?: () => void;
 }
 
@@ -24,7 +23,6 @@ export default function Admin({
   isAuthenticated = false,
   onOpenLogin = () => {},
   language = 'zh',
-  onToggleLanguage = () => {},
   onToggleTheme = () => {}
 }: AdminProps) {
   const { t } = useI18n();
@@ -69,8 +67,6 @@ export default function Admin({
         <Header
           isAuthenticated={isAuthenticated}
           onOpenLogin={onOpenLogin}
-          language={language}
-          onToggleLanguage={onToggleLanguage}
           onToggleTheme={onToggleTheme}
         />
         <div className="flex-1 flex overflow-hidden">
@@ -90,8 +86,6 @@ export default function Admin({
         <Header
           isAuthenticated={isAuthenticated}
           onOpenLogin={onOpenLogin}
-          language={language}
-          onToggleLanguage={onToggleLanguage}
           onToggleTheme={onToggleTheme}
         />
         <div className="flex-1 flex overflow-hidden">
@@ -117,8 +111,6 @@ export default function Admin({
       <Header
         isAuthenticated={isAuthenticated}
         onOpenLogin={onOpenLogin}
-        language={language}
-        onToggleLanguage={onToggleLanguage}
         onToggleTheme={onToggleTheme}
       />
 

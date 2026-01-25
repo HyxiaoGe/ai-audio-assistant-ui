@@ -17,16 +17,12 @@ import { useUserStore } from '@/store/user-store';
 interface HeaderProps {
   isAuthenticated: boolean;
   onOpenLogin: () => void;
-  language?: 'zh' | 'en';
-  onToggleLanguage?: () => void;
   onToggleTheme?: () => void;
 }
 
-export default function Header({ 
-  isAuthenticated, 
+export default function Header({
+  isAuthenticated,
   onOpenLogin,
-  language = 'zh',
-  onToggleLanguage = () => {},
   onToggleTheme = () => {}
 }: HeaderProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -265,15 +261,6 @@ export default function Header({
             </button>
           </div>
         )}
-        {/* 语言切换 */}
-        <button 
-          onClick={onToggleLanguage}
-          className="text-sm transition-all hover:opacity-70 px-2 py-1 rounded"
-          style={{ color: "var(--app-text-muted)" }}
-        >
-          {language === 'zh' ? t("header.languageToggleZh") : t("header.languageToggleEn")}
-        </button>
-
         {/* 主题切换 */}
         <button 
           onClick={onToggleTheme}
@@ -332,7 +319,7 @@ export default function Header({
               >
                 <button
                   onClick={handleLogout}
-                  className="w-full px-3 py-2 flex items-center gap-2 text-sm transition-colors hover:bg-[var(--app-glass-hover)]"
+                  className="w-full px-3 py-2 flex items-center gap-2 text-sm transition-colors hover:bg-[var(--app-sidebar-item-hover)]"
                   style={{ color: "var(--app-text)" }}
                 >
                   <LogOut className="w-4 h-4" />

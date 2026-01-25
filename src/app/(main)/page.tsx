@@ -13,7 +13,7 @@ export default function DashboardPage() {
   const { data: session, status } = useSession();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
-  const { language, setLanguage, setTheme } = useSettings();
+  const { setTheme } = useSettings();
   const { resolvedTheme } = useTheme();
   const openLoginModal = () => {
     setShowLoginModal(true);
@@ -31,9 +31,6 @@ export default function DashboardPage() {
     setShowNewTaskModal(false);
   };
 
-  const toggleLanguage = () => {
-    setLanguage(language === "zh" ? "en" : "zh");
-  };
 
   const toggleTheme = () => {
     setTheme(resolvedTheme === "dark" ? "light" : "dark");
@@ -50,8 +47,6 @@ export default function DashboardPage() {
         onOpenLogin={openLoginModal}
         onOpenNewTask={openNewTaskModal}
         userName={session?.user?.name}
-        language={language}
-        onToggleLanguage={toggleLanguage}
         onToggleTheme={toggleTheme}
       />
 

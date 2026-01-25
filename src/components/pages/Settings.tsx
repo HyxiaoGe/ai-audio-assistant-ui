@@ -36,7 +36,6 @@ interface SettingsProps {
   isAuthenticated?: boolean;
   onOpenLogin?: () => void;
   language?: 'zh' | 'en';
-  onToggleLanguage?: () => void;
   onToggleTheme?: () => void;
 }
 
@@ -96,7 +95,6 @@ export default function Settings({
   isAuthenticated = false, 
   onOpenLogin = () => {},
   language = 'zh',
-  onToggleLanguage = () => {},
   onToggleTheme = () => {}
 }: SettingsProps) {
   const {
@@ -214,14 +212,6 @@ export default function Settings({
     localStorage.setItem("settings", JSON.stringify({ ...current, ...partial }));
   }, []);
 
-  const normalizeLocale = useCallback((value?: string) => {
-    if (!value) return null;
-    const lower = value.toLowerCase();
-    if (lower.startsWith("zh")) return "zh-CN";
-    if (lower.startsWith("en")) return "en-US";
-    return value;
-  }, []);
-
   const applyPreferences = useCallback((nextPreferences: UserPreferences) => {
     const taskDefaults = nextPreferences.task_defaults || {};
     const ui = nextPreferences.ui || {};
@@ -242,19 +232,15 @@ export default function Settings({
     }
 
     if (!uiTouchedRef.current) {
-      const normalizedLocale = normalizeLocale(ui.locale);
-      if (normalizedLocale && normalizedLocale !== locale) {
-        setLocale(normalizedLocale);
-      }
+      // Only apply timezone from API, not locale
+      // Locale is managed by the nav bar toggle and settings-context
+      // Applying locale from API would override user's nav bar selection
       if (ui.timezone && ui.timezone !== timeZone) {
         setTimeZone(ui.timezone);
       }
     }
   }, [
-    locale,
-    normalizeLocale,
     persistLocalSettings,
-    setLocale,
     setLocalSettings,
     setTimeZone,
     timeZone,
@@ -492,8 +478,6 @@ export default function Settings({
       <Header 
         isAuthenticated={isAuthenticated} 
         onOpenLogin={onOpenLogin}
-        language={language}
-        onToggleLanguage={onToggleLanguage}
         onToggleTheme={onToggleTheme}
       />
 

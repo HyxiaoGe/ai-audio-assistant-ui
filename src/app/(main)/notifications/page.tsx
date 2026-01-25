@@ -10,13 +10,10 @@ import FullPageLoader from "@/components/common/FullPageLoader";
 
 export default function NotificationsPage() {
   const { data: session, status } = useSession();
-  const { language, setLanguage, setTheme } = useSettings();
+  const { setTheme } = useSettings();
   const { resolvedTheme } = useTheme();
   const [loginOpen, setLoginOpen] = useState(false);
 
-  const toggleLanguage = () => {
-    setLanguage(language === "zh" ? "en" : "zh");
-  };
 
   const toggleTheme = () => {
     setTheme(resolvedTheme === "dark" ? "light" : "dark");
@@ -31,8 +28,6 @@ export default function NotificationsPage() {
       <Notifications
         isAuthenticated={!!session?.user}
         onOpenLogin={() => setLoginOpen(true)}
-        language={language}
-        onToggleLanguage={toggleLanguage}
         onToggleTheme={toggleTheme}
       />
       <LoginModal

@@ -20,7 +20,6 @@ interface TaskListProps {
   onOpenLogin: () => void;
   onOpenNewTask?: () => void;
   language?: 'zh' | 'en';
-  onToggleLanguage?: () => void;
   onToggleTheme?: () => void;
 }
 
@@ -29,7 +28,6 @@ export default function TaskList({
   onOpenLogin,
   onOpenNewTask,
   language = 'zh',
-  onToggleLanguage = () => {},
   onToggleTheme = () => {}
 }: TaskListProps) {
   const router = useRouter();
@@ -258,8 +256,6 @@ export default function TaskList({
       <Header 
         isAuthenticated={isAuthenticated} 
         onOpenLogin={onOpenLogin}
-        language={language}
-        onToggleLanguage={onToggleLanguage}
         onToggleTheme={onToggleTheme}
       />
 

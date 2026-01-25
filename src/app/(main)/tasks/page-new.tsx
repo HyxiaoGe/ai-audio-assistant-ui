@@ -20,11 +20,8 @@ export default function TasksPageNew() {
   const { data: session, status } = useSession()
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
   const [loginOpen, setLoginOpen] = useState(false)
-  const { language, setLanguage, setTheme } = useSettings()
+  const { setTheme } = useSettings()
   const { resolvedTheme } = useTheme()
-  const toggleLanguage = () => {
-    setLanguage(language === "zh" ? "en" : "zh")
-  }
 
   const toggleTheme = () => {
     setTheme(resolvedTheme === "dark" ? "light" : "dark")
@@ -40,8 +37,6 @@ export default function TasksPageNew() {
       <Header
         isAuthenticated={!!session?.user}
         onOpenLogin={() => setLoginOpen(true)}
-        language={language}
-        onToggleLanguage={toggleLanguage}
         onToggleTheme={toggleTheme}
       />
 

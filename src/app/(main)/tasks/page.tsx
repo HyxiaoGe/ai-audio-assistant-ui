@@ -13,7 +13,7 @@ export default function TaskListPage() {
   const { data: session, status } = useSession();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
-  const { language, setLanguage, setTheme } = useSettings();
+  const { setTheme } = useSettings();
   const { resolvedTheme } = useTheme();
   const openLoginModal = () => {
     setShowLoginModal(true);
@@ -31,9 +31,6 @@ export default function TaskListPage() {
     setShowNewTaskModal(false);
   };
 
-  const toggleLanguage = () => {
-    setLanguage(language === "zh" ? "en" : "zh");
-  };
 
   const toggleTheme = () => {
     setTheme(resolvedTheme === "dark" ? "light" : "dark");
@@ -49,8 +46,6 @@ export default function TaskListPage() {
         isAuthenticated={!!session?.user}
         onOpenLogin={openLoginModal}
         onOpenNewTask={openNewTaskModal}
-        language={language}
-        onToggleLanguage={toggleLanguage}
         onToggleTheme={toggleTheme}
       />
 

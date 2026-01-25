@@ -17,7 +17,6 @@ interface NotificationsProps {
   isAuthenticated: boolean;
   onOpenLogin: () => void;
   language?: "zh" | "en";
-  onToggleLanguage?: () => void;
   onToggleTheme?: () => void;
 }
 
@@ -27,7 +26,6 @@ export default function Notifications({
   isAuthenticated,
   onOpenLogin,
   language = "zh",
-  onToggleLanguage = () => {},
   onToggleTheme = () => {},
 }: NotificationsProps) {
   const client = useAPIClient();
@@ -167,8 +165,6 @@ export default function Notifications({
       <Header
         isAuthenticated={isAuthenticated}
         onOpenLogin={onOpenLogin}
-        language={language}
-        onToggleLanguage={onToggleLanguage}
         onToggleTheme={onToggleTheme}
       />
 
