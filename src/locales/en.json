@@ -21,8 +21,8 @@
     "admin": "Admin"
   },
   "admin": {
-    "console": "Admin Console",
-    "title": "Admin Console",
+    "console": "Admin",
+    "title": "Admin",
     "accessDenied": "Access Denied",
     "accessDeniedDesc": "This page is for administrators only",
     "quotaManagement": "Quota Management",

@@ -429,34 +429,34 @@
 }
 
 /* ============================================================================
- * Admin Avatar Glow Effect
+ * Admin Gradient Ring (Gemini Pro style)
  * ============================================================================ */
 
-.admin-avatar-glow {
+.admin-gradient-ring {
   position: relative;
+  padding: 3px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    #4285f4,  /* Google Blue */
+    #ea4335,  /* Google Red */
+    #fbbc04,  /* Google Yellow */
+    #34a853,  /* Google Green */
+    #4285f4   /* Back to Blue */
+  );
 }
 
-.admin-avatar-glow::before {
+.admin-gradient-ring::before {
   content: '';
   position: absolute;
-  inset: -3px;
+  inset: 3px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #fbbf24, #f59e0b, #d97706);
-  opacity: 0.6;
-  filter: blur(4px);
-  animation: admin-glow 2s ease-in-out infinite;
-  z-index: -1;
+  background: var(--app-surface);
 }
 
-@keyframes admin-glow {
-  0%, 100% {
-    opacity: 0.4;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.7;
-    transform: scale(1.05);
-  }
+.admin-gradient-ring > * {
+  position: relative;
+  z-index: 1;
 }
 
 /* ============================================================================

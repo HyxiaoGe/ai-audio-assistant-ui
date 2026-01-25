@@ -1,9 +1,10 @@
 "use client";
 
 import type React from "react";
-import { BarChart3, Settings, List, LineChart, Youtube } from 'lucide-react';
+import { BarChart3, Settings, List, LineChart, Youtube, Shield } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useI18n } from '@/lib/i18n-context';
+import { useUserStore } from '@/store/user-store';
 
 interface SidebarItemProps {
   icon: React.ReactNode;
@@ -32,6 +33,7 @@ export default function Sidebar() {
   const router = useRouter();
   const pathname = usePathname();
   const { t } = useI18n();
+  const isAdmin = useUserStore((state) => state.isAdmin);
 
   const menuItems = [
     {
@@ -82,13 +84,17 @@ export default function Sidebar() {
       return pathname === '/subscriptions' || pathname.startsWith('/subscriptions/');
     }
 
+    if (itemPath === '/admin') {
+      return pathname === '/admin' || pathname.startsWith('/admin/');
+    }
+
     // 其他页面：精确匹配
     return pathname === itemPath;
   };
 
   return (
-    <aside 
-      className="w-60 h-full p-4 space-y-1"
+    <aside
+      className="w-60 h-full p-4 flex flex-col"
       style={{
         background: "var(--app-glass-bg)",
         borderRight: "1px solid var(--app-glass-border)",
@@ -96,16 +102,31 @@ export default function Sidebar() {
         boxShadow: "var(--app-glass-shadow)"
       }}
     >
-      {menuItems.map((item) => (
-        <SidebarItem
-          key={item.path}
-          icon={item.icon}
-          label={item.label}
-          path={item.path}
-          isActive={isActive(item.path)}
-          onClick={() => router.push(item.path)}
-        />
-      ))}
+      <div className="space-y-1 flex-1">
+        {menuItems.map((item) => (
+          <SidebarItem
+            key={item.path}
+            icon={item.icon}
+            label={item.label}
+            path={item.path}
+            isActive={isActive(item.path)}
+            onClick={() => router.push(item.path)}
+          />
+        ))}
+      </div>
+
+      {/* Admin section at bottom */}
+      {isAdmin && (
+        <div className="pt-4 border-t" style={{ borderColor: 'var(--app-glass-border)' }}>
+          <SidebarItem
+            icon={<Shield className="w-5 h-5" />}
+            label={t("admin.console")}
+            path="/admin"
+            isActive={isActive('/admin')}
+            onClick={() => router.push('/admin')}
+          />
+        </div>
+      )}
     </aside>
   );
 }

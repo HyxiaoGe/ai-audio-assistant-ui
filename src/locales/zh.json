@@ -21,8 +21,8 @@
     "admin": "管理员"
   },
   "admin": {
-    "console": "管理控制台",
-    "title": "管理控制台",
+    "console": "后台管理",
+    "title": "后台管理",
     "accessDenied": "无权访问",
     "accessDeniedDesc": "此页面仅限管理员访问",
     "quotaManagement": "配额管理",

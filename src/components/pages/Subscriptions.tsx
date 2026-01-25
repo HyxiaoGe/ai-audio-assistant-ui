@@ -1225,7 +1225,7 @@ export default function Subscriptions({
                             <div className="space-y-4">
                               {/* Horizontal scrolling card grid */}
                               <ScrollArea className="w-full">
-                                <div className="flex gap-3 pb-4">
+                                <div className="flex gap-3 px-1 pt-1 pb-4">
                                   {filteredSubscriptions.map((sub) => (
                                     <div
                                       key={sub.channel_id}

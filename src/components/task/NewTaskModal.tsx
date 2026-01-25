@@ -327,14 +327,19 @@ export default function NewTaskModal({ isOpen, onClose, initialVideoUrl }: NewTa
       style={{ background: 'rgba(15, 23, 42, 0.6)' }}
       onClick={handleClose}
     >
-      <div 
-        className="glass-panel-strong relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl"
+      <div
+        className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl border"
+        style={{
+          background: 'var(--app-surface)',
+          borderColor: 'var(--app-glass-border)',
+          boxShadow: 'var(--app-glass-shadow)',
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div 
+        <div
           className="sticky top-0 z-10 flex items-center justify-between px-8 py-6 border-b"
-          style={{ background: 'var(--app-glass-bg-strong)', borderColor: 'var(--app-glass-border)' }}
+          style={{ background: 'var(--app-surface)', borderColor: 'var(--app-glass-border)' }}
         >
           <h2 className="text-2xl" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
             {t("task.newTask")}
@@ -599,9 +604,9 @@ export default function NewTaskModal({ isOpen, onClose, initialVideoUrl }: NewTa
         </div>
 
         {/* Footer */}
-        <div 
+        <div
           className="sticky bottom-0 flex items-center justify-end gap-3 px-8 py-6 border-t"
-          style={{ background: 'var(--app-glass-bg-strong)', borderColor: 'var(--app-glass-border)' }}
+          style={{ background: 'var(--app-surface)', borderColor: 'var(--app-glass-border)' }}
         >
           <Button
             onClick={handleClose}

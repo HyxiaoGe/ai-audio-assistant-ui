@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import { clearToken } from '@/lib/auth-token';
-import { Moon, Sun, ChevronDown, Mic, LogOut, Play, Pause, X, Shield } from 'lucide-react';
+import { Moon, Sun, ChevronDown, Mic, LogOut, Play, Pause, X } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useI18n } from '@/lib/i18n-context';
 import { useTheme } from "next-themes";
@@ -312,11 +312,8 @@ export default function Header({
               onClick={() => setIsMenuOpen((prev) => !prev)}
               className="flex items-center gap-2 hover:opacity-70 transition-opacity"
             >
-              <div className={`relative ${isAdmin ? "admin-avatar-glow" : ""}`}>
-                <Avatar
-                  size="sm"
-                  className={isAdmin ? "ring-2 ring-amber-400" : ""}
-                >
+              <div className={`relative ${isAdmin ? "admin-gradient-ring" : ""}`}>
+                <Avatar size="sm">
                   <AvatarImage
                     src={resolvedAvatarSrc || undefined}
                     referrerPolicy="no-referrer"
@@ -333,23 +330,6 @@ export default function Header({
                 className="glass-panel-strong absolute right-0 mt-2 w-40 rounded-lg border z-10 overflow-hidden"
                 style={{ borderColor: "var(--app-glass-border)" }}
               >
-                {isAdmin && (
-                  <>
-                    <Link
-                      href="/admin"
-                      className="w-full px-3 py-2 flex items-center gap-2 text-sm transition-colors hover:bg-[var(--app-glass-hover)]"
-                      style={{ color: "var(--app-text)" }}
-                      onClick={() => setIsMenuOpen(false)}
-                    >
-                      <Shield className="w-4 h-4" />
-                      {t("admin.console")}
-                    </Link>
-                    <div
-                      className="border-t"
-                      style={{ borderColor: "var(--app-glass-border)" }}
-                    />
-                  </>
-                )}
                 <button
                   onClick={handleLogout}
                   className="w-full px-3 py-2 flex items-center gap-2 text-sm transition-colors hover:bg-[var(--app-glass-hover)]"
