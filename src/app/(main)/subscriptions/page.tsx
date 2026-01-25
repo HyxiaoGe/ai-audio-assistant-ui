@@ -1,34 +1,20 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useTheme } from "next-themes";
-import { useRouter, useSearchParams } from "next/navigation";
-import Settings from "@/components/pages/Settings";
+import { useSearchParams } from "next/navigation";
+import Subscriptions from "@/components/pages/Subscriptions";
 import LoginModal from "@/components/auth/LoginModal";
 import { useSettings } from "@/lib/settings-context";
 import FullPageLoader from "@/components/common/FullPageLoader";
 
-function SettingsContent() {
+function SubscriptionsContent() {
   const { data: session, status } = useSession();
   const { language, setLanguage, setTheme } = useSettings();
   const { resolvedTheme } = useTheme();
   const [loginOpen, setLoginOpen] = useState(false);
   const searchParams = useSearchParams();
-  const router = useRouter();
-
-  // Handle YouTube OAuth callback redirect
-  // Backend redirects to /settings?youtube=connected, we forward to /subscriptions
-  useEffect(() => {
-    const youtubeParam = searchParams.get("youtube");
-    if (youtubeParam) {
-      const reason = searchParams.get("reason");
-      const params = new URLSearchParams();
-      params.set("youtube", youtubeParam);
-      if (reason) params.set("reason", reason);
-      router.replace(`/subscriptions?${params.toString()}`);
-    }
-  }, [searchParams, router]);
 
   const toggleLanguage = () => {
     setLanguage(language === "zh" ? "en" : "zh");
@@ -44,26 +30,27 @@ function SettingsContent() {
 
   return (
     <>
-      <Settings
+      <Subscriptions
         isAuthenticated={!!session?.user}
         onOpenLogin={() => setLoginOpen(true)}
         language={language}
         onToggleLanguage={toggleLanguage}
         onToggleTheme={toggleTheme}
+        searchParams={searchParams}
       />
       <LoginModal
         isOpen={loginOpen}
         onClose={() => setLoginOpen(false)}
-        callbackUrl="/settings"
+        callbackUrl="/subscriptions"
       />
     </>
   );
 }
 
-export default function SettingsPage() {
+export default function SubscriptionsPage() {
   return (
     <Suspense fallback={<FullPageLoader />}>
-      <SettingsContent />
+      <SubscriptionsContent />
     </Suspense>
   );
 }

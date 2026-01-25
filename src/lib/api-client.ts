@@ -45,6 +45,25 @@ import {
   VisualSummaryRequest,
   VisualSummaryResponse,
   VisualType,
+  YouTubeAuthResponse,
+  YouTubeChannelSyncStatus,
+  YouTubeBatchAutoTranscribeRequest,
+  YouTubeBatchStarRequest,
+  YouTubeChannelVideosRequest,
+  YouTubeChannelVideosSyncRequest,
+  YouTubeConnectionStatus,
+  YouTubeDisconnectResponse,
+  YouTubeLatestVideosRequest,
+  YouTubeSubscriptionListRequest,
+  YouTubeSubscriptionListResponse,
+  YouTubeSubscriptionSettings,
+  YouTubeSubscriptionSettingsUpdateRequest,
+  YouTubeSyncOverview,
+  YouTubeSyncResponse,
+  YouTubeTaskStatusResponse,
+  YouTubeTranscribeRequest,
+  YouTubeTranscribeResponse,
+  YouTubeVideoListResponse,
 } from "@/types/api"
 
 // ============================================================================
@@ -723,6 +742,234 @@ export class APIClient {
       50001,
       "可视化摘要生成超时，请稍后手动刷新查看",
       ""
+    )
+  }
+
+  // ==========================================================================
+  // YouTube 订阅同步
+  // ==========================================================================
+
+  /**
+   * 获取 YouTube OAuth 授权 URL
+   */
+  async getYouTubeAuthUrl(): Promise<YouTubeAuthResponse> {
+    return request("/youtube/auth", { method: "GET" }, this.token)
+  }
+
+  /**
+   * 获取 YouTube 连接状态
+   */
+  async getYouTubeStatus(): Promise<YouTubeConnectionStatus> {
+    return request("/youtube/status", { method: "GET" }, this.token)
+  }
+
+  /**
+   * 断开 YouTube 账号连接
+   */
+  async disconnectYouTube(): Promise<YouTubeDisconnectResponse> {
+    return request("/youtube/disconnect", { method: "DELETE" }, this.token)
+  }
+
+  /**
+   * 获取 YouTube 订阅列表
+   */
+  async getYouTubeSubscriptions(
+    params?: YouTubeSubscriptionListRequest
+  ): Promise<YouTubeSubscriptionListResponse> {
+    const queryParams = new URLSearchParams()
+    if (params?.page) queryParams.set("page", params.page.toString())
+    if (params?.page_size)
+      queryParams.set("page_size", params.page_size.toString())
+
+    const query = queryParams.toString()
+    const endpoint = query ? `/youtube/subscriptions?${query}` : "/youtube/subscriptions"
+
+    return request(endpoint, { method: "GET" }, this.token)
+  }
+
+  /**
+   * 触发 YouTube 订阅同步
+   */
+  async syncYouTubeSubscriptions(): Promise<YouTubeSyncResponse> {
+    return request("/youtube/subscriptions/sync", { method: "POST" }, this.token)
+  }
+
+  /**
+   * 获取所有订阅频道的最新视频（聚合信息流）
+   */
+  async getYouTubeLatestVideos(
+    params?: YouTubeLatestVideosRequest
+  ): Promise<YouTubeVideoListResponse> {
+    const queryParams = new URLSearchParams()
+    if (params?.page) queryParams.set("page", params.page.toString())
+    if (params?.page_size)
+      queryParams.set("page_size", params.page_size.toString())
+
+    const query = queryParams.toString()
+    const endpoint = query ? `/youtube/videos/latest?${query}` : "/youtube/videos/latest"
+
+    return request(endpoint, { method: "GET" }, this.token)
+  }
+
+  /**
+   * 获取指定频道的视频列表
+   */
+  async getYouTubeChannelVideos(
+    channelId: string,
+    params?: YouTubeChannelVideosRequest
+  ): Promise<YouTubeVideoListResponse> {
+    const queryParams = new URLSearchParams()
+    if (params?.page) queryParams.set("page", params.page.toString())
+    if (params?.page_size)
+      queryParams.set("page_size", params.page_size.toString())
+
+    const query = queryParams.toString()
+    const endpoint = query
+      ? `/youtube/channels/${channelId}/videos?${query}`
+      : `/youtube/channels/${channelId}/videos`
+
+    return request(endpoint, { method: "GET" }, this.token)
+  }
+
+  /**
+   * 获取频道同步状态
+   */
+  async getYouTubeChannelSyncStatus(
+    channelId: string
+  ): Promise<YouTubeChannelSyncStatus> {
+    return request(
+      `/youtube/channels/${channelId}/sync-status`,
+      { method: "GET" },
+      this.token
+    )
+  }
+
+  /**
+   * 触发频道视频同步
+   */
+  async syncYouTubeChannelVideos(
+    channelId: string,
+    params?: YouTubeChannelVideosSyncRequest
+  ): Promise<YouTubeSyncResponse> {
+    const queryParams = new URLSearchParams()
+    if (params?.max_videos)
+      queryParams.set("max_videos", params.max_videos.toString())
+
+    const query = queryParams.toString()
+    const endpoint = query
+      ? `/youtube/channels/${channelId}/videos/sync?${query}`
+      : `/youtube/channels/${channelId}/videos/sync`
+
+    return request(endpoint, { method: "POST" }, this.token)
+  }
+
+  /**
+   * 一键转写 YouTube 视频
+   */
+  async transcribeYouTubeVideo(
+    videoId: string,
+    params?: YouTubeTranscribeRequest
+  ): Promise<YouTubeTranscribeResponse> {
+    return request(
+      `/youtube/videos/${videoId}/transcribe`,
+      {
+        method: "POST",
+        body: JSON.stringify(params || {}),
+      },
+      this.token
+    )
+  }
+
+  /**
+   * 获取 YouTube 异步任务状态
+   */
+  async getYouTubeTaskStatus(taskId: string): Promise<YouTubeTaskStatusResponse> {
+    return request(
+      `/youtube/tasks/${taskId}/status`,
+      { method: "GET" },
+      this.token
+    )
+  }
+
+  /**
+   * 获取 YouTube 同步进度概览
+   */
+  async getYouTubeSyncOverview(): Promise<YouTubeSyncOverview> {
+    return request(
+      `/youtube/sync-overview`,
+      { method: "GET" },
+      this.token
+    )
+  }
+
+  /**
+   * 获取 YouTube 频道订阅设置
+   */
+  async getYouTubeSubscriptionSettings(channelId: string): Promise<YouTubeSubscriptionSettings> {
+    return request(
+      `/youtube/subscriptions/${channelId}/settings`,
+      { method: "GET" },
+      this.token
+    )
+  }
+
+  /**
+   * 更新 YouTube 频道订阅设置
+   */
+  async updateYouTubeSubscriptionSettings(
+    channelId: string,
+    settings: YouTubeSubscriptionSettingsUpdateRequest
+  ): Promise<YouTubeSubscriptionSettings> {
+    return request(
+      `/youtube/subscriptions/${channelId}/settings`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(settings),
+      },
+      this.token
+    )
+  }
+
+  /**
+   * 批量设置 YouTube 订阅特别关注
+   */
+  async batchStarYouTubeSubscriptions(params: YouTubeBatchStarRequest): Promise<void> {
+    return request(
+      `/youtube/subscriptions/batch/star`,
+      {
+        method: "POST",
+        body: JSON.stringify(params),
+      },
+      this.token
+    )
+  }
+
+  /**
+   * 批量设置 YouTube 订阅自动转写
+   */
+  async batchAutoTranscribeYouTubeSubscriptions(params: YouTubeBatchAutoTranscribeRequest): Promise<void> {
+    return request(
+      `/youtube/subscriptions/batch/auto-transcribe`,
+      {
+        method: "POST",
+        body: JSON.stringify(params),
+      },
+      this.token
+    )
+  }
+
+  /**
+   * 获取特别关注频道的视频
+   */
+  async getYouTubeStarredVideos(params?: YouTubeLatestVideosRequest): Promise<YouTubeVideoListResponse> {
+    const searchParams = new URLSearchParams()
+    if (params?.page) searchParams.set("page", params.page.toString())
+    if (params?.page_size) searchParams.set("page_size", params.page_size.toString())
+    const query = searchParams.toString()
+    return request(
+      `/youtube/videos/starred${query ? `?${query}` : ""}`,
+      { method: "GET" },
+      this.token
     )
   }
 }

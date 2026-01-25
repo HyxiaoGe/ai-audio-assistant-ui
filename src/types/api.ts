@@ -69,6 +69,13 @@ export enum ErrorCode {
   UPLOAD_FAILED = 51201,
   YOUTUBE_DOWNLOAD_FAILED = 51300,
   YOUTUBE_UNAVAILABLE = 51301,
+
+  // 51900-51904: YouTube OAuth 错误
+  YOUTUBE_NOT_CONNECTED = 51900,
+  YOUTUBE_OAUTH_FAILED = 51901,
+  YOUTUBE_TOKEN_EXPIRED = 51902,
+  YOUTUBE_API_ERROR = 51903,
+  YOUTUBE_OAUTH_STATE_INVALID = 51904,
 }
 
 export class ApiError extends Error {
@@ -766,4 +773,221 @@ export interface NotificationStatsResponse {
   total: number
   unread: number
   dismissed: number
+}
+
+// ============================================================================
+// YouTube 订阅同步
+// ============================================================================
+
+/**
+ * YouTube OAuth 授权 URL 响应
+ */
+export interface YouTubeAuthResponse {
+  auth_url: string
+}
+
+/**
+ * YouTube 连接状态
+ */
+export interface YouTubeConnectionStatus {
+  connected: boolean
+  channel_id?: string
+  subscription_count: number
+  last_synced_at?: string
+  token_expires_at?: string
+}
+
+/**
+ * YouTube 断开连接响应
+ */
+export interface YouTubeDisconnectResponse {
+  disconnected: boolean
+}
+
+/**
+ * YouTube 订阅项
+ */
+export interface YouTubeSubscriptionItem {
+  channel_id: string
+  channel_title: string
+  channel_thumbnail?: string
+  channel_description?: string
+  subscribed_at?: string
+  // 定制化字段
+  is_starred: boolean
+  auto_transcribe: boolean
+  is_hidden: boolean
+}
+
+/**
+ * YouTube 订阅列表请求
+ */
+export interface YouTubeSubscriptionListRequest {
+  page?: number
+  page_size?: number
+  show_hidden?: boolean
+  starred_only?: boolean
+}
+
+/**
+ * YouTube 订阅列表响应
+ */
+export interface YouTubeSubscriptionListResponse {
+  items: YouTubeSubscriptionItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+/**
+ * YouTube 同步触发响应
+ */
+export interface YouTubeSyncResponse {
+  task_id: string
+  message: string
+}
+
+/**
+ * YouTube 视频项
+ */
+export interface YouTubeVideoItem {
+  video_id: string
+  channel_id: string
+  title: string
+  description?: string
+  thumbnail_url?: string
+  published_at: string
+  duration_seconds?: number
+  view_count?: number
+  like_count?: number
+  comment_count?: number
+  transcribed: boolean
+  task_id?: string
+}
+
+/**
+ * YouTube 视频列表请求
+ */
+export interface YouTubeChannelVideosRequest {
+  page?: number
+  page_size?: number
+}
+
+/**
+ * YouTube 最新视频列表请求
+ */
+export interface YouTubeLatestVideosRequest {
+  page?: number
+  page_size?: number
+}
+
+/**
+ * YouTube 视频列表响应
+ */
+export interface YouTubeVideoListResponse {
+  items: YouTubeVideoItem[]
+  total: number
+  page: number
+  page_size: number
+  last_synced_at?: string
+}
+
+/**
+ * YouTube 频道同步状态
+ */
+export interface YouTubeChannelSyncStatus {
+  subscribed: boolean
+  channel_title?: string
+  video_count: number
+  last_synced_at?: string
+}
+
+/**
+ * YouTube 频道视频同步请求
+ */
+export interface YouTubeChannelVideosSyncRequest {
+  max_videos?: number
+}
+
+/**
+ * YouTube 视频转写请求
+ */
+export interface YouTubeTranscribeRequest {
+  language?: string
+  output_format?: string
+}
+
+/**
+ * YouTube 视频转写响应
+ */
+export interface YouTubeTranscribeResponse {
+  task_id: string
+  video_id: string
+  title: string
+  message: string
+}
+
+/**
+ * YouTube 同步进度概览
+ */
+export interface YouTubeSyncOverview {
+  total_subscriptions: number
+  synced_subscriptions: number
+  pending_subscriptions: number
+  total_videos: number
+  channels_with_videos: number
+  fully_synced: boolean
+  last_sync_at?: string
+}
+
+/**
+ * YouTube 异步任务状态
+ */
+export type YouTubeTaskStatus = 'pending' | 'started' | 'success' | 'failure' | 'revoked'
+
+/**
+ * YouTube 任务状态响应
+ */
+export interface YouTubeTaskStatusResponse {
+  task_id: string
+  status: YouTubeTaskStatus
+  result?: {
+    synced_count?: number
+    message?: string
+  }
+  error?: string | null
+}
+
+/**
+ * YouTube 订阅设置
+ */
+export interface YouTubeSubscriptionSettings {
+  is_starred: boolean
+  auto_transcribe: boolean
+  is_hidden: boolean
+}
+
+/**
+ * YouTube 订阅设置更新请求
+ */
+export interface YouTubeSubscriptionSettingsUpdateRequest {
+  is_starred?: boolean
+  auto_transcribe?: boolean
+  is_hidden?: boolean
+}
+
+/**
+ * YouTube 批量设置特别关注请求
+ */
+export interface YouTubeBatchStarRequest {
+  channel_ids: string[]
+  is_starred: boolean
+}
+
+/**
+ * YouTube 批量设置自动转写请求
+ */
+export interface YouTubeBatchAutoTranscribeRequest {
+  channel_ids: string[]
+  auto_transcribe: boolean
 }

@@ -16,6 +16,8 @@ import { useI18n } from '@/lib/i18n-context';
 interface NewTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Pre-fill with a YouTube video URL */
+  initialVideoUrl?: string;
 }
 
 type Platform = 'youtube' | 'bilibili';
@@ -52,7 +54,7 @@ const resolvePreferredModel = (preferences: UserPreferences, models: LLMModel[])
   return match ? (match.model_id || match.provider) : null;
 };
 
-export default function NewTaskModal({ isOpen, onClose }: NewTaskModalProps) {
+export default function NewTaskModal({ isOpen, onClose, initialVideoUrl }: NewTaskModalProps) {
   const router = useRouter();
   const client = useAPIClient();
   const { state: uploadState, uploadFile, reset, isUploading } = useFileUpload();
@@ -111,6 +113,20 @@ export default function NewTaskModal({ isOpen, onClose }: NewTaskModalProps) {
     reset();
     setSelectedFile(null);
   };
+
+  // Handle initial video URL
+  useEffect(() => {
+    if (isOpen && initialVideoUrl) {
+      setActiveTab('link');
+      setVideoUrl(initialVideoUrl);
+      // Auto-detect platform from URL
+      if (initialVideoUrl.includes('bilibili.com') || initialVideoUrl.includes('b23.tv')) {
+        setSelectedPlatform('bilibili');
+      } else {
+        setSelectedPlatform('youtube');
+      }
+    }
+  }, [isOpen, initialVideoUrl]);
 
   useEffect(() => {
     if (!isOpen) return;
