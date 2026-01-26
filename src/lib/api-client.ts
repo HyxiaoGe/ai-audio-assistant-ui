@@ -31,6 +31,7 @@ import {
   SummaryRegenerateResponse,
   SummaryActivateResponse,
   SummaryResponse,
+  SummaryStylesResponse,
   StatsServicesOverviewResponse,
   StatsTasksOverviewResponse,
   TaskDetail,
@@ -505,6 +506,14 @@ export class APIClient {
    */
   async getLLMModels(): Promise<LLMModelsResponse> {
     return request("/llm/models", { method: "GET" }, this.token)
+  }
+
+  /**
+   * 获取摘要风格列表
+   * 后端返回已国际化的风格名称和描述
+   */
+  async getSummaryStyles(): Promise<SummaryStylesResponse> {
+    return request("/summary-styles", { method: "GET" }, this.token)
   }
 
   // ==========================================================================

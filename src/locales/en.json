@@ -663,6 +663,7 @@
     "summaryMeeting": "Meeting minutes",
     "summaryLecture": "Lecture notes",
     "summaryPodcast": "Podcast summary",
+    "summaryGeneral": "General",
     "visualSummary": "Visual summary",
     "autoGenerateVisualSummary": "Auto-generate visual summary",
     "visualTypes": "Select types",

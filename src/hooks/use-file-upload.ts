@@ -130,7 +130,7 @@ export function useFileUpload() {
           options: options || {
             language: "auto",
             enable_speaker_diarization: true,
-            summary_style: "meeting",
+            summary_style: "general",
           },
         })
 

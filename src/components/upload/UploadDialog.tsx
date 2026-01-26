@@ -26,7 +26,7 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { FileUploader } from "./FileUploader"
-import type { LLMModel, TaskOptions, Language, SummaryStyle } from "@/types/api"
+import type { LLMModel, SummaryStyleItem, TaskOptions, Language } from "@/types/api"
 import { useI18n } from "@/lib/i18n-context"
 import { useAPIClient } from "@/lib/use-api-client"
 
@@ -46,29 +46,36 @@ export function UploadDialog({
   const [options, setOptions] = useState<TaskOptions>({
     language: "auto",
     enable_speaker_diarization: false,
-    summary_style: "meeting",
+    summary_style: "general",
     provider: null,
     model_id: null,
   })
   const [llmModels, setLlmModels] = useState<LLMModel[]>([])
+  const [summaryStyles, setSummaryStyles] = useState<SummaryStyleItem[]>([])
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open) return
     let active = true
-    const loadModels = async () => {
+    const loadData = async () => {
+      // Load LLM models and summary styles in parallel
       try {
-        const result = await client.getLLMModels()
+        const [modelsResult, stylesResult] = await Promise.all([
+          client.getLLMModels().catch(() => ({ models: [] })),
+          client.getSummaryStyles().catch(() => ({ styles: [] })),
+        ])
         if (active) {
-          setLlmModels(result.models || [])
+          setLlmModels(modelsResult.models || [])
+          setSummaryStyles(stylesResult.styles || [])
         }
       } catch {
         if (active) {
           setLlmModels([])
+          setSummaryStyles([])
         }
       }
     }
-    loadModels()
+    loadData()
     return () => {
       active = false
     }
@@ -211,28 +218,32 @@ export function UploadDialog({
             <div className="space-y-2">
               <Label htmlFor="summary-style">{t("uploadDialog.summaryStyle")}</Label>
               <Select
-                value={options.summary_style}
-                onValueChange={(value: SummaryStyle) =>
+                value={options.summary_style || "general"}
+                onValueChange={(value: string) =>
                   setOptions((prev) => ({ ...prev, summary_style: value }))
                 }
+                disabled={summaryStyles.length === 0}
               >
                 <SelectTrigger id="summary-style">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="meeting">{t("newTask.summaryMeeting")}</SelectItem>
-                  <SelectItem value="learning">{t("uploadDialog.summaryLearning")}</SelectItem>
-                  <SelectItem value="interview">{t("uploadDialog.summaryInterview")}</SelectItem>
+                  {summaryStyles.length > 0 ? (
+                    summaryStyles.map((style) => (
+                      <SelectItem key={style.id} value={style.id}>
+                        {style.name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="general">{t("newTask.summaryGeneral")}</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
-              <p className="text-xs" style={{ color: "var(--app-text-muted)" }}>
-                {options.summary_style === "meeting" &&
-                  t("uploadDialog.summaryMeetingDesc")}
-                {options.summary_style === "learning" &&
-                  t("uploadDialog.summaryLearningDesc")}
-                {options.summary_style === "interview" &&
-                  t("uploadDialog.summaryInterviewDesc")}
-              </p>
+              {summaryStyles.length > 0 && (
+                <p className="text-xs" style={{ color: "var(--app-text-muted)" }}>
+                  {summaryStyles.find((s) => s.id === options.summary_style)?.focus}
+                </p>
+              )}
             </div>
           </div>
         </div>

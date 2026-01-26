@@ -10,7 +10,7 @@ import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { useAPIClient } from '@/lib/use-api-client';
 import { useFileUpload } from '@/hooks/use-file-upload';
-import type { LLMModel, TaskOptions, UserPreferences } from '@/types/api';
+import type { LLMModel, SummaryStyleItem, TaskOptions, UserPreferences } from '@/types/api';
 import { useI18n } from '@/lib/i18n-context';
 
 interface NewTaskModalProps {
@@ -37,12 +37,6 @@ const getStoredDefaultLanguage = () => {
   return null;
 };
 
-const mapSummaryStyleFromPreference = (value?: TaskOptions["summary_style"]) => {
-  if (value === "learning") return "lecture";
-  if (value === "interview") return "podcast";
-  if (value === "meeting") return "meeting";
-  return null;
-};
 
 const resolvePreferredModel = (preferences: UserPreferences, models: LLMModel[]) => {
   const preferredId =
@@ -69,11 +63,12 @@ export default function NewTaskModal({ isOpen, onClose, initialVideoUrl }: NewTa
     summaryModelId: null as string | null,
     language: 'auto',
     speakerDiarization: false,
-    summaryStyle: 'meeting',
+    summaryStyle: 'general',
     enableVisualSummary: false,
     visualTypes: [] as string[]
   });
   const [llmModels, setLlmModels] = useState<LLMModel[]>([]);
+  const [summaryStyles, setSummaryStyles] = useState<SummaryStyleItem[]>([]);
   const preferencesRef = useRef<UserPreferences | null>(null);
   const advancedTouchedRef = useRef(false);
 
@@ -131,19 +126,25 @@ export default function NewTaskModal({ isOpen, onClose, initialVideoUrl }: NewTa
   useEffect(() => {
     if (!isOpen) return;
     let active = true;
-    const loadModels = async () => {
+    const loadData = async () => {
+      // Load LLM models and summary styles in parallel
       try {
-        const result = await client.getLLMModels();
+        const [modelsResult, stylesResult] = await Promise.all([
+          client.getLLMModels().catch(() => ({ models: [] })),
+          client.getSummaryStyles().catch(() => ({ styles: [] })),
+        ]);
         if (active) {
-          setLlmModels(result.models || []);
+          setLlmModels(modelsResult.models || []);
+          setSummaryStyles(stylesResult.styles || []);
         }
       } catch {
         if (active) {
           setLlmModels([]);
+          setSummaryStyles([]);
         }
       }
     };
-    loadModels();
+    loadData();
     return () => {
       active = false;
     };
@@ -152,7 +153,6 @@ export default function NewTaskModal({ isOpen, onClose, initialVideoUrl }: NewTa
   const applyPreferenceDefaults = useCallback((preferences: UserPreferences) => {
     if (advancedTouchedRef.current) return;
     const defaults = preferences.task_defaults || {};
-    const preferredSummaryStyle = mapSummaryStyleFromPreference(defaults.summary_style);
     const preferredModelId = resolvePreferredModel(preferences, llmModels);
     const fallbackLanguage = getStoredDefaultLanguage();
 
@@ -163,7 +163,7 @@ export default function NewTaskModal({ isOpen, onClose, initialVideoUrl }: NewTa
         typeof defaults.enable_speaker_diarization === "boolean"
           ? defaults.enable_speaker_diarization
           : prev.speakerDiarization,
-      summaryStyle: preferredSummaryStyle || prev.summaryStyle,
+      summaryStyle: defaults.summary_style || prev.summaryStyle,
       summaryModelId: preferredModelId ?? null,
     }));
   }, [llmModels]);
@@ -240,11 +240,6 @@ export default function NewTaskModal({ isOpen, onClose, initialVideoUrl }: NewTa
   );
 
   const buildOptions = (): TaskOptions => {
-    const summaryStyleMap: Record<string, TaskOptions["summary_style"]> = {
-      meeting: "meeting",
-      lecture: "learning",
-      podcast: "interview",
-    };
     const selectedModelId = advancedOptions.summaryModelId;
     const selectedModel = selectedModelId
       ? llmModels.find((model) =>
@@ -255,7 +250,7 @@ export default function NewTaskModal({ isOpen, onClose, initialVideoUrl }: NewTa
     const options: TaskOptions = {
       language: advancedOptions.language as TaskOptions["language"],
       enable_speaker_diarization: advancedOptions.speakerDiarization,
-      summary_style: summaryStyleMap[advancedOptions.summaryStyle] || "meeting",
+      summary_style: advancedOptions.summaryStyle || "general",
       provider: selectedModel?.provider ?? null,
       model_id: selectedModel?.model_id ?? null,
     };
@@ -516,23 +511,37 @@ export default function NewTaskModal({ isOpen, onClose, initialVideoUrl }: NewTa
                   </div>
 
                   {/* Summary Style */}
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                    <label className="text-sm sm:w-32" style={{ color: 'var(--app-text-muted)' }}>
+                  <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+                    <label className="text-sm sm:w-32 pt-2" style={{ color: 'var(--app-text-muted)' }}>
                       {t("newTask.summaryStyle")}：
                     </label>
-                    <select
-                      value={advancedOptions.summaryStyle}
-                      onChange={(e) => {
-                        advancedTouchedRef.current = true;
-                        setAdvancedOptions({ ...advancedOptions, summaryStyle: e.target.value });
-                      }}
-                      className="glass-control flex-1 sm:max-w-xs px-3 py-2 rounded-lg text-sm"
-                      style={{ color: 'var(--app-text)' }}
-                    >
-                      <option value="meeting">{t("newTask.summaryMeeting")}</option>
-                      <option value="lecture">{t("newTask.summaryLecture")}</option>
-                      <option value="podcast">{t("newTask.summaryPodcast")}</option>
-                    </select>
+                    <div className="flex-1 sm:max-w-xs">
+                      <select
+                        value={advancedOptions.summaryStyle}
+                        onChange={(e) => {
+                          advancedTouchedRef.current = true;
+                          setAdvancedOptions({ ...advancedOptions, summaryStyle: e.target.value });
+                        }}
+                        disabled={summaryStyles.length === 0}
+                        className="glass-control w-full px-3 py-2 rounded-lg text-sm disabled:opacity-50"
+                        style={{ color: 'var(--app-text)' }}
+                      >
+                        {summaryStyles.length > 0 ? (
+                          summaryStyles.map((style) => (
+                            <option key={style.id} value={style.id}>
+                              {style.name}
+                            </option>
+                          ))
+                        ) : (
+                          <option value="general">{t("newTask.summaryGeneral")}</option>
+                        )}
+                      </select>
+                      {summaryStyles.length > 0 && (
+                        <p className="text-xs mt-1" style={{ color: 'var(--app-text-subtle)' }}>
+                          {summaryStyles.find((s) => s.id === advancedOptions.summaryStyle)?.focus}
+                        </p>
+                      )}
+                    </div>
                   </div>
 
                   {/* Visual Summary */}

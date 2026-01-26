@@ -234,7 +234,33 @@ export type SourceType = "upload" | "youtube"
 
 export type Language = "auto" | "zh" | "en"
 
-export type SummaryStyle = "meeting" | "learning" | "interview"
+// SummaryStyle is now dynamic - use string for flexibility
+export type SummaryStyle = string
+
+// ============================================================================
+// 摘要风格（动态获取）
+// ============================================================================
+
+/**
+ * 摘要风格项
+ * 从后端动态获取，支持国际化
+ */
+export interface SummaryStyleItem {
+  id: string                        // 风格标识符
+  name: string                      // 显示名称（已国际化）
+  description: string               // 风格描述（已国际化）
+  focus: string                     // 摘要侧重点（已国际化）
+  icon?: string                     // 图标标识符
+  recommended_visual_types: string[] // 推荐的可视化类型
+}
+
+/**
+ * 摘要风格列表响应
+ */
+export interface SummaryStylesResponse {
+  version: string
+  styles: SummaryStyleItem[]
+}
 
 export interface TaskOptions {
   language?: Language

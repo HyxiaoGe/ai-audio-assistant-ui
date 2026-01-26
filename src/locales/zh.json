@@ -663,6 +663,7 @@
     "summaryMeeting": "会议纪要",
     "summaryLecture": "讲座笔记",
     "summaryPodcast": "播客摘要",
+    "summaryGeneral": "通用",
     "visualSummary": "可视化摘要",
     "autoGenerateVisualSummary": "自动生成可视化摘要",
     "visualTypes": "选择类型",
