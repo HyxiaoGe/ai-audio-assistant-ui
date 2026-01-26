@@ -19,11 +19,14 @@ import { useAPIClient } from "@/lib/use-api-client"
 interface VisualSummaryGeneratorProps {
   taskId: string
   onGenerated?: (visualType: VisualType) => void
+  /** 是否为重新生成模式（已存在可视化摘要时使用） */
+  isRegenerate?: boolean
 }
 
 export function VisualSummaryGenerator({
   taskId,
   onGenerated,
+  isRegenerate = false,
 }: VisualSummaryGeneratorProps) {
   const [visualType, setVisualType] = useState<VisualType>("mindmap")
   const [contentStyle, setContentStyle] = useState<ContentStyle | "auto">("auto")
@@ -40,19 +43,25 @@ export function VisualSummaryGenerator({
     setProgress(0)
 
     try {
-      // 1. 发起生成请求
+      // 1. 发起生成请求（成功时返回数据，失败时抛出 ApiError）
       const response = await client.generateVisualSummary(taskId, {
         visual_type: visualType,
         content_style: contentStyle === "auto" ? null : contentStyle,
         generate_image: generateImage,
         image_format: imageFormat,
+        regenerate: isRegenerate,
       })
 
-      if (response.code !== 0) {
-        throw new Error(response.message)
+      // 2. 检查响应状态
+      // 如果 status === "exists"，说明已存在，无需轮询
+      if (response.status === "exists") {
+        setProgress(100)
+        setLoading(false)
+        onGenerated?.(visualType)
+        return
       }
 
-      // 2. 轮询检查生成状态（后端没有 SSE 端点）
+      // 3. 轮询检查生成状态（后端没有 SSE 端点）
       await client.pollVisualSummary(taskId, visualType, {
         maxAttempts: 30, // 最多尝试 30 次
         interval: 2000,  // 每 2 秒轮询一次
@@ -63,7 +72,7 @@ export function VisualSummaryGenerator({
         },
       })
 
-      // 3. 生成完成
+      // 4. 生成完成
       setProgress(100)
       setLoading(false)
       onGenerated?.(visualType)
@@ -158,12 +167,12 @@ export function VisualSummaryGenerator({
         {loading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            生成中... {progress}%
+            {isRegenerate ? "重新生成中" : "生成中"}... {progress}%
           </>
         ) : (
           <>
             <Sparkles className="mr-2 h-4 w-4" />
-            生成可视化摘要
+            {isRegenerate ? "重新生成可视化摘要" : "生成可视化摘要"}
           </>
         )}
       </Button>

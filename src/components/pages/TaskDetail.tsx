@@ -130,6 +130,8 @@ export default function TaskDetail({
   const [keyPointsMarkdown, setKeyPointsMarkdown] = useState<string>('');
   const [actionItemsMarkdown, setActionItemsMarkdown] = useState<string>('');
   const [visualSummaries, setVisualSummaries] = useState<SummaryItem[]>([]);
+  const [visualSummaryRegenerating, setVisualSummaryRegenerating] = useState<Record<string, boolean>>({});
+  const [visualSummaryModelSelection, setVisualSummaryModelSelection] = useState<Record<string, string | null>>({});
   const [summaryModelUsed, setSummaryModelUsed] = useState<Record<SummaryRegenerateType, string | null>>({
     overview: null,
     key_points: null,
@@ -657,6 +659,80 @@ export default function TaskDetail({
       }
     },
     [buildSummaryState, client, id, llmModels, summaryModelSelection, summaryStreaming, summaryVersions, t, updateSummaryFromStream]
+  );
+
+  const regenerateVisualSummary = useCallback(
+    async (visualType: VisualType) => {
+      if (!id) return;
+      if (visualSummaryRegenerating[visualType]) return;
+
+      const selectedModelId = visualSummaryModelSelection[visualType] ?? null;
+      const selectedModel = selectedModelId
+        ? llmModels.find((model) =>
+            model.model_id ? model.model_id === selectedModelId : model.provider === selectedModelId
+          ) || null
+        : null;
+
+      setVisualSummaryRegenerating((prev) => ({ ...prev, [visualType]: true }));
+
+      try {
+        // 1. 发起重新生成请求（成功时返回数据，失败时抛出 ApiError）
+        const response = await client.generateVisualSummary(id, {
+          visual_type: visualType,
+          regenerate: true,
+          provider: selectedModel?.provider ?? null,
+          model_id: selectedModel?.model_id ?? null,
+        });
+
+        // 如果已存在，无需轮询
+        if (response.status === "exists") {
+          // 刷新数据
+          const summaryResult = await client.getSummary(id);
+          buildSummaryState(summaryResult.items);
+          notifySuccess(t("task.visualSummaryRegenerated"));
+          return;
+        }
+
+        // 2. 轮询检查生成状态
+        const result = await client.pollVisualSummary(id, visualType, {
+          maxAttempts: 30,
+          interval: 2000,
+        });
+
+        // 3. 更新本地状态
+        const summaryType = `visual_${visualType}` as SummaryItem['summary_type'];
+        setVisualSummaries((prev) => {
+          const newItem: SummaryItem = {
+            id: result.id,
+            summary_type: summaryType,
+            version: 1,
+            is_active: true,
+            content: result.content,
+            model_used: result.model_used || null,
+            prompt_version: null,
+            token_count: result.token_count || null,
+            created_at: result.created_at,
+            visual_format: result.format,
+            visual_content: result.content,
+            image_url: result.image_url || null,
+          };
+          // 替换同类型的旧数据
+          const filtered = prev.filter((s) => s.summary_type !== summaryType);
+          return [...filtered, newItem];
+        });
+
+        notifySuccess(t("task.visualSummaryRegenerated"));
+      } catch (err) {
+        if (err instanceof ApiError) {
+          notifyError(err.message);
+        } else {
+          notifyError(t("task.retryFailed"));
+        }
+      } finally {
+        setVisualSummaryRegenerating((prev) => ({ ...prev, [visualType]: false }));
+      }
+    },
+    [client, id, llmModels, t, visualSummaryModelSelection, visualSummaryRegenerating]
   );
 
   useEffect(() => {
@@ -2321,9 +2397,49 @@ export default function TaskDetail({
                 {/* Visual Summary Tabs */}
                 {visualSummaries.map((summary) => {
                   const visualType = summary.summary_type.replace('visual_', '') as VisualType;
+                  const isRegenerating = visualSummaryRegenerating[visualType];
+                  const visualTypeLabel = visualType === 'mindmap' ? t("task.visualMindmap")
+                    : visualType === 'timeline' ? t("task.visualTimeline")
+                    : t("task.visualFlowchart");
                   return (
                     activeTab === summary.summary_type && (
-                      <div key={summary.summary_type} className="space-y-4">
+                      <div key={summary.id} className="space-y-4">
+                        {/* Header with model selector and regenerate button */}
+                        <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
+                          <div>
+                            <h3 className="text-lg" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
+                              {visualTypeLabel}
+                            </h3>
+                            <p className="text-xs mt-1" style={{ color: 'var(--app-text-subtle)' }}>
+                              {t("task.summaryModelLabel")} {summary.model_used || t("task.unknown")}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <select
+                              value={visualSummaryModelSelection[visualType] ?? ''}
+                              onChange={(event) =>
+                                setVisualSummaryModelSelection((prev) => ({
+                                  ...prev,
+                                  [visualType]: event.target.value || null,
+                                }))
+                              }
+                              disabled={isRegenerating || llmModels.length === 0}
+                              className="text-xs px-2 py-1 rounded-md border bg-transparent disabled:opacity-50"
+                              style={{ borderColor: 'var(--app-glass-border)', color: 'var(--app-text)' }}
+                            >
+                              <option value="">{t("task.summaryModelAutoOption")}</option>
+                              {renderModelOptions()}
+                            </select>
+                            <button
+                              onClick={() => regenerateVisualSummary(visualType)}
+                              disabled={isRegenerating}
+                              className="text-xs px-3 py-1 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              style={{ background: 'var(--app-primary-soft)', color: 'var(--app-primary)' }}
+                            >
+                              {isRegenerating ? t("task.summaryRetrying") : t("task.summaryRetry")}
+                            </button>
+                          </div>
+                        </div>
                         <VisualSummaryView
                           taskId={id}
                           visualType={visualType}

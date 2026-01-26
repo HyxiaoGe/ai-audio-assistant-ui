@@ -648,7 +648,7 @@ export class APIClient {
   async generateVisualSummary(
     taskId: string,
     data: VisualSummaryRequest
-  ): Promise<ApiResponse<{ task_id: string; status: string }>> {
+  ): Promise<{ task_id: string; status: string }> {
     return request(
       `/summaries/${taskId}/visual`,
       { method: "POST", body: JSON.stringify(data) },
@@ -662,7 +662,7 @@ export class APIClient {
   async getVisualSummary(
     taskId: string,
     visualType: VisualType
-  ): Promise<ApiResponse<VisualSummaryResponse>> {
+  ): Promise<VisualSummaryResponse> {
     return request(
       `/summaries/${taskId}/visual/${visualType}`,
       { method: "GET" },
@@ -704,22 +704,10 @@ export class APIClient {
       try {
         onProgress?.(attempt, maxAttempts)
 
+        // getVisualSummary 成功时直接返回 VisualSummaryResponse
+        // 失败时会抛出 ApiError
         const result = await this.getVisualSummary(taskId, visualType)
-
-        if (result.code === 0 && result.data) {
-          return result.data
-        }
-
-        // 如果是 404（未找到），继续轮询
-        if (result.code === 40402) {
-          if (attempt < maxAttempts) {
-            await new Promise((resolve) => setTimeout(resolve, interval))
-            continue
-          }
-        }
-
-        // 其他错误直接抛出
-        throw new ApiError(result.code, result.message, result.traceId)
+        return result
       } catch (error) {
         // 最后一次尝试，抛出错误
         if (attempt >= maxAttempts) {
@@ -733,10 +721,10 @@ export class APIClient {
           )
         }
 
-        // 如果是 404（未生成完成），继续轮询
+        // 如果是 404（未生成完成）或 403（摘要不存在），继续轮询
         if (
           error instanceof ApiError &&
-          (error.code === 40402 || error.code === 40401)
+          (error.code === 40402 || error.code === 40401 || error.code === 40403)
         ) {
           await new Promise((resolve) => setTimeout(resolve, interval))
           continue

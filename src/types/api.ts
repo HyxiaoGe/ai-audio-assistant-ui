@@ -503,6 +503,7 @@ export interface VisualSummaryRequest {
   model_id?: string | null
   generate_image?: boolean  // 是否生成 PNG/SVG 图片，默认 true
   image_format?: "png" | "svg"  // 图片格式，默认 png
+  regenerate?: boolean  // 是否强制重新生成，默认 false（已存在则返回现有）
 }
 
 /**

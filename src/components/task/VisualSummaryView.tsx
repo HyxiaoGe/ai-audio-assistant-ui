@@ -48,13 +48,9 @@ export function VisualSummaryView({
     setError(null)
 
     try {
-      const response = await client.getVisualSummary(taskId, visualType)
-
-      if (response.code !== 0) {
-        throw new Error(response.message)
-      }
-
-      setData(response.data)
+      // getVisualSummary 成功时直接返回 VisualSummaryResponse，失败时抛出 ApiError
+      const result = await client.getVisualSummary(taskId, visualType)
+      setData(result)
     } catch (err) {
       const message = err instanceof Error ? err.message : "加载失败"
       setError(message)
@@ -187,21 +183,9 @@ export function VisualSummaryView({
 
   return (
     <div className={`space-y-4 ${className}`}>
-      {/* 工具栏 */}
-      <div className="flex items-center justify-between border-b pb-3">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span>模型: {data.model_used || "未知"}</span>
-          <span>•</span>
-          <span>格式: {data.format}</span>
-          {data.image_url && (
-            <>
-              <span>•</span>
-              <span>已生成图片</span>
-            </>
-          )}
-        </div>
-
-        <div className="flex gap-2">
+      {/* 工具栏 - 仅在有按钮时显示 */}
+      {(data.image_url || (renderMode === "mermaid" && mermaidRendered)) && (
+        <div className="flex items-center justify-end gap-2 border-b pb-3">
           {data.image_url && (
             <Button
               variant="outline"
@@ -224,7 +208,7 @@ export function VisualSummaryView({
             </Button>
           )}
         </div>
-      </div>
+      )}
 
       {/* 图表内容 */}
       {renderMode === "image" && data.image_url ? (
