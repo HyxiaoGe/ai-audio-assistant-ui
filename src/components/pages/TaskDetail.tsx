@@ -42,8 +42,16 @@ import type {
   SummaryItem,
   SummaryRegenerateType,
   LLMModel,
-  VisualType
+  VisualType,
+  StreamingImage,
+  SSEImageReadyEvent,
 } from '@/types/api';
+import { ImagePlaceholder } from '@/components/task/ImagePlaceholder';
+import {
+  extractPlaceholderDescription,
+  findImagePlaceholders,
+  extractImagePlaceholder,
+} from '@/lib/image-placeholder';
 import { useI18n } from '@/lib/i18n-context';
 import { useDateFormatter } from '@/lib/use-date-formatter';
 
@@ -167,6 +175,12 @@ export default function TaskDetail({
     key_points: null,
     action_items: null,
   });
+  // State for streaming images in summary (for overview only)
+  const [streamingImages, setStreamingImages] = useState<Map<string, StreamingImage>>(new Map());
+  const imagesTimeoutRef = useRef<number | null>(null);
+  // Summary scroll auto-follow refs
+  const summaryScrollRef = useRef<HTMLDivElement | null>(null);
+  const summaryAutoScrollRef = useRef(true);
   const [llmModels, setLlmModels] = useState<LLMModel[]>([]);
   const [summaryModelSelection, setSummaryModelSelection] = useState<Record<SummaryRegenerateType, string | null>>({
     overview: null,
@@ -240,7 +254,26 @@ export default function TaskDetail({
             h1: ({ ...props }) => <h1 {...props} className="text-2xl font-bold mt-6 mb-4" style={{ color: "var(--app-text)" }} />,
             h2: ({ ...props }) => <h2 {...props} className="text-xl font-semibold mt-5 mb-3" style={{ color: "var(--app-text)" }} />,
             h3: ({ ...props }) => <h3 {...props} className="text-lg font-semibold mt-4 mb-2" style={{ color: "var(--app-text)" }} />,
-            p: ({ ...props }) => <p {...props} className="my-3 leading-relaxed" />,
+            p: ({ children, ...props }) => {
+              // Check if children contain an image placeholder
+              const text = String(children);
+              const placeholderMatch = extractImagePlaceholder(text);
+
+              if (placeholderMatch) {
+                const description = extractPlaceholderDescription(placeholderMatch);
+                const imageState = streamingImages.get(placeholderMatch);
+
+                return (
+                  <ImagePlaceholder
+                    description={description}
+                    status={imageState?.status || "generating"}
+                    imageUrl={imageState?.url}
+                  />
+                );
+              }
+
+              return <p {...props} className="my-3 leading-relaxed">{children}</p>;
+            },
             code: ({ className, children, ...props }) => {
               const isInline = !className;
               if (isInline) {
@@ -446,6 +479,7 @@ export default function TaskDetail({
     const comparePoll = comparePollRef.current;
     const compareStream = compareStreamRef.current;
     const resumeTimer = resumeScrollTimerRef.current;
+    const imagesTimeout = imagesTimeoutRef.current;
     return () => {
       (Object.keys(summaryStreams) as SummaryRegenerateType[]).forEach((type) => {
         summaryStreams[type]?.close();
@@ -459,6 +493,9 @@ export default function TaskDetail({
       compareStream?.close();
       if (resumeTimer) {
         window.clearTimeout(resumeTimer);
+      }
+      if (imagesTimeout) {
+        window.clearTimeout(imagesTimeout);
       }
     };
   }, []);
@@ -483,6 +520,19 @@ export default function TaskDetail({
     [parseActionItems, parseSummaryLines]
   );
 
+  // Scroll summary container to bottom (used during streaming)
+  const scrollSummaryToBottom = useCallback(() => {
+    const container = summaryScrollRef.current;
+    if (!container || !summaryAutoScrollRef.current) return;
+
+    requestAnimationFrame(() => {
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: 'smooth'
+      });
+    });
+  }, []);
+
   const regenerateSummary = useCallback(
     async (summaryType: SummaryRegenerateType) => {
       if (!id) return;
@@ -501,6 +551,19 @@ export default function TaskDetail({
         summaryPollRef.current[summaryType] = null;
       }
       summaryBufferRef.current[summaryType] = '';
+
+      // Reset streaming images state (only overview supports images)
+      if (summaryType === 'overview') {
+        setStreamingImages(new Map());
+        if (imagesTimeoutRef.current) {
+          window.clearTimeout(imagesTimeoutRef.current);
+          imagesTimeoutRef.current = null;
+        }
+      }
+
+      // Reset auto-scroll state and scroll to top to prepare for new content
+      summaryAutoScrollRef.current = true;
+      summaryScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
 
       setSummaryStreaming((prev) => ({ ...prev, [summaryType]: true }));
       updateSummaryFromStream(summaryType, '');
@@ -608,21 +671,130 @@ export default function TaskDetail({
               if (typeof payload.content !== 'string') return;
               summaryBufferRef.current[summaryType] += payload.content;
               updateSummaryFromStream(summaryType, summaryBufferRef.current[summaryType]);
+
+              // Auto-scroll to follow new content
+              scrollSummaryToBottom();
+
+              // Detect and initialize image placeholders during streaming (overview only)
+              if (summaryType === 'overview') {
+                const placeholders = findImagePlaceholders(summaryBufferRef.current[summaryType]);
+                setStreamingImages((prev) => {
+                  const next = new Map(prev);
+                  let changed = false;
+                  for (const placeholder of placeholders) {
+                    if (!next.has(placeholder)) {
+                      next.set(placeholder, {
+                        placeholder,
+                        description: extractPlaceholderDescription(placeholder),
+                        url: null,
+                        status: 'pending',
+                      });
+                      changed = true;
+                    }
+                  }
+                  return changed ? next : prev;
+                });
+              }
             } catch {
               // Ignore malformed payloads
             }
           });
 
-          eventSource.addEventListener("summary.completed", (event) => {
+          // Handle images.processing event (overview only)
+          eventSource.addEventListener("images.processing", (event) => {
             try {
               const payload = JSON.parse(event.data);
-              if (payload.summary_type && payload.summary_type !== summaryType) return;
+              if (summaryType !== 'overview') return;
+              // Update all pending placeholders to generating status
+              if (payload.status === 'generating' && payload.total > 0) {
+                setStreamingImages((prev) => {
+                  const next = new Map(prev);
+                  for (const [key, img] of next) {
+                    if (img.status === 'pending') {
+                      next.set(key, { ...img, status: 'generating' });
+                    }
+                  }
+                  return next;
+                });
+              }
             } catch {
               // Ignore malformed payloads
             }
+          });
+
+          // Handle image.ready event (singular - one image at a time, overview only)
+          eventSource.addEventListener("image.ready", (event) => {
+            try {
+              const payload: SSEImageReadyEvent = JSON.parse(event.data);
+              if (summaryType !== 'overview') return;
+              // Update this single image's state
+              setStreamingImages((prev) => {
+                const next = new Map(prev);
+                next.set(payload.placeholder, {
+                  placeholder: payload.placeholder,
+                  description: extractPlaceholderDescription(payload.placeholder),
+                  url: payload.status === 'success' ? payload.url : null,
+                  status: payload.status === 'success' ? 'ready' : 'failed',
+                });
+                return next;
+              });
+              // Auto-scroll when image loads (content height may change)
+              scrollSummaryToBottom();
+              // Optional: could show progress like "2/3" using payload.current / payload.total
+            } catch {
+              // Ignore malformed payloads
+            }
+          });
+
+          // Handle images.completed event (all images done, overview only)
+          eventSource.addEventListener("images.completed", () => {
+            if (summaryType !== 'overview') return;
+            // Clear images timeout and close connection
+            if (imagesTimeoutRef.current) {
+              window.clearTimeout(imagesTimeoutRef.current);
+              imagesTimeoutRef.current = null;
+            }
             eventSource.close();
             summaryStreamRef.current[summaryType] = null;
-            setSummaryStreaming((prev) => ({ ...prev, [summaryType]: false }));
+          });
+
+          eventSource.addEventListener("summary.completed", (event) => {
+            let hasImages = false;
+            try {
+              const payload = JSON.parse(event.data);
+              if (payload.summary_type && payload.summary_type !== summaryType) return;
+              hasImages = Boolean(payload.has_images);
+            } catch {
+              // Ignore malformed payloads
+            }
+
+            // If no images expected, close connection immediately
+            if (!hasImages) {
+              eventSource.close();
+              summaryStreamRef.current[summaryType] = null;
+              setSummaryStreaming((prev) => ({ ...prev, [summaryType]: false }));
+            } else {
+              // Keep connection open for image.ready and images.completed events
+              // Set a timeout to close if images.completed never arrives (90s = 60s per image + 30s buffer)
+              imagesTimeoutRef.current = window.setTimeout(() => {
+                eventSource.close();
+                summaryStreamRef.current[summaryType] = null;
+                setSummaryStreaming((prev) => ({ ...prev, [summaryType]: false }));
+                // Mark remaining generating images as failed
+                setStreamingImages((prev) => {
+                  const next = new Map(prev);
+                  for (const [key, img] of next) {
+                    if (img.status === 'pending' || img.status === 'generating') {
+                      next.set(key, { ...img, status: 'failed' });
+                    }
+                  }
+                  return next;
+                });
+              }, 90000);
+              // Mark text streaming as complete, but images may still be loading
+              setSummaryStreaming((prev) => ({ ...prev, [summaryType]: false }));
+            }
+
             client.getSummary(id).then((result) => {
               buildSummaryState(result.items);
             });
@@ -658,7 +830,7 @@ export default function TaskDetail({
         }
       }
     },
-    [buildSummaryState, client, id, llmModels, summaryModelSelection, summaryStreaming, summaryVersions, t, updateSummaryFromStream]
+    [buildSummaryState, client, id, llmModels, scrollSummaryToBottom, summaryModelSelection, summaryStreaming, summaryVersions, t, updateSummaryFromStream]
   );
 
   const regenerateVisualSummary = useCallback(
@@ -761,6 +933,21 @@ export default function TaskDetail({
       active = false;
     };
   }, [client, locale, session?.user]);
+
+  // Detect user scroll in summary container to pause/resume auto-scroll
+  useEffect(() => {
+    const container = summaryScrollRef.current;
+    if (!container) return;
+
+    const handleUserScroll = () => {
+      // Check if user is near the bottom (within 50px)
+      const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
+      summaryAutoScrollRef.current = isAtBottom;
+    };
+
+    container.addEventListener('scroll', handleUserScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleUserScroll);
+  }, []);
 
   useEffect(() => {
     if (!task?.id || typeof window === "undefined") return;
@@ -2127,7 +2314,7 @@ export default function TaskDetail({
               </div>
 
               {/* Tab Content */}
-              <div className="flex-1 overflow-y-auto p-6">
+              <div ref={summaryScrollRef} className="flex-1 overflow-y-auto p-6">
                 {/* Summary Tab */}
                 {activeTab === 'summary' && (
                   <div className="space-y-6">

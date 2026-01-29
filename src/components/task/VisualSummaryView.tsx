@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from "react"
 import mermaid from "mermaid"
-import { Loader2, Download, Maximize2, AlertCircle } from "lucide-react"
+import { Loader2, Download, Maximize2, AlertCircle, Copy, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import type { VisualSummaryResponse, VisualType, SummaryItem } from "@/types/api"
@@ -29,6 +29,7 @@ export function VisualSummaryView({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mermaidRendered, setMermaidRendered] = useState(false)
+  const [copied, setCopied] = useState(false)
   const mermaidRef = useRef<HTMLDivElement>(null)
   const client = useAPIClient()
 
@@ -131,6 +132,19 @@ export function VisualSummaryView({
 
     if (mermaidRef.current.requestFullscreen) {
       mermaidRef.current.requestFullscreen()
+    }
+  }
+
+  // 复制代码
+  const handleCopyCode = async () => {
+    if (!data?.content) return
+
+    try {
+      await navigator.clipboard.writeText(data.content)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error("Failed to copy:", err)
     }
   }
 
@@ -257,13 +271,34 @@ export function VisualSummaryView({
       )}
 
       {/* 原始代码（可折叠查看）*/}
+      {/* 源代码（可折叠查看）*/}
       <details className="border rounded-lg p-4">
         <summary className="cursor-pointer text-sm font-medium">
           查看 Mermaid 源代码
         </summary>
-        <pre className="mt-3 p-4 bg-muted rounded text-xs overflow-x-auto">
-          <code>{data.content}</code>
-        </pre>
+        <div className="mt-3 relative">
+          <Button
+            variant="outline"
+            size="sm"
+            className="absolute top-2 right-2 h-8 px-2"
+            onClick={handleCopyCode}
+          >
+            {copied ? (
+              <>
+                <Check className="h-4 w-4 mr-1" />
+                已复制
+              </>
+            ) : (
+              <>
+                <Copy className="h-4 w-4 mr-1" />
+                复制
+              </>
+            )}
+          </Button>
+          <pre className="p-4 bg-muted rounded text-xs overflow-x-auto">
+            <code>{data.content}</code>
+          </pre>
+        </div>
       </details>
     </div>
   )

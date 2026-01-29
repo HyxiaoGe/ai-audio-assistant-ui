@@ -1038,3 +1038,49 @@ export interface YouTubeBatchAutoTranscribeRequest {
   channel_ids: string[]
   auto_transcribe: boolean
 }
+
+// ============================================================================
+// SSE 摘要流式图片事件
+// ============================================================================
+
+/**
+ * SSE images.processing 事件数据
+ * 当后端开始生成图片时发送
+ */
+export interface SSEImagesProcessingEvent {
+  status: "generating"
+  total: number
+}
+
+/**
+ * SSE image.ready 事件数据（单数）
+ * 每张图片生成完成时单独发送
+ */
+export interface SSEImageReadyEvent {
+  placeholder: string  // e.g., "{{IMAGE: 供应链时间轴}}"
+  url: string | null   // null if failed
+  status: "success" | "failed"
+  current: number      // 当前是第几张，如 2
+  total: number        // 总共几张，如 3
+}
+
+/**
+ * SSE images.completed 事件数据
+ * 所有图片生成完成时发送
+ */
+export interface SSEImagesCompletedEvent {
+  total: number
+  success_count: number
+  failed_count: number
+}
+
+/**
+ * 流式图片状态
+ * 用于前端追踪每个占位符的状态
+ */
+export interface StreamingImage {
+  placeholder: string
+  description: string
+  url: string | null
+  status: "pending" | "generating" | "ready" | "failed"
+}
