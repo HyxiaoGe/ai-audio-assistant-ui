@@ -842,6 +842,7 @@ export interface YouTubeConnectionStatus {
   subscription_count: number
   last_synced_at?: string
   token_expires_at?: string
+  needs_reauth: boolean // true 表示 refresh token 已失效，需要重新授权
 }
 
 /**

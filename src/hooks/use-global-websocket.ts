@@ -211,6 +211,26 @@ export function useGlobalWebSocket() {
             });
           }
         }
+
+        // Handle YouTube reauthorization required (with deduplication)
+        if (response.data?.type === "youtube_reauth_required") {
+          const now = Date.now();
+          const lastShown = toastHistoryRef.current.get("youtube_reauth");
+          if (!lastShown || now - lastShown > 60000) {
+            // Only show once per minute
+            toastHistoryRef.current.set("youtube_reauth", now);
+            toast.warning("YouTube 授权已过期", {
+              description: "请重新连接您的 YouTube 账号以继续同步",
+              action: {
+                label: "重新连接",
+                onClick: () => {
+                  window.location.href = "/subscriptions";
+                },
+              },
+              duration: 10000,
+            });
+          }
+        }
       } catch {
       }
     },

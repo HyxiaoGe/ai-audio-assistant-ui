@@ -188,10 +188,10 @@ export default function Subscriptions({
     } catch (error) {
       // Not connected is expected
       if (error instanceof ApiError && error.code === 51900) {
-        setStatus({ connected: false, subscription_count: 0 });
+        setStatus({ connected: false, subscription_count: 0, needs_reauth: false });
       } else {
         console.error("Failed to load YouTube status:", error);
-        setStatus({ connected: false, subscription_count: 0 });
+        setStatus({ connected: false, subscription_count: 0, needs_reauth: false });
       }
     } finally {
       setStatusLoading(false);
@@ -548,7 +548,7 @@ export default function Subscriptions({
     setDisconnecting(true);
     try {
       await client.disconnectYouTube();
-      setStatus({ connected: false, subscription_count: 0 });
+      setStatus({ connected: false, subscription_count: 0, needs_reauth: false });
       setSubscriptions([]);
       setSubsTotal(0);
       setLatestVideos([]);
@@ -827,6 +827,36 @@ export default function Subscriptions({
                             </div>
                           )}
                         </div>
+
+                        {/* Reauth warning */}
+                        {status.needs_reauth && (
+                          <div
+                            className="rounded-xl border p-4 flex items-start gap-3"
+                            style={{
+                              borderColor: "var(--app-warning)",
+                              background: "rgba(var(--warning-rgb), 0.1)",
+                            }}
+                          >
+                            <AlertCircle className="w-5 h-5 text-[var(--app-warning)] shrink-0 mt-0.5" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-[var(--app-warning)]">
+                                {t("subscriptions.reauthRequired")}
+                              </p>
+                              <p className="text-xs text-[var(--app-text-muted)] mt-1">
+                                {t("subscriptions.reauthDescription")}
+                              </p>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                className="mt-3"
+                                onClick={handleConnect}
+                                disabled={connecting}
+                              >
+                                {connecting ? t("subscriptions.connecting") : t("subscriptions.reconnectButton")}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
 
                         <div className="flex items-center gap-3">
                           <Button
