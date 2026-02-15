@@ -601,7 +601,7 @@ export default function TaskDetail({
         const rawBaseUrl =
           process.env.NEXT_PUBLIC_API_URL ||
           process.env.NEXT_PUBLIC_API_BASE_URL ||
-          'http://localhost:8000';
+          'http://localhost:8088';
         const normalizedBaseUrl = /\/api\/v1\/?$/.test(rawBaseUrl)
           ? rawBaseUrl.replace(/\/$/, '')
           : `${rawBaseUrl.replace(/\/$/, '')}/api/v1`;
@@ -1375,7 +1375,7 @@ export default function TaskDetail({
       const rawBaseUrl =
         process.env.NEXT_PUBLIC_API_URL ||
         process.env.NEXT_PUBLIC_API_BASE_URL ||
-        'http://localhost:8000';
+        'http://localhost:8088';
       const normalizedBaseUrl = /\/api\/v1\/?$/.test(rawBaseUrl)
         ? rawBaseUrl.replace(/\/$/, '')
         : `${rawBaseUrl.replace(/\/$/, '')}/api/v1`;

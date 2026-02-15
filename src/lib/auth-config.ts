@@ -24,7 +24,7 @@ export const authConfig: NextAuthConfig = {
       }
 
       const baseUrl =
-        process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL
+        process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL
       if (!baseUrl) {
         return false
       }

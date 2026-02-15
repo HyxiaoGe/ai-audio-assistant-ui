@@ -72,7 +72,7 @@ import {
 // ============================================================================
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api/v1"
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8088/api/v1"
 
 const DEFAULT_HEADERS = {
   "Content-Type": "application/json",
@@ -676,7 +676,7 @@ export class APIClient {
    */
   getVisualImageUrl(imageKey: string): string {
     const baseUrl =
-      process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+      process.env.NEXT_PUBLIC_API_URL || "http://localhost:8088"
     return `${baseUrl}/api/v1/media/${imageKey}`
   }
 
