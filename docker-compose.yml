@@ -9,10 +9,14 @@ services:
         NEXT_PUBLIC_API_BASE_URL: http://localhost:8088/api/v1
     ports:
       - "3000:3000"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     environment:
       - AUTH_URL=http://localhost:3000
       - AUTH_TRUST_HOST=true
-      - API_BASE_URL=http://host.docker.internal:8088/api/v1
+      - API_BASE_URL=http://ai-audio-assistant-web-api-1:8000/api/v1
     restart: unless-stopped
+    networks:
+      - ai-audio-network
+
+networks:
+  ai-audio-network:
+    external: true
