@@ -14,11 +14,19 @@ const REFRESH_TOKEN_KEY = "auth_refresh_token"
 const TOKEN_EXPIRY_KEY = "auth_token_expiry"
 const USER_INFO_KEY = "auth_user_info"
 
+export interface AuthUserPreferences {
+  locale: string
+  timezone: string
+  theme: string
+}
+
 export interface AuthUser {
   id: string
   email: string
   name: string
   avatar_url?: string
+  is_superuser: boolean
+  preferences: AuthUserPreferences
 }
 
 interface AuthState {
@@ -100,6 +108,8 @@ async function fetchUserInfo(accessToken: string): Promise<AuthUser | null> {
       email: data.email,
       name: data.name || "",
       avatar_url: data.avatar_url,
+      is_superuser: data.is_superuser ?? false,
+      preferences: data.preferences ?? { locale: "zh", timezone: "Asia/Shanghai", theme: "system" },
     }
   } catch {
     return null
