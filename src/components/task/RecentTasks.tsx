@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useAuthStore } from "@/store/auth-store";
 import EmptyState from "@/components/common/EmptyState";
 import TaskCard from "@/components/task/TaskCard";
 import { useAPIClient } from "@/lib/use-api-client";
@@ -11,7 +11,7 @@ import type { TaskListItem, TaskStatus } from "@/types/api";
 import { useI18n } from "@/lib/i18n-context";
 
 export const RecentTasks = () => {
-  const { data: session } = useSession();
+  const authUser = useAuthStore((s) => s.user);
   const client = useAPIClient();
   const { formatRelativeTime } = useDateFormatter();
   const { t } = useI18n();
@@ -20,7 +20,7 @@ export const RecentTasks = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!session?.user) {
+    if (!authUser) {
       setTasks([]);
       setLoading(false);
       setError(null);
@@ -55,7 +55,7 @@ export const RecentTasks = () => {
     return () => {
       isMounted = false;
     };
-  }, [client, session, t]);
+  }, [client, authUser, t]);
 
   const formatDurationLabel = (seconds?: number) => {
     if (!seconds || seconds <= 0) return "--";
@@ -76,7 +76,7 @@ export const RecentTasks = () => {
 
   const recentTasks = tasks.slice(0, 5);
 
-  if (!session?.user) {
+  if (!authUser) {
     return (
       <EmptyState
         title={t("dashboard.loginToViewTitle")}

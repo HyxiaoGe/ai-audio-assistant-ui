@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useAuthStore } from "@/store/auth-store";
 import { useTheme } from "next-themes";
 import { useSearchParams } from "next/navigation";
 import Subscriptions from "@/components/pages/Subscriptions";
@@ -10,7 +10,8 @@ import { useSettings } from "@/lib/settings-context";
 import FullPageLoader from "@/components/common/FullPageLoader";
 
 function SubscriptionsContent() {
-  const { data: session, status } = useSession();
+  const authUser = useAuthStore((s) => s.user);
+  const status = useAuthStore((s) => s.status);
   const { setTheme } = useSettings();
   const { resolvedTheme } = useTheme();
   const [loginOpen, setLoginOpen] = useState(false);
@@ -28,7 +29,7 @@ function SubscriptionsContent() {
   return (
     <>
       <Subscriptions
-        isAuthenticated={!!session?.user}
+        isAuthenticated={!!authUser}
         onOpenLogin={() => setLoginOpen(true)}
         onToggleTheme={toggleTheme}
         searchParams={searchParams}

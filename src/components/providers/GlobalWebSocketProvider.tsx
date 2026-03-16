@@ -2,18 +2,18 @@
  * Global WebSocket Provider
  *
  * Initializes the global WebSocket connection for the entire app.
- * Must be placed inside SessionProvider to access authentication.
+ * Must be placed inside AuthProvider to access authentication.
  */
 
 "use client";
 
 import { useEffect } from "react";
-import { useSession } from "next-auth/react";
+import { useAuthStore } from "@/store/auth-store";
 import { useGlobalWebSocket } from "@/hooks/use-global-websocket";
 import { useGlobalStore } from "@/store/global-store";
 
 export function GlobalWebSocketProvider({ children }: { children: React.ReactNode }) {
-  const { data: session } = useSession();
+  const authUser = useAuthStore((s) => s.user);
   const loadNotifications = useGlobalStore((state) => state.loadNotifications);
 
   // Initialize global WebSocket (auto-connects when user is authenticated)
@@ -21,10 +21,10 @@ export function GlobalWebSocketProvider({ children }: { children: React.ReactNod
 
   // Load notifications when user is authenticated
   useEffect(() => {
-    if (session?.user) {
+    if (authUser) {
       loadNotifications();
     }
-  }, [session, loadNotifications]);
+  }, [authUser, loadNotifications]);
 
   return <>{children}</>;
 }

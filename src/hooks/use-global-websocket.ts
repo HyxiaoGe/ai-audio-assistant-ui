@@ -13,7 +13,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback, createElement } from "react";
-import { useSession } from "next-auth/react";
+import { useAuthStore } from "@/store/auth-store";
 import { toast } from "sonner";
 import { CheckCircle2, XCircle } from "lucide-react";
 import { getToken } from "@/lib/auth-token";
@@ -49,7 +49,7 @@ const AUTH_TIMEOUT_MS = 5000;
 const POLLING_INTERVAL = 5000; // 5 seconds
 
 export function useGlobalWebSocket() {
-  const { data: session } = useSession();
+  const authUser = useAuthStore((s) => s.user);
   const client = useAPIClient();
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
@@ -96,7 +96,7 @@ export function useGlobalWebSocket() {
 
   // Start HTTP polling fallback
   const startPolling = useCallback(() => {
-    if (!session?.user || pollingIntervalRef.current) return;
+    if (!authUser || pollingIntervalRef.current) return;
 
     const poll = async () => {
       try {
@@ -123,7 +123,7 @@ export function useGlobalWebSocket() {
     // Poll immediately, then every 5 seconds
     poll();
     pollingIntervalRef.current = setInterval(poll, POLLING_INTERVAL);
-  }, [session, client, updateTask]);
+  }, [authUser, client, updateTask]);
 
   // Handle incoming WebSocket messages
   const handleMessage = useCallback(
@@ -246,7 +246,7 @@ export function useGlobalWebSocket() {
 
   // Reconnect with exponential backoff
   const reconnect = useCallback(() => {
-    if (!enabledRef.current || !session?.user) return;
+    if (!enabledRef.current || !authUser) return;
 
     const attempts = reconnectAttemptsRef.current;
     if (attempts >= MAX_RECONNECT_ATTEMPTS) {
@@ -267,11 +267,11 @@ export function useGlobalWebSocket() {
       reconnectAttemptsRef.current += 1;
       connectRef.current?.();
     }, delay);
-  }, [session, startPolling, setWsReconnecting]);
+  }, [authUser, startPolling, setWsReconnecting]);
 
   // Connect to WebSocket
   const connect = useCallback(async () => {
-    if (!session?.user) return;
+    if (!authUser) return;
 
     // Close existing connection
     if (wsRef.current) {
@@ -342,7 +342,7 @@ export function useGlobalWebSocket() {
         wsRef.current = null;
 
         // Auto-reconnect if enabled
-        if (enabledRef.current && session?.user) {
+        if (enabledRef.current && authUser) {
           reconnect();
         }
       };
@@ -350,7 +350,7 @@ export function useGlobalWebSocket() {
       setWsConnected(false);
       reconnect();
     }
-  }, [session, handleMessage, setWsConnected, reconnect]);
+  }, [authUser, handleMessage, setWsConnected, reconnect]);
 
   useEffect(() => {
     connectRef.current = () => {
@@ -388,7 +388,7 @@ export function useGlobalWebSocket() {
 
   // Connect on mount, disconnect on unmount
   useEffect(() => {
-    if (session?.user) {
+    if (authUser) {
       enabledRef.current = true;
       connect();
     }
@@ -396,7 +396,7 @@ export function useGlobalWebSocket() {
     return () => {
       disconnect();
     };
-  }, [session, connect, disconnect]);
+  }, [authUser, connect, disconnect]);
 
   return {
     wsConnected: useGlobalStore((state) => state.wsConnected),

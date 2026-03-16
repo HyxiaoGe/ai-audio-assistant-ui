@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useSession } from "next-auth/react";
+import { useAuthStore } from "@/store/auth-store";
 import { useTheme } from "next-themes";
 import TaskList from "@/components/pages/TaskList";
 import LoginModal from "@/components/auth/LoginModal";
@@ -10,7 +10,8 @@ import { useSettings } from "@/lib/settings-context";
 import FullPageLoader from "@/components/common/FullPageLoader";
 
 export default function TaskListPage() {
-  const { data: session, status } = useSession();
+  const authUser = useAuthStore((s) => s.user);
+  const status = useAuthStore((s) => s.status);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
   const { setTheme } = useSettings();
@@ -43,7 +44,7 @@ export default function TaskListPage() {
   return (
     <>
       <TaskList
-        isAuthenticated={!!session?.user}
+        isAuthenticated={!!authUser}
         onOpenLogin={openLoginModal}
         onOpenNewTask={openNewTaskModal}
         onToggleTheme={toggleTheme}

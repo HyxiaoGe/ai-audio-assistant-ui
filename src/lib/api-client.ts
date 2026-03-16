@@ -157,10 +157,20 @@ async function request<T>(
   }
 
   try {
-    const response = await fetch(url, {
+    let response = await fetch(url, {
       ...options,
       headers,
     })
+
+    // 401 时自动刷新 token 并重试
+    if (response.status === 401 && typeof window !== "undefined") {
+      const { useAuthStore } = await import("@/store/auth-store")
+      const newToken = await useAuthStore.getState().getAccessToken()
+      if (newToken && newToken !== authToken) {
+        headers["Authorization"] = `Bearer ${newToken}`
+        response = await fetch(url, { ...options, headers })
+      }
+    }
 
     // 解析响应
     const result: ApiResponse<T> = await response.json()

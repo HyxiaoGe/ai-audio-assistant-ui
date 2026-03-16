@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { useSession } from "next-auth/react"
+import { useAuthStore } from "@/store/auth-store"
 import { Search, ChevronLeft, ChevronRight, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { TaskCardNew } from "./TaskCardNew"
@@ -28,7 +28,8 @@ interface TaskListAPIProps {
 export function TaskListAPI({ onRequireLogin }: TaskListAPIProps) {
   const router = useRouter()
   const client = useAPIClient()
-  const { data: session, status } = useSession()
+  const authUser = useAuthStore((s) => s.user)
+  const status = useAuthStore((s) => s.status)
   const { t } = useI18n()
 
   // 状态
@@ -75,10 +76,10 @@ export function TaskListAPI({ onRequireLogin }: TaskListAPIProps) {
    * 初始加载
    */
   useEffect(() => {
-    if (session?.user) {
+    if (authUser) {
       loadTasks()
     }
-  }, [loadTasks, session])
+  }, [loadTasks, authUser])
 
   if (status === "loading") {
     return (
@@ -96,7 +97,7 @@ export function TaskListAPI({ onRequireLogin }: TaskListAPIProps) {
     )
   }
 
-  if (!session?.user) {
+  if (!authUser) {
     return (
       <div
         className="glass-panel p-10 rounded-lg text-center"

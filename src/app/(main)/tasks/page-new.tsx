@@ -6,7 +6,7 @@
 "use client"
 
 import { useState } from "react"
-import { useSession } from "next-auth/react"
+import { useAuthStore } from "@/store/auth-store"
 import { useTheme } from "next-themes"
 import Header from "@/components/layout/Header"
 import Sidebar from "@/components/layout/Sidebar"
@@ -17,7 +17,8 @@ import { useSettings } from "@/lib/settings-context"
 import FullPageLoader from "@/components/common/FullPageLoader"
 
 export default function TasksPageNew() {
-  const { data: session, status } = useSession()
+  const authUser = useAuthStore((s) => s.user)
+  const status = useAuthStore((s) => s.status)
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
   const [loginOpen, setLoginOpen] = useState(false)
   const { setTheme } = useSettings()
@@ -35,7 +36,7 @@ export default function TasksPageNew() {
     <div className="h-screen flex flex-col" style={{ background: "var(--app-bg)" }}>
       {/* Header */}
       <Header
-        isAuthenticated={!!session?.user}
+        isAuthenticated={!!authUser}
         onOpenLogin={() => setLoginOpen(true)}
         onToggleTheme={toggleTheme}
       />

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { useAuthStore } from '@/store/auth-store';
 import { notifyError, notifySuccess } from '@/lib/notify';
 import { ArrowLeft, ChevronDown, FileText, CheckSquare, Lightbulb } from 'lucide-react';
 import ReactMarkdown from "react-markdown";
@@ -96,7 +96,8 @@ export default function TaskDetail({
 }: TaskDetailProps) {
   const router = useRouter();
   const params = useParams();
-  const { data: session, status: sessionStatus } = useSession();
+  const authUser = useAuthStore((s) => s.user);
+  const sessionStatus = useAuthStore((s) => s.status);
   const client = useAPIClient();
   const { t, locale } = useI18n();
   const { formatRelativeTime } = useDateFormatter();
@@ -383,7 +384,7 @@ export default function TaskDetail({
   }, [parseActionItems, parseSummaryLines]);
 
   const loadTask = useCallback(async () => {
-    if (!id || !session?.user) return;
+    if (!id || !authUser) return;
     setLoading(true);
     setError(null);
     setTranscriptLoading(true);
@@ -471,7 +472,7 @@ export default function TaskDetail({
       setTranscriptLoading(false);
       setLoading(false);
     }
-  }, [buildSummaryState, client, id, session, t, availableSpeakers]);
+  }, [buildSummaryState, client, id, authUser, t, availableSpeakers]);
 
   useEffect(() => {
     const summaryStreams = summaryStreamRef.current;
@@ -908,13 +909,13 @@ export default function TaskDetail({
   );
 
   useEffect(() => {
-    if (session?.user) {
+    if (authUser) {
       loadTask();
     }
-  }, [loadTask, session]);
+  }, [loadTask, authUser]);
 
   useEffect(() => {
-    if (!session?.user) return;
+    if (!authUser) return;
     let active = true;
     const loadModels = async () => {
       try {
@@ -932,7 +933,7 @@ export default function TaskDetail({
     return () => {
       active = false;
     };
-  }, [client, locale, session?.user]);
+  }, [client, locale, authUser]);
 
   // Detect user scroll in summary container to pause/resume auto-scroll
   useEffect(() => {
@@ -1854,7 +1855,7 @@ export default function TaskDetail({
     );
   }
 
-  if (!session?.user) {
+  if (!authUser) {
     return (
       <div className="h-screen flex flex-col" style={{ background: 'var(--app-bg)' }}>
         <Header
@@ -1884,7 +1885,7 @@ export default function TaskDetail({
     return (
       <div className="h-screen flex flex-col" style={{ background: 'var(--app-bg)' }}>
         <Header
-          isAuthenticated={!!session?.user}
+          isAuthenticated={!!authUser}
           onOpenLogin={() => setLoginOpen(true)}
           onToggleTheme={onToggleTheme}
         />
@@ -1906,7 +1907,7 @@ export default function TaskDetail({
     return (
       <div className="h-screen flex flex-col" style={{ background: 'var(--app-bg)' }}>
         <Header
-          isAuthenticated={!!session?.user}
+          isAuthenticated={!!authUser}
           onOpenLogin={() => setLoginOpen(true)}
           onToggleTheme={onToggleTheme}
         />
@@ -1928,7 +1929,7 @@ export default function TaskDetail({
       <div className="h-screen flex flex-col" style={{ background: 'var(--app-bg)' }}>
         {/* Header */}
         <Header
-          isAuthenticated={!!session?.user}
+          isAuthenticated={!!authUser}
           onOpenLogin={() => setLoginOpen(true)}
           onToggleTheme={onToggleTheme}
         />
@@ -2008,7 +2009,7 @@ export default function TaskDetail({
       <div className="h-screen flex flex-col" style={{ background: 'var(--app-bg)' }}>
         {/* Header */}
         <Header
-          isAuthenticated={!!session?.user}
+          isAuthenticated={!!authUser}
           onOpenLogin={() => setLoginOpen(true)}
           onToggleTheme={onToggleTheme}
         />
@@ -2138,7 +2139,7 @@ export default function TaskDetail({
     <div className="h-screen flex flex-col" style={{ background: 'var(--app-bg)' }}>
       {/* Header */}
       <Header 
-        isAuthenticated={!!session?.user}
+        isAuthenticated={!!authUser}
         onOpenLogin={() => setLoginOpen(true)}
         onToggleTheme={onToggleTheme}
       />

@@ -7,12 +7,10 @@ services:
       args:
         NEXT_PUBLIC_APP_URL: http://192.168.1.10:3002
         NEXT_PUBLIC_API_BASE_URL: http://192.168.1.10:8088/api/v1
+        NEXT_PUBLIC_AUTH_URL: http://192.168.1.10:8100
+        NEXT_PUBLIC_AUTH_CLIENT_ID: ${AUTH_CLIENT_ID:-}
     ports:
       - "3002:3000"
-    environment:
-      - AUTH_URL=http://192.168.1.10:3002
-      - AUTH_TRUST_HOST=true
-      - API_BASE_URL=http://ai-audio-assistant-web-api-1:8000/api/v1
     restart: unless-stopped
     networks:
       - ai-audio-network

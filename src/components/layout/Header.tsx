@@ -4,8 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { signOut, useSession } from 'next-auth/react';
-import { clearToken } from '@/lib/auth-token';
+import { useAuthStore } from '@/store/auth-store';
 import { Moon, Sun, ChevronDown, Mic, LogOut, Play, Pause, X } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useI18n } from '@/lib/i18n-context';
@@ -29,7 +28,9 @@ export default function Header({
   const [isMounted, setIsMounted] = useState(false);
   const [hoverRatio, setHoverRatio] = useState<number | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const { data: session, status: sessionStatus, update } = useSession();
+  const authUser = useAuthStore((s) => s.user);
+  const authStatus = useAuthStore((s) => s.status);
+  const authLogout = useAuthStore((s) => s.logout);
   const { t } = useI18n();
   const { resolvedTheme } = useTheme();
   const pathname = usePathname();
@@ -45,8 +46,8 @@ export default function Header({
   const stop = useAudioStore((state) => state.stop);
   const isDark = resolvedTheme === "dark";
   const [avatarSrc, setAvatarSrc] = useState("");
-  const avatarName = session?.user?.name || session?.user?.email || "U";
-  const resolvedAvatarSrc = avatarSrc || session?.user?.image || "";
+  const avatarName = authUser?.name || authUser?.email || "U";
+  const resolvedAvatarSrc = avatarSrc || authUser?.avatar_url || "";
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -59,23 +60,20 @@ export default function Header({
   const isAdmin = useUserStore((state) => state.isAdmin);
 
   useEffect(() => {
-    if (!session?.user) return;
+    if (!authUser) return;
     // Load profile into global store
     if (!profileLoaded) {
       loadUserProfile();
     }
-  }, [session?.user, profileLoaded, loadUserProfile]);
+  }, [authUser, profileLoaded, loadUserProfile]);
 
   useEffect(() => {
     // Update avatar from user profile
     if (userProfile?.image_url) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setAvatarSrc(userProfile.image_url);
-      if (!session?.user?.image && typeof update === "function") {
-        update({ user: { image: userProfile.image_url } });
-      }
     }
-  }, [userProfile, session?.user?.image, update]);
+  }, [userProfile]);
 
   useEffect(() => {
     if (!isMenuOpen) return;
@@ -92,8 +90,8 @@ export default function Header({
   }, [isMenuOpen]);
 
   const handleLogout = async () => {
-    clearToken();
-    await signOut({ callbackUrl: '/' });
+    await authLogout();
+    router.push('/login');
   };
 
   const pathSegments = pathname.split("/").filter(Boolean);
@@ -282,7 +280,7 @@ export default function Header({
         <NotificationBell />
 
         {/* 用户头像 + 下拉 */}
-        {sessionStatus === "loading" ? (
+        {authStatus === "loading" ? (
           <div className="flex items-center gap-2 opacity-70">
             <div
               className="size-8 rounded-full"

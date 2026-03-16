@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from 'react';
-import { signIn } from 'next-auth/react';
 import { Mic, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n-context';
+import { loginWithGoogle, loginWithGitHub } from '@/store/auth-store';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -11,13 +11,17 @@ interface LoginModalProps {
   callbackUrl?: string;
 }
 
-export default function LoginModal({ isOpen, onClose, callbackUrl = '/' }: LoginModalProps) {
+export default function LoginModal({ isOpen, onClose, callbackUrl = '/tasks' }: LoginModalProps) {
   const [loading, setLoading] = useState<'google' | 'github' | null>(null);
   const { t } = useI18n();
 
-  const handleSocialLogin = async (provider: 'google' | 'github') => {
+  const handleSocialLogin = (provider: 'google' | 'github') => {
     setLoading(provider);
-    await signIn(provider, { callbackUrl });
+    if (provider === 'google') {
+      loginWithGoogle(callbackUrl);
+    } else {
+      loginWithGitHub(callbackUrl);
+    }
   };
 
   if (!isOpen) return null;
@@ -25,12 +29,12 @@ export default function LoginModal({ isOpen, onClose, callbackUrl = '/' }: Login
   return (
     <>
       {/* 背景遮罩 */}
-      <div 
+      <div
         className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
         onClick={onClose}
       >
         {/* 登录模态框 */}
-        <div 
+        <div
           className="glass-panel-strong relative w-full max-w-md rounded-2xl p-12"
           onClick={(e) => e.stopPropagation()}
         >
@@ -52,12 +56,12 @@ export default function LoginModal({ isOpen, onClose, callbackUrl = '/' }: Login
             >
               <Mic className="w-6 h-6 text-white" />
             </div>
-            
+
             {/* 产品名称 - Heading/H1 */}
             <h1 className="text-h1 mb-2" style={{ color: "var(--app-text)" }}>
               {t("app.name")}
             </h1>
-            
+
             {/* 副标题 - Body/Default */}
             <p className="text-body-default" style={{ color: "var(--app-text-muted)" }}>
               {t("app.tagline")}

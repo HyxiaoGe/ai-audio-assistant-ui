@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useAuthStore } from "@/store/auth-store";
 import { useTheme } from "next-themes";
 import { useRouter, useSearchParams } from "next/navigation";
 import Settings from "@/components/pages/Settings";
@@ -10,7 +10,8 @@ import { useSettings } from "@/lib/settings-context";
 import FullPageLoader from "@/components/common/FullPageLoader";
 
 function SettingsContent() {
-  const { data: session, status } = useSession();
+  const authUser = useAuthStore((s) => s.user);
+  const status = useAuthStore((s) => s.status);
   const { setTheme } = useSettings();
   const { resolvedTheme } = useTheme();
   const [loginOpen, setLoginOpen] = useState(false);
@@ -42,7 +43,7 @@ function SettingsContent() {
   return (
     <>
       <Settings
-        isAuthenticated={!!session?.user}
+        isAuthenticated={!!authUser}
         onOpenLogin={() => setLoginOpen(true)}
         onToggleTheme={toggleTheme}
       />
