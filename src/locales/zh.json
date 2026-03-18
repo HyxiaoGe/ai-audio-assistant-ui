@@ -622,6 +622,7 @@
     "model": "模型: {model}",
     "tokens": "tokens: {count}",
     "generatedAt": "生成于",
+    "imageGeneratedBy": "由 {model} 生成",
     "type": {
       "overview": "内容概述",
       "keyPoints": "关键要点",

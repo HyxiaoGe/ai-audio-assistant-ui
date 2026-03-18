@@ -452,6 +452,7 @@ export interface SummaryItem {
   visual_content?: string | null
   image_url?: string | null  // 修复：后端返回的是 image_url 不是 image_key
   image_format?: "png" | "svg" | null
+  image_model_used?: string | null
 }
 
 /**

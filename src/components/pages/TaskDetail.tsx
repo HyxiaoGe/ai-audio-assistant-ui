@@ -47,6 +47,7 @@ import type {
   SSEImageReadyEvent,
 } from '@/types/api';
 import { ImagePlaceholder } from '@/components/task/ImagePlaceholder';
+import { formatModelName } from '@/lib/model-name';
 import {
   extractPlaceholderDescription,
   findImagePlaceholders,
@@ -148,6 +149,7 @@ export default function TaskDetail({
     key_points: null,
     action_items: null,
   });
+  const [imageModelUsed, setImageModelUsed] = useState<string | null>(null);
   const [summaryStreaming, setSummaryStreaming] = useState({
     overview: false,
     key_points: false,
@@ -218,7 +220,7 @@ export default function TaskDetail({
   ]), [t]);
 
   // Render Markdown content for summaries
-  const renderMarkdownContent = (content: string) => {
+  const renderMarkdownContent = (content: string, options?: { imageModel?: string | null }) => {
     return (
       <div className="prose prose-sm max-w-none markdown-summary" style={{ color: 'var(--app-text)' }}>
         <ReactMarkdown
@@ -284,6 +286,27 @@ export default function TaskDetail({
               }
               return <code {...props} className={`block p-3 rounded text-sm overflow-x-auto ${className || ""}`} style={{ backgroundColor: "var(--app-glass-bg)" }}>{children}</code>;
             },
+            img: ({ src, alt, ...props }) => (
+              <figure style={{ margin: '16px 0' }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={src} alt={alt} {...props} style={{ maxWidth: '100%', borderRadius: '8px' }} />
+                <figcaption
+                  style={{
+                    fontSize: '12px',
+                    color: 'var(--app-text-subtle)',
+                    marginTop: '6px',
+                    textAlign: 'center',
+                  }}
+                >
+                  {alt}
+                  {options?.imageModel && (
+                    <span style={{ marginLeft: '8px', opacity: 0.7 }}>
+                      · {t("summary.imageGeneratedBy", { model: formatModelName(options.imageModel) })}
+                    </span>
+                  )}
+                </figcaption>
+              </figure>
+            ),
             blockquote: ({ ...props }) => <blockquote {...props} className="border-l-4 pl-4 my-4 italic" style={{ borderColor: "var(--app-primary)", color: "var(--app-text-muted)" }} />,
           }}
         >
@@ -383,6 +406,9 @@ export default function TaskDetail({
 
     setSummaryVersions(latestVersions);
     setSummaryModelUsed(modelUsed);
+    setImageModelUsed(
+      items.find((item) => item.summary_type === 'overview' && item.is_active)?.image_model_used ?? null
+    );
   }, [parseActionItems, parseSummaryLines]);
 
   const loadTask = useCallback(async () => {
@@ -2376,11 +2402,11 @@ export default function TaskDetail({
                         </div>
                       </div>
                       {summaryStreaming.overview && summaryStreamContent.overview ? (
-                        renderMarkdownContent(summaryStreamContent.overview)
+                        renderMarkdownContent(summaryStreamContent.overview, { imageModel: imageModelUsed })
                       ) : compareMode && compareSummaryType === "overview" ? (
                         renderCompareView()
                       ) : summaryOverviewMarkdown ? (
-                        renderMarkdownContent(summaryOverviewMarkdown)
+                        renderMarkdownContent(summaryOverviewMarkdown, { imageModel: imageModelUsed })
                       ) : (
                         <p className="text-base leading-7" style={{ color: 'var(--app-text-subtle)' }}>
                           {getSummaryEmptyText("overview", "task.summaryEmpty")}
