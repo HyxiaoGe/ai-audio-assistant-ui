@@ -49,4 +49,4 @@ yarn-error.log*
 next-env.d.ts
 
 AGENTS.md
-CLAUDE.md
+CLAUDE.md.env.local
