@@ -33,7 +33,7 @@ export default function ProcessingState({
     "preparing": ["queued", "resolving"],
     "downloading": ["downloading", "downloaded", "transcoding", "uploading", "uploaded", "resolved"],
     "extracting": ["extracting"],
-    "transcribing": ["asr_submitting", "asr_polling", "transcribing"],
+    "transcribing": ["asr_submitting", "asr_polling", "transcribing", "polishing"],
     "summarizing": ["summarizing"],
     "completed": ["completed"],
   };

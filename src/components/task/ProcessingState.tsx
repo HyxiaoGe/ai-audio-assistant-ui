@@ -26,6 +26,7 @@ export function ProcessingState({
     status === "pending" ||
     status === "extracting" ||
     status === "transcribing" ||
+    status === "polishing" ||
     status === "summarizing"
 
   if (!isProcessing) {
@@ -36,6 +37,7 @@ export function ProcessingState({
     pending: t("processingState.pending"),
     extracting: t("processingState.extracting"),
     transcribing: t("processingState.transcribing"),
+    polishing: t("processingState.polishing"),
     summarizing: t("processingState.summarizing"),
     completed: t("task.status.completed"),
     failed: t("task.status.failed"),
@@ -45,6 +47,7 @@ export function ProcessingState({
     pending: t("processingState.pendingDesc"),
     extracting: t("processingState.extractingDesc"),
     transcribing: t("processingState.transcribingDesc"),
+    polishing: t("processingState.polishingDesc"),
     summarizing: t("processingState.summarizingDesc"),
     completed: t("processingState.completedDesc"),
     failed: t("processingState.failedDesc"),

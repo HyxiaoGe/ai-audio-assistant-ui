@@ -70,6 +70,8 @@ interface DisplayTranscriptSegment {
   content: string;
   words: TranscriptWord[] | null;
   avatarColor: string;
+  isPolished: boolean;
+  originalContent: string | null;
 }
 
 interface KeyPoint {
@@ -437,6 +439,8 @@ export default function TaskDetail({
             content: segment.content,
             words: segment.words ?? null,
             avatarColor: speakerInfo?.color || 'var(--app-text-subtle)',
+            isPolished: segment.is_edited ?? false,
+            originalContent: segment.original_content ?? null,
           };
         });
         setTranscript(mappedTranscript);
@@ -2288,6 +2292,8 @@ export default function TaskDetail({
                         }
                         onTimeClick={handleTimeClick}
                         onEdit={(newContent) => handleEditTranscript(segment.id, newContent)}
+                        isPolished={segment.isPolished}
+                        originalContent={segment.originalContent}
                       />
                     </div>
                   ))

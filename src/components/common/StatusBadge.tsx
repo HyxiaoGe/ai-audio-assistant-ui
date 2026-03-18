@@ -66,6 +66,10 @@ export const StatusBadge = ({ status }: StatusBadgeProps) => {
       label: t("status.processing"),
       className: "bg-[var(--app-primary-soft)] text-[var(--app-primary)]"
     },
+    polishing: {
+      label: t("task.status.polishing"),
+      className: "bg-[var(--app-primary-soft)] text-[var(--app-primary)]"
+    },
     summarizing: {
       label: t("status.processing"),
       className: "bg-[var(--app-primary-soft)] text-[var(--app-primary)]"

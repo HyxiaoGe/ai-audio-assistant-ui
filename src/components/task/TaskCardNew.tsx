@@ -37,6 +37,7 @@ const STATUS_VARIANTS: Record<
   asr_submitting: "default",
   asr_polling: "default",
   transcribing: "default",
+  polishing: "default",
   summarizing: "default",
   completed: "default",
   failed: "destructive",

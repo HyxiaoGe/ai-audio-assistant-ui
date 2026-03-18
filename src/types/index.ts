@@ -13,6 +13,7 @@ export type TaskStatus =
   | "asr_submitting"
   | "asr_polling"
   | "transcribing"
+  | "polishing"
   | "summarizing"
   | "completed"
   | "failed"

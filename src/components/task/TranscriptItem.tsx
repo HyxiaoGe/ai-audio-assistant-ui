@@ -16,6 +16,8 @@ interface TranscriptItemProps {
   activeWordProgress?: number | null;
   onEdit?: (newContent: string) => void;
   onTimeClick?: (time: string) => void;
+  isPolished?: boolean;
+  originalContent?: string | null;
 }
 
 export default function TranscriptItem({
@@ -29,11 +31,14 @@ export default function TranscriptItem({
   activeWordIndex = null,
   activeWordProgress = null,
   onEdit = () => {},
-  onTimeClick = () => {}
+  onTimeClick = () => {},
+  isPolished = false,
+  originalContent = null,
 }: TranscriptItemProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(content);
+  const [showOriginal, setShowOriginal] = useState(false);
   const { t } = useI18n();
 
   // 获取说话人首字母
@@ -112,6 +117,20 @@ export default function TranscriptItem({
           >
             ({startTime} - {endTime})
           </button>
+
+          {/* AI Polish Badge */}
+          {isPolished && (
+            <span
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs"
+              style={{
+                background: 'var(--app-success-bg)',
+                color: 'var(--app-success)',
+                fontSize: '11px',
+              }}
+            >
+              ✓ {t("transcript.aiPolished")}
+            </span>
+          )}
         </div>
 
         {/* Edit/Save Buttons */}
@@ -192,6 +211,33 @@ export default function TranscriptItem({
         >
           {content}
         </p>
+      )}
+
+      {/* Original Content Toggle (for polished segments) */}
+      {isPolished && originalContent && originalContent !== content && (
+        <div style={{ marginTop: '6px' }}>
+          <button
+            onClick={() => setShowOriginal(!showOriginal)}
+            className="text-xs hover:underline"
+            style={{ color: 'var(--app-text-subtle)' }}
+          >
+            {showOriginal ? t("transcript.hideOriginal") : t("transcript.showOriginal")}
+          </button>
+          {showOriginal && (
+            <div
+              className="mt-2 px-3 py-2 rounded text-sm"
+              style={{
+                background: 'var(--app-glass-bg-strong)',
+                color: 'var(--app-text-muted)',
+                borderLeft: '3px solid var(--app-warning)',
+                fontSize: '13px',
+                lineHeight: '1.6',
+              }}
+            >
+              {originalContent}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
