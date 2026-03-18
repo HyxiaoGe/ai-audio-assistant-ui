@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { Edit2, Check, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n-context';
 import type { TranscriptWord } from '@/types/api';
+import DiffContent from '@/components/task/DiffContent';
 
 interface TranscriptItemProps {
   speaker: string;
@@ -38,7 +39,6 @@ export default function TranscriptItem({
   const [isHovered, setIsHovered] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(content);
-  const [showOriginal, setShowOriginal] = useState(false);
   const { t } = useI18n();
 
   // 获取说话人首字母
@@ -173,8 +173,8 @@ export default function TranscriptItem({
           value={editedContent}
           onChange={(e) => setEditedContent(e.target.value)}
           className="glass-control w-full px-3 py-2 rounded-lg text-base leading-relaxed resize-none"
-          style={{ 
-            color: 'var(--app-text)', 
+          style={{
+            color: 'var(--app-text)',
             lineHeight: '24px',
             borderColor: 'var(--app-primary)',
             minHeight: '100px'
@@ -204,6 +204,13 @@ export default function TranscriptItem({
             );
           })}
         </p>
+      ) : isPolished && originalContent && originalContent !== content ? (
+        <p
+          className="text-base leading-relaxed"
+          style={{ color: 'var(--app-text)', lineHeight: '24px' }}
+        >
+          <DiffContent content={content} originalContent={originalContent} />
+        </p>
       ) : (
         <p
           className="text-base leading-relaxed"
@@ -211,33 +218,6 @@ export default function TranscriptItem({
         >
           {content}
         </p>
-      )}
-
-      {/* Original Content Toggle (for polished segments) */}
-      {isPolished && originalContent && originalContent !== content && (
-        <div style={{ marginTop: '6px' }}>
-          <button
-            onClick={() => setShowOriginal(!showOriginal)}
-            className="text-xs hover:underline"
-            style={{ color: 'var(--app-text-subtle)' }}
-          >
-            {showOriginal ? t("transcript.hideOriginal") : t("transcript.showOriginal")}
-          </button>
-          {showOriginal && (
-            <div
-              className="mt-2 px-3 py-2 rounded text-sm"
-              style={{
-                background: 'var(--app-glass-bg-strong)',
-                color: 'var(--app-text-muted)',
-                borderLeft: '3px solid var(--app-warning)',
-                fontSize: '13px',
-                lineHeight: '1.6',
-              }}
-            >
-              {originalContent}
-            </div>
-          )}
-        </div>
       )}
     </div>
   );
