@@ -12,6 +12,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Record start time
+        run: echo "BUILD_START=$(date +%s)" >> $GITHUB_ENV
+
       - name: Deploy
         run: |
           cd ~/project/ai-audio-assistant-ui
@@ -19,3 +22,7 @@ jobs:
           docker compose up -d --build
           docker image prune -f
           docker builder prune --filter "until=72h" -f
+
+      - name: Push deploy metrics
+        if: always()
+        run: bash ~/scripts/push-deploy-metrics.sh ai-audio-assistant-ui master ${{ job.status }} ${{ env.BUILD_START }}
