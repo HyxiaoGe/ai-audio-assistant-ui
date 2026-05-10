@@ -1,13 +1,14 @@
-name: Deploy to Dev Server
+name: Deploy to Dev Server (Legacy / Manual Fallback)
 
+# 主流水线已切到 build-and-deploy.yml（Windows runner build → push GHCR → dev pull）。
+# 这个 workflow 退化成 GHCR 故障 / Windows runner 离线时的手动应急入口：dev 自 build。
+# 不再随 master push 触发，避免和 GHCR 路径双跑造成镜像版本冲突。
 on:
-  push:
-    branches: ["master"]
   workflow_dispatch:
 
 jobs:
   deploy:
-    runs-on: self-hosted
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
