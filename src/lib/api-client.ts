@@ -681,15 +681,6 @@ export class APIClient {
   }
 
   /**
-   * 获取图片 URL（如果后端生成了图片）
-   * @param imageKey - Summary 对象中的 image_key 字段
-   */
-  getVisualImageUrl(imageKey: string): string {
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || ""
-    return `${baseUrl}/api/v1/media/${imageKey}`
-  }
-
-  /**
    * 轮询可视化摘要生成状态
    * 由于后端没有 SSE 端点，使用轮询方式检查生成是否完成
    * @param taskId 任务 ID

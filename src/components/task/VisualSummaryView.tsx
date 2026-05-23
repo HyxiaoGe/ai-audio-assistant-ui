@@ -121,8 +121,9 @@ export function VisualSummaryView({
     if (!data?.image_url) return
 
     const link = document.createElement("a")
-    link.href = client.getVisualImageUrl(data.image_url)
-    link.download = `${visualType}_${taskId}.${data.image_url.split(".").pop()}`
+    const extension = data.image_url.split("?")[0]?.split(".").pop() || "png"
+    link.href = data.image_url
+    link.download = `${visualType}_${taskId}.${extension}`
     link.click()
   }
 
@@ -230,7 +231,7 @@ export function VisualSummaryView({
         <div className="flex justify-center bg-muted/30 rounded-lg p-6">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={client.getVisualImageUrl(data.image_url)}
+            src={data.image_url}
             alt={`${visualType} visual summary`}
             className="max-w-full h-auto"
           />
@@ -251,7 +252,7 @@ export function VisualSummaryView({
               <div className="flex justify-center bg-muted/30 rounded-lg p-6">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={client.getVisualImageUrl(data.image_url)}
+                  src={data.image_url}
                   alt={`${visualType} visual summary (backend)`}
                   className="max-w-full h-auto"
                 />
