@@ -140,6 +140,7 @@ export default function Subscriptions({
   // New task modal for transcription
   const [newTaskModalOpen, setNewTaskModalOpen] = useState(false);
   const [transcribeVideoUrl, setTranscribeVideoUrl] = useState<string | undefined>(undefined);
+  const [transcribeVideoId, setTranscribeVideoId] = useState<string | undefined>(undefined);
 
   // Filter subscriptions by search query and visibility settings
   const filteredSubscriptions = useMemo(() => {
@@ -641,8 +642,9 @@ export default function Subscriptions({
   const hasMoreChannelVideos = channelVideos.length < channelVideosTotal;
 
   // Handle transcribe action - opens modal with pre-filled URL
-  const handleTranscribe = (videoUrl: string) => {
+  const handleTranscribe = (videoUrl: string, videoId: string) => {
     setTranscribeVideoUrl(videoUrl);
+    setTranscribeVideoId(videoId);
     setNewTaskModalOpen(true);
   };
 
@@ -650,6 +652,7 @@ export default function Subscriptions({
   const handleCloseNewTaskModal = () => {
     setNewTaskModalOpen(false);
     setTranscribeVideoUrl(undefined);
+    setTranscribeVideoId(undefined);
   };
 
   // Find channel info for a video
@@ -1507,6 +1510,7 @@ export default function Subscriptions({
         isOpen={newTaskModalOpen}
         onClose={handleCloseNewTaskModal}
         initialVideoUrl={transcribeVideoUrl}
+        initialYouTubeVideoId={transcribeVideoId}
       />
     </div>
   );

@@ -14,7 +14,7 @@ interface VideoCardProps {
   channelTitle?: string;
   showChannel?: boolean;
   /** Called when user clicks transcribe button, passes the YouTube video URL */
-  onTranscribe?: (videoUrl: string) => void;
+  onTranscribe?: (videoUrl: string, videoId: string) => void;
 }
 
 /**
@@ -66,7 +66,7 @@ export default function VideoCard({
 
     // Build YouTube URL and call the callback
     const videoUrl = `https://www.youtube.com/watch?v=${video.video_id}`;
-    onTranscribe?.(videoUrl);
+    onTranscribe?.(videoUrl, video.video_id);
   };
 
   const handleViewTask = (e: React.MouseEvent) => {

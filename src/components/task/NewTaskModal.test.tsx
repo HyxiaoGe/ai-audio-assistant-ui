@@ -77,4 +77,27 @@ describe("NewTaskModal YouTube style recommendation", () => {
     expect(await screen.findByDisplayValue("Tutorial")).toBeInTheDocument()
     expect(screen.getByText(/step-by-step signals/i)).toBeInTheDocument()
   })
+
+  it("loads a recommendation when a mounted modal is opened with a subscription video URL", async () => {
+    const onClose = vi.fn()
+    const { rerender } = render(
+      <NewTaskModal
+        isOpen={false}
+        onClose={onClose}
+      />
+    )
+
+    rerender(
+      <NewTaskModal
+        isOpen
+        onClose={onClose}
+        initialVideoUrl="https://www.youtube.com/watch?v=url-video"
+        initialYouTubeVideoId="subscription-video"
+      />
+    )
+
+    await waitFor(() => {
+      expect(mockClient.getYouTubeSummaryStyleRecommendation).toHaveBeenCalledWith("subscription-video")
+    })
+  })
 })

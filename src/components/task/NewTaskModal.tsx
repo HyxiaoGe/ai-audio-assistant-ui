@@ -24,6 +24,8 @@ interface NewTaskModalProps {
   onClose: () => void;
   /** Pre-fill with a YouTube video URL */
   initialVideoUrl?: string;
+  /** Prefer this cached YouTube video id for subscription-triggered transcription */
+  initialYouTubeVideoId?: string;
 }
 
 type Platform = 'youtube' | 'bilibili';
@@ -75,7 +77,12 @@ const extractYouTubeVideoId = (url: string): string | null => {
   return null;
 };
 
-export default function NewTaskModal({ isOpen, onClose, initialVideoUrl }: NewTaskModalProps) {
+export default function NewTaskModal({
+  isOpen,
+  onClose,
+  initialVideoUrl,
+  initialYouTubeVideoId,
+}: NewTaskModalProps) {
   const router = useRouter();
   const client = useAPIClient();
   const { state: uploadState, uploadFile, reset, isUploading } = useFileUpload();
@@ -234,8 +241,16 @@ export default function NewTaskModal({ isOpen, onClose, initialVideoUrl }: NewTa
   }, [applyPreferenceDefaults, isOpen, llmModels]);
 
   useEffect(() => {
-    if (!isOpen || activeTab !== "link" || selectedPlatform !== "youtube") return;
-    const videoId = extractYouTubeVideoId(videoUrl.trim());
+    if (!isOpen) return;
+    const inputVideoId =
+      activeTab === "link" && selectedPlatform === "youtube"
+        ? extractYouTubeVideoId(videoUrl.trim())
+        : null;
+    const initialVideoId =
+      activeTab !== "link" && initialVideoUrl
+        ? initialYouTubeVideoId || extractYouTubeVideoId(initialVideoUrl)
+        : null;
+    const videoId = inputVideoId || initialVideoId;
     if (!videoId) {
       setStyleRecommendation(null);
       setStyleRecommendationLoading(false);
@@ -275,7 +290,16 @@ export default function NewTaskModal({ isOpen, onClose, initialVideoUrl }: NewTa
     return () => {
       active = false;
     };
-  }, [activeTab, client, isOpen, selectedPlatform, styleRecommendation?.style, videoUrl]);
+  }, [
+    activeTab,
+    client,
+    initialVideoUrl,
+    initialYouTubeVideoId,
+    isOpen,
+    selectedPlatform,
+    styleRecommendation?.style,
+    videoUrl,
+  ]);
 
   const modelGroups = useMemo(() => {
     const groups = new Map<string, LLMModel[]>();
