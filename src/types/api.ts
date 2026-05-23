@@ -943,6 +943,16 @@ export interface YouTubeVideoListResponse {
 }
 
 /**
+ * YouTube 摘要风格推荐
+ */
+export interface YouTubeSummaryStyleRecommendation {
+  style: SummaryStyle
+  confidence: number
+  reason: string
+  cached: boolean
+}
+
+/**
  * YouTube 频道同步状态
  */
 export interface YouTubeChannelSyncStatus {

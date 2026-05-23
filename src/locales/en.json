@@ -678,6 +678,8 @@
     "summaryLecture": "Lecture notes",
     "summaryPodcast": "Podcast summary",
     "summaryGeneral": "General",
+    "summaryStyleRecommending": "AI is recommending a summary style...",
+    "summaryStyleRecommended": "AI recommended · {confidence}% confidence",
     "visualSummary": "Visual summary",
     "autoGenerateVisualSummary": "Auto-generate visual summary",
     "visualTypes": "Select types",

@@ -3,14 +3,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { notifyError, notifySuccess } from '@/lib/notify';
-import { X, Link as LinkIcon, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Link as LinkIcon, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 import TabSwitch from './TabSwitch';
 import UploadZone from './UploadZone';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { useAPIClient } from '@/lib/use-api-client';
 import { useFileUpload } from '@/hooks/use-file-upload';
-import type { LLMModel, SummaryStyleItem, TaskOptions, UserPreferences } from '@/types/api';
+import type {
+  LLMModel,
+  SummaryStyleItem,
+  TaskOptions,
+  UserPreferences,
+  YouTubeSummaryStyleRecommendation,
+} from '@/types/api';
 import { useI18n } from '@/lib/i18n-context';
 
 interface NewTaskModalProps {
@@ -48,6 +54,27 @@ const resolvePreferredModel = (preferences: UserPreferences, models: LLMModel[])
   return match ? (match.model_id || match.provider) : null;
 };
 
+const extractYouTubeVideoId = (url: string): string | null => {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./, "");
+    if (host === "youtu.be") {
+      return parsed.pathname.split("/").filter(Boolean)[0] || null;
+    }
+    if (host.endsWith("youtube.com")) {
+      const watchId = parsed.searchParams.get("v");
+      if (watchId) return watchId;
+      const parts = parsed.pathname.split("/").filter(Boolean);
+      if ((parts[0] === "shorts" || parts[0] === "embed") && parts[1]) {
+        return parts[1];
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+};
+
 export default function NewTaskModal({ isOpen, onClose, initialVideoUrl }: NewTaskModalProps) {
   const router = useRouter();
   const client = useAPIClient();
@@ -69,8 +96,13 @@ export default function NewTaskModal({ isOpen, onClose, initialVideoUrl }: NewTa
   });
   const [llmModels, setLlmModels] = useState<LLMModel[]>([]);
   const [summaryStyles, setSummaryStyles] = useState<SummaryStyleItem[]>([]);
+  const [styleRecommendation, setStyleRecommendation] =
+    useState<YouTubeSummaryStyleRecommendation | null>(null);
+  const [styleRecommendationLoading, setStyleRecommendationLoading] = useState(false);
   const preferencesRef = useRef<UserPreferences | null>(null);
   const advancedTouchedRef = useRef(false);
+  const summaryStyleTouchedRef = useRef(false);
+  const recommendationRequestRef = useRef<string | null>(null);
 
   const tabs = [
     { id: 'upload', label: t("newTask.tabs.upload") },
@@ -171,6 +203,7 @@ export default function NewTaskModal({ isOpen, onClose, initialVideoUrl }: NewTa
   useEffect(() => {
     if (!isOpen) return;
     advancedTouchedRef.current = false;
+    summaryStyleTouchedRef.current = false;
     const fallbackLanguage = getStoredDefaultLanguage();
     if (fallbackLanguage) {
       setAdvancedOptions((prev) => ({
@@ -199,6 +232,50 @@ export default function NewTaskModal({ isOpen, onClose, initialVideoUrl }: NewTa
     if (!isOpen || !preferencesRef.current) return;
     applyPreferenceDefaults(preferencesRef.current);
   }, [applyPreferenceDefaults, isOpen, llmModels]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== "link" || selectedPlatform !== "youtube") return;
+    const videoId = extractYouTubeVideoId(videoUrl.trim());
+    if (!videoId) {
+      setStyleRecommendation(null);
+      setStyleRecommendationLoading(false);
+      recommendationRequestRef.current = null;
+      return;
+    }
+    if (recommendationRequestRef.current === videoId && styleRecommendation?.style) return;
+
+    let active = true;
+    recommendationRequestRef.current = videoId;
+    setStyleRecommendation(null);
+    setStyleRecommendationLoading(true);
+
+    client
+      .getYouTubeSummaryStyleRecommendation(videoId)
+      .then((recommendation) => {
+        if (!active || recommendationRequestRef.current !== videoId) return;
+        setStyleRecommendation(recommendation);
+        if (!summaryStyleTouchedRef.current && recommendation.style) {
+          setAdvancedOptions((prev) => ({
+            ...prev,
+            summaryStyle: recommendation.style,
+          }));
+        }
+      })
+      .catch(() => {
+        if (active && recommendationRequestRef.current === videoId) {
+          setStyleRecommendation(null);
+        }
+      })
+      .finally(() => {
+        if (active && recommendationRequestRef.current === videoId) {
+          setStyleRecommendationLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [activeTab, client, isOpen, selectedPlatform, styleRecommendation?.style, videoUrl]);
 
   const modelGroups = useMemo(() => {
     const groups = new Map<string, LLMModel[]>();
@@ -306,6 +383,10 @@ export default function NewTaskModal({ isOpen, onClose, initialVideoUrl }: NewTa
     setShowAdvanced(true);
     setIsCreating(false);
     advancedTouchedRef.current = false;
+    summaryStyleTouchedRef.current = false;
+    recommendationRequestRef.current = null;
+    setStyleRecommendation(null);
+    setStyleRecommendationLoading(false);
     preferencesRef.current = null;
     onClose();
   };
@@ -520,6 +601,7 @@ export default function NewTaskModal({ isOpen, onClose, initialVideoUrl }: NewTa
                         value={advancedOptions.summaryStyle}
                         onChange={(e) => {
                           advancedTouchedRef.current = true;
+                          summaryStyleTouchedRef.current = true;
                           setAdvancedOptions({ ...advancedOptions, summaryStyle: e.target.value });
                         }}
                         disabled={summaryStyles.length === 0}
@@ -539,6 +621,25 @@ export default function NewTaskModal({ isOpen, onClose, initialVideoUrl }: NewTa
                       {summaryStyles.length > 0 && (
                         <p className="text-xs mt-1" style={{ color: 'var(--app-text-subtle)' }}>
                           {summaryStyles.find((s) => s.id === advancedOptions.summaryStyle)?.focus}
+                        </p>
+                      )}
+                      {styleRecommendationLoading && (
+                        <p className="text-xs mt-2" style={{ color: 'var(--app-text-muted)' }}>
+                          {t("newTask.summaryStyleRecommending")}
+                        </p>
+                      )}
+                      {styleRecommendation && !styleRecommendationLoading && (
+                        <p
+                          className="text-xs mt-2 flex items-start gap-1.5"
+                          style={{ color: 'var(--app-primary)' }}
+                        >
+                          <Sparkles className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                          <span>
+                            {t("newTask.summaryStyleRecommended", {
+                              confidence: Math.round(styleRecommendation.confidence * 100),
+                            })}{" "}
+                            {styleRecommendation.reason}
+                          </span>
                         </p>
                       )}
                     </div>

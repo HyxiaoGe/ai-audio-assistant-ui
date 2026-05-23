@@ -59,6 +59,7 @@ import {
   YouTubeSubscriptionListResponse,
   YouTubeSubscriptionSettings,
   YouTubeSubscriptionSettingsUpdateRequest,
+  YouTubeSummaryStyleRecommendation,
   YouTubeSyncOverview,
   YouTubeSyncResponse,
   YouTubeTaskStatusResponse,
@@ -858,6 +859,19 @@ export class APIClient {
       : `/youtube/channels/${channelId}/videos/sync`
 
     return request(endpoint, { method: "POST" }, this.token)
+  }
+
+  /**
+   * 获取 YouTube 视频摘要风格推荐
+   */
+  async getYouTubeSummaryStyleRecommendation(
+    videoId: string
+  ): Promise<YouTubeSummaryStyleRecommendation> {
+    return request(
+      `/youtube/videos/${videoId}/summary-style-recommendation`,
+      { method: "GET" },
+      this.token
+    )
   }
 
   /**
