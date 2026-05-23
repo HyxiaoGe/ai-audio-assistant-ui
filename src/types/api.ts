@@ -953,6 +953,22 @@ export interface YouTubeSummaryStyleRecommendation {
 }
 
 /**
+ * YouTube 摘要风格推荐预热请求
+ */
+export interface YouTubeSummaryStylePrewarmRequest {
+  video_ids: string[]
+}
+
+/**
+ * YouTube 摘要风格推荐预热响应
+ */
+export interface YouTubeSummaryStylePrewarmResponse {
+  task_id: string
+  queued_count: number
+  skipped_count: number
+}
+
+/**
  * YouTube 频道同步状态
  */
 export interface YouTubeChannelSyncStatus {

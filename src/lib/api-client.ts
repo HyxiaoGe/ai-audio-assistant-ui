@@ -59,6 +59,8 @@ import {
   YouTubeSubscriptionListResponse,
   YouTubeSubscriptionSettings,
   YouTubeSubscriptionSettingsUpdateRequest,
+  YouTubeSummaryStylePrewarmRequest,
+  YouTubeSummaryStylePrewarmResponse,
   YouTubeSummaryStyleRecommendation,
   YouTubeSyncOverview,
   YouTubeSyncResponse,
@@ -870,6 +872,23 @@ export class APIClient {
     return request(
       `/youtube/videos/${videoId}/summary-style-recommendation`,
       { method: "GET" },
+      this.token
+    )
+  }
+
+  /**
+   * 预热 YouTube 视频摘要风格推荐
+   */
+  async prewarmYouTubeSummaryStyleRecommendations(
+    videoIds: string[]
+  ): Promise<YouTubeSummaryStylePrewarmResponse> {
+    const body: YouTubeSummaryStylePrewarmRequest = { video_ids: videoIds }
+    return request(
+      "/youtube/videos/summary-style-recommendations/prewarm",
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
       this.token
     )
   }

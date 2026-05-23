@@ -45,6 +45,7 @@ import { Input } from "@/components/ui/input";
 import { useI18n } from "@/lib/i18n-context";
 import { useAPIClient } from "@/lib/use-api-client";
 import { notifySuccess, notifyError } from "@/lib/notify";
+import { selectSummaryStylePrewarmVideoIds } from "@/lib/youtube-summary-style-prewarm";
 import {
   ApiError,
   YouTubeConnectionStatus,
@@ -83,6 +84,7 @@ export default function Subscriptions({
   // Ref for sync polling interval
   const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const channelSyncIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const summaryStylePrewarmRequestedRef = useRef<Set<string>>(new Set());
 
   // Refs to store latest function references for interval callbacks
   const loadSyncOverviewRef = useRef<() => Promise<void>>(() => Promise.resolve());
@@ -175,6 +177,24 @@ export default function Subscriptions({
   const PAGE_SIZE = 20;
   const VIDEOS_PAGE_SIZE = 12;
 
+  const prewarmSummaryStyles = useCallback(
+    (videos: YouTubeVideoItem[]) => {
+      if (!isAuthenticated || !status?.connected) return;
+
+      const requested = summaryStylePrewarmRequestedRef.current;
+      const videoIds = selectSummaryStylePrewarmVideoIds(videos, requested, VIDEOS_PAGE_SIZE);
+      if (videoIds.length === 0) return;
+
+      videoIds.forEach((videoId) => requested.add(videoId));
+      void client
+        .prewarmYouTubeSummaryStyleRecommendations(videoIds)
+        .catch(() => {
+          videoIds.forEach((videoId) => requested.delete(videoId));
+        });
+    },
+    [client, isAuthenticated, status?.connected, VIDEOS_PAGE_SIZE]
+  );
+
   // Load YouTube connection status
   const loadStatus = useCallback(async () => {
     if (!isAuthenticated) {
@@ -260,6 +280,7 @@ export default function Subscriptions({
         } else {
           setLatestVideos(result.items);
         }
+        prewarmSummaryStyles(result.items);
         setVideosTotal(result.total);
         setVideosPage(page);
       } catch (error) {
@@ -272,7 +293,7 @@ export default function Subscriptions({
         setVideosLoading(false);
       }
     },
-    [client, isAuthenticated, status?.connected, t]
+    [client, isAuthenticated, prewarmSummaryStyles, status?.connected, t]
   );
 
   // Load starred videos
@@ -292,6 +313,7 @@ export default function Subscriptions({
         } else {
           setStarredVideos(result.items);
         }
+        prewarmSummaryStyles(result.items);
         setStarredVideosTotal(result.total);
         setStarredVideosPage(page);
       } catch (error) {
@@ -304,7 +326,7 @@ export default function Subscriptions({
         setStarredVideosLoading(false);
       }
     },
-    [client, isAuthenticated, status?.connected, t]
+    [client, isAuthenticated, prewarmSummaryStyles, status?.connected, t]
   );
 
   // Poll task status until complete
@@ -413,6 +435,7 @@ export default function Subscriptions({
         } else {
           setChannelVideos(result.items);
         }
+        prewarmSummaryStyles(result.items);
         setChannelVideosTotal(result.total);
         setChannelVideosPage(page);
       } catch (error) {
@@ -425,7 +448,7 @@ export default function Subscriptions({
         setChannelVideosLoading(false);
       }
     },
-    [client, t]
+    [client, prewarmSummaryStyles, t]
   );
 
   // Keep loadChannelVideos ref updated
@@ -554,6 +577,7 @@ export default function Subscriptions({
       setSubsTotal(0);
       setLatestVideos([]);
       setVideosTotal(0);
+      summaryStylePrewarmRequestedRef.current.clear();
       notifySuccess(t("subscriptions.disconnectSuccess"));
       setDisconnectDialogOpen(false);
     } catch (error) {
