@@ -99,5 +99,6 @@ describe("NewTaskModal YouTube style recommendation", () => {
     await waitFor(() => {
       expect(mockClient.getYouTubeSummaryStyleRecommendation).toHaveBeenCalledWith("subscription-video")
     })
+    expect(mockClient.getYouTubeSummaryStyleRecommendation).toHaveBeenCalledTimes(1)
   })
 })

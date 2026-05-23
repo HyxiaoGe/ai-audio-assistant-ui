@@ -110,6 +110,7 @@ export default function NewTaskModal({
   const advancedTouchedRef = useRef(false);
   const summaryStyleTouchedRef = useRef(false);
   const recommendationRequestRef = useRef<string | null>(null);
+  const recommendationInFlightRef = useRef<string | null>(null);
 
   const tabs = [
     { id: 'upload', label: t("newTask.tabs.upload") },
@@ -241,26 +242,29 @@ export default function NewTaskModal({
   }, [applyPreferenceDefaults, isOpen, llmModels]);
 
   useEffect(() => {
-    if (!isOpen) return;
-    const inputVideoId =
-      activeTab === "link" && selectedPlatform === "youtube"
-        ? extractYouTubeVideoId(videoUrl.trim())
-        : null;
-    const initialVideoId =
-      activeTab !== "link" && initialVideoUrl
-        ? initialYouTubeVideoId || extractYouTubeVideoId(initialVideoUrl)
-        : null;
-    const videoId = inputVideoId || initialVideoId;
+    if (!isOpen || activeTab !== "link" || selectedPlatform !== "youtube") return;
+    const inputVideoId = extractYouTubeVideoId(videoUrl.trim());
+    const initialUrlVideoId = initialVideoUrl ? extractYouTubeVideoId(initialVideoUrl) : null;
+    const videoId =
+      inputVideoId && inputVideoId === initialUrlVideoId
+        ? initialYouTubeVideoId || inputVideoId
+        : inputVideoId;
     if (!videoId) {
       setStyleRecommendation(null);
       setStyleRecommendationLoading(false);
       recommendationRequestRef.current = null;
       return;
     }
-    if (recommendationRequestRef.current === videoId && styleRecommendation?.style) return;
+    if (
+      recommendationInFlightRef.current === videoId ||
+      (recommendationRequestRef.current === videoId && styleRecommendation?.style)
+    ) {
+      return;
+    }
 
     let active = true;
     recommendationRequestRef.current = videoId;
+    recommendationInFlightRef.current = videoId;
     setStyleRecommendation(null);
     setStyleRecommendationLoading(true);
 
@@ -284,6 +288,7 @@ export default function NewTaskModal({
       .finally(() => {
         if (active && recommendationRequestRef.current === videoId) {
           setStyleRecommendationLoading(false);
+          recommendationInFlightRef.current = null;
         }
       });
 
@@ -409,6 +414,7 @@ export default function NewTaskModal({
     advancedTouchedRef.current = false;
     summaryStyleTouchedRef.current = false;
     recommendationRequestRef.current = null;
+    recommendationInFlightRef.current = null;
     setStyleRecommendation(null);
     setStyleRecommendationLoading(false);
     preferencesRef.current = null;
