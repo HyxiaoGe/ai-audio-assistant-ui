@@ -72,7 +72,7 @@ import {
 // ============================================================================
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8088/api/v1"
+  process.env.NEXT_PUBLIC_API_BASE_URL || "/api/v1"
 
 const DEFAULT_HEADERS = {
   "Content-Type": "application/json",
@@ -685,8 +685,7 @@ export class APIClient {
    * @param imageKey - Summary 对象中的 image_key 字段
    */
   getVisualImageUrl(imageKey: string): string {
-    const baseUrl =
-      process.env.NEXT_PUBLIC_API_URL || "http://localhost:8088"
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || ""
     return `${baseUrl}/api/v1/media/${imageKey}`
   }
 

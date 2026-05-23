@@ -289,16 +289,26 @@ export function useGlobalWebSocket() {
     const rawBaseUrl =
       process.env.NEXT_PUBLIC_API_URL ||
       process.env.NEXT_PUBLIC_API_BASE_URL ||
-      "http://localhost:8088";
-    const normalizedBaseUrl = /\/api\/v1\/?$/.test(rawBaseUrl)
-      ? rawBaseUrl.replace(/\/$/, "")
-      : `${rawBaseUrl.replace(/\/$/, "")}/api/v1`;
-    const wsBase = new URL(normalizedBaseUrl);
-    const basePath =
-      wsBase.pathname && wsBase.pathname !== "/"
-        ? wsBase.pathname.replace(/\/$/, "")
-        : "";
-    const wsUrl = `${wsProtocol}//${wsBase.host}${basePath}/ws/user`;
+      "";
+    let wsHost: string;
+    let basePath: string;
+    if (rawBaseUrl) {
+      // Dev: env var provides an absolute URL to the API server
+      const normalizedBaseUrl = /\/api\/v1\/?$/.test(rawBaseUrl)
+        ? rawBaseUrl.replace(/\/$/, "")
+        : `${rawBaseUrl.replace(/\/$/, "")}/api/v1`;
+      const wsBase = new URL(normalizedBaseUrl);
+      wsHost = wsBase.host;
+      basePath =
+        wsBase.pathname && wsBase.pathname !== "/"
+          ? wsBase.pathname.replace(/\/$/, "")
+          : "";
+    } else {
+      // Prod: same-origin WS via nginx /api/v1/ proxy
+      wsHost = window.location.host;
+      basePath = "/api/v1";
+    }
+    const wsUrl = `${wsProtocol}//${wsHost}${basePath}/ws/user`;
 
     try {
       const ws = new WebSocket(wsUrl);
