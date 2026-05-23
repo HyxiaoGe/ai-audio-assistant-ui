@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react"
+import { act, render, screen, waitFor } from "@testing-library/react"
 import { describe, expect, it, vi, beforeEach } from "vitest"
 import NewTaskModal from "./NewTaskModal"
 
@@ -100,5 +100,30 @@ describe("NewTaskModal YouTube style recommendation", () => {
       expect(mockClient.getYouTubeSummaryStyleRecommendation).toHaveBeenCalledWith("subscription-video")
     })
     expect(mockClient.getYouTubeSummaryStyleRecommendation).toHaveBeenCalledTimes(1)
+  })
+
+  it("keeps the recommended style when preferences load after the recommendation", async () => {
+    let resolvePreferences!: (value: { task_defaults: { summary_style: string } }) => void
+    mockClient.getUserPreferences.mockReturnValue(
+      new Promise((resolve) => {
+        resolvePreferences = resolve
+      })
+    )
+
+    render(
+      <NewTaskModal
+        isOpen
+        onClose={vi.fn()}
+        initialVideoUrl="https://www.youtube.com/watch?v=yt-123"
+      />
+    )
+
+    expect(await screen.findByDisplayValue("Tutorial")).toBeInTheDocument()
+
+    await act(async () => {
+      resolvePreferences({ task_defaults: { summary_style: "general" } })
+    })
+
+    expect(screen.getByDisplayValue("Tutorial")).toBeInTheDocument()
   })
 })

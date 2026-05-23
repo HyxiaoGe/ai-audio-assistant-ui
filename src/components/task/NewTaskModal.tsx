@@ -109,8 +109,10 @@ export default function NewTaskModal({
   const preferencesRef = useRef<UserPreferences | null>(null);
   const advancedTouchedRef = useRef(false);
   const summaryStyleTouchedRef = useRef(false);
+  const summaryStyleRecommendedRef = useRef(false);
   const recommendationRequestRef = useRef<string | null>(null);
   const recommendationInFlightRef = useRef<string | null>(null);
+  const modalOpenRef = useRef(false);
 
   const tabs = [
     { id: 'upload', label: t("newTask.tabs.upload") },
@@ -196,28 +198,41 @@ export default function NewTaskModal({
     const preferredModelId = resolvePreferredModel(preferences, llmModels);
     const fallbackLanguage = getStoredDefaultLanguage();
 
-    setAdvancedOptions((prev) => ({
-      ...prev,
-      language: defaults.language || fallbackLanguage || prev.language,
-      speakerDiarization:
-        typeof defaults.enable_speaker_diarization === "boolean"
-          ? defaults.enable_speaker_diarization
-          : prev.speakerDiarization,
-      summaryStyle: defaults.summary_style || prev.summaryStyle,
-      summaryModelId: preferredModelId ?? null,
-    }));
+    setAdvancedOptions((prev) => {
+      const keepCurrentSummaryStyle =
+        summaryStyleTouchedRef.current || summaryStyleRecommendedRef.current;
+      return {
+        ...prev,
+        language: defaults.language || fallbackLanguage || prev.language,
+        speakerDiarization:
+          typeof defaults.enable_speaker_diarization === "boolean"
+            ? defaults.enable_speaker_diarization
+            : prev.speakerDiarization,
+        summaryStyle: keepCurrentSummaryStyle
+          ? prev.summaryStyle
+          : defaults.summary_style || prev.summaryStyle,
+        summaryModelId: preferredModelId ?? null,
+      };
+    });
   }, [llmModels]);
 
   useEffect(() => {
-    if (!isOpen) return;
-    advancedTouchedRef.current = false;
-    summaryStyleTouchedRef.current = false;
-    const fallbackLanguage = getStoredDefaultLanguage();
-    if (fallbackLanguage) {
-      setAdvancedOptions((prev) => ({
-        ...prev,
-        language: fallbackLanguage,
-      }));
+    if (!isOpen) {
+      modalOpenRef.current = false;
+      return;
+    }
+    if (!modalOpenRef.current) {
+      modalOpenRef.current = true;
+      advancedTouchedRef.current = false;
+      summaryStyleTouchedRef.current = false;
+      summaryStyleRecommendedRef.current = false;
+      const fallbackLanguage = getStoredDefaultLanguage();
+      if (fallbackLanguage) {
+        setAdvancedOptions((prev) => ({
+          ...prev,
+          language: fallbackLanguage,
+        }));
+      }
     }
     let active = true;
     const loadPreferences = async () => {
@@ -252,6 +267,7 @@ export default function NewTaskModal({
     if (!videoId) {
       setStyleRecommendation(null);
       setStyleRecommendationLoading(false);
+      summaryStyleRecommendedRef.current = false;
       recommendationRequestRef.current = null;
       return;
     }
@@ -274,6 +290,7 @@ export default function NewTaskModal({
         if (!active || recommendationRequestRef.current !== videoId) return;
         setStyleRecommendation(recommendation);
         if (!summaryStyleTouchedRef.current && recommendation.style) {
+          summaryStyleRecommendedRef.current = true;
           setAdvancedOptions((prev) => ({
             ...prev,
             summaryStyle: recommendation.style,
@@ -413,6 +430,7 @@ export default function NewTaskModal({
     setIsCreating(false);
     advancedTouchedRef.current = false;
     summaryStyleTouchedRef.current = false;
+    summaryStyleRecommendedRef.current = false;
     recommendationRequestRef.current = null;
     recommendationInFlightRef.current = null;
     setStyleRecommendation(null);
