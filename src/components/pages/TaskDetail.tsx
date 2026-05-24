@@ -787,6 +787,9 @@ export default function TaskDetail({
             }
             eventSource.close();
             summaryStreamRef.current[summaryType] = null;
+            client.getSummary(id).then((result) => {
+              buildSummaryState(result.items);
+            });
           });
 
           eventSource.addEventListener("summary.completed", (event) => {

@@ -13,6 +13,12 @@ const ACCESS_TOKEN_KEY = "auth_access_token"
 const REFRESH_TOKEN_KEY = "auth_refresh_token"
 const TOKEN_EXPIRY_KEY = "auth_token_expiry"
 const USER_INFO_KEY = "auth_user_info"
+const REFRESH_LOCK_NAME = "auth-token-refresh"
+
+let refreshInFlight: Promise<{ access_token: string; refresh_token: string; expires_in: number } | null> | null = null
+type BrowserLockManager = {
+  request: <T>(name: string, callback: () => Promise<T>) => Promise<T>
+}
 
 export interface AuthUserPreferences {
   locale: string
@@ -69,7 +75,22 @@ function isTokenExpired(): boolean {
   return Date.now() >= parseInt(expiry, 10) - 30_000
 }
 
-async function refreshTokens(): Promise<{ access_token: string; refresh_token: string; expires_in: number } | null> {
+function getFreshStoredTokenResult(): { access_token: string; refresh_token: string; expires_in: number } | null {
+  if (isTokenExpired()) return null
+
+  const accessToken = getStored(ACCESS_TOKEN_KEY)
+  const refreshToken = getStored(REFRESH_TOKEN_KEY)
+  const expiry = getStored(TOKEN_EXPIRY_KEY)
+  if (!accessToken || !refreshToken || !expiry) return null
+
+  return {
+    access_token: accessToken,
+    refresh_token: refreshToken,
+    expires_in: Math.max(0, Math.floor((parseInt(expiry, 10) - Date.now()) / 1000)),
+  }
+}
+
+async function performTokenRefresh(): Promise<{ access_token: string; refresh_token: string; expires_in: number } | null> {
   const refreshToken = getStored(REFRESH_TOKEN_KEY)
   if (!refreshToken) return null
 
@@ -96,6 +117,39 @@ async function refreshTokens(): Promise<{ access_token: string; refresh_token: s
   }
 }
 
+async function refreshTokens(): Promise<{ access_token: string; refresh_token: string; expires_in: number } | null> {
+  const lockManager =
+    typeof navigator !== "undefined"
+      ? (navigator as Navigator & { locks?: BrowserLockManager }).locks
+      : undefined
+
+  if (lockManager) {
+    return lockManager.request(REFRESH_LOCK_NAME, async () => {
+      const freshToken = getFreshStoredTokenResult()
+      if (freshToken) return freshToken
+      return refreshTokensInCurrentContext()
+    })
+  }
+
+  return refreshTokensInCurrentContext()
+}
+
+async function refreshTokensInCurrentContext(): Promise<{
+  access_token: string
+  refresh_token: string
+  expires_in: number
+} | null> {
+  if (refreshInFlight) {
+    return refreshInFlight
+  }
+
+  refreshInFlight = performTokenRefresh().finally(() => {
+    refreshInFlight = null
+  })
+
+  return refreshInFlight
+}
+
 async function fetchUserInfo(accessToken: string): Promise<AuthUser | null> {
   try {
     const res = await fetch(`${AUTH_URL}/auth/userinfo`, {
@@ -116,7 +170,7 @@ async function fetchUserInfo(accessToken: string): Promise<AuthUser | null> {
   }
 }
 
-export const useAuthStore = create<AuthState>((set, _get) => ({
+export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   status: "loading",
 

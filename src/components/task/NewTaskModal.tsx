@@ -97,9 +97,7 @@ export default function NewTaskModal({
     summaryModelId: null as string | null,
     language: 'auto',
     speakerDiarization: false,
-    summaryStyle: 'general',
-    enableVisualSummary: false,
-    visualTypes: [] as string[]
+    summaryStyle: 'general'
   });
   const [llmModels, setLlmModels] = useState<LLMModel[]>([]);
   const [summaryStyles, setSummaryStyles] = useState<SummaryStyleItem[]>([]);
@@ -377,12 +375,6 @@ export default function NewTaskModal({
       provider: selectedModel?.provider ?? null,
       model_id: selectedModel?.model_id ?? null,
     };
-
-    // 添加可视化摘要选项
-    if (advancedOptions.enableVisualSummary && advancedOptions.visualTypes.length > 0) {
-      options.enable_visual_summary = true;
-      options.visual_types = advancedOptions.visualTypes as TaskOptions["visual_types"];
-    }
 
     return options;
   };
@@ -693,68 +685,6 @@ export default function NewTaskModal({
                     </div>
                   </div>
 
-                  {/* Visual Summary */}
-                  <div className="border-t pt-4 space-y-4" style={{ borderColor: 'var(--app-glass-border)' }}>
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                      <label className="text-sm sm:w-32" style={{ color: 'var(--app-text-muted)' }}>
-                        {t("newTask.visualSummary")}：
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={advancedOptions.enableVisualSummary}
-                          onChange={(e) => {
-                            advancedTouchedRef.current = true;
-                            setAdvancedOptions({
-                              ...advancedOptions,
-                              enableVisualSummary: e.target.checked,
-                              visualTypes: e.target.checked ? advancedOptions.visualTypes : []
-                            });
-                          }}
-                          className="w-4 h-4"
-                        />
-                        <span className="text-sm" style={{ color: 'var(--app-text)' }}>
-                          {t("newTask.autoGenerateVisualSummary")}
-                        </span>
-                      </label>
-                    </div>
-
-                    {advancedOptions.enableVisualSummary && (
-                      <div className="flex flex-col sm:flex-row sm:items-start gap-3">
-                        <label className="text-sm sm:w-32" style={{ color: 'var(--app-text-muted)' }}>
-                          {t("newTask.visualTypes")}：
-                        </label>
-                        <div className="flex-1 space-y-2">
-                          {[
-                            { value: 'mindmap', label: t("newTask.visualMindmap") },
-                            { value: 'timeline', label: t("newTask.visualTimeline") },
-                            { value: 'flowchart', label: t("newTask.visualFlowchart") }
-                          ].map((type) => (
-                            <label key={type.value} className="flex items-center gap-2 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={advancedOptions.visualTypes.includes(type.value)}
-                                onChange={(e) => {
-                                  advancedTouchedRef.current = true;
-                                  const newTypes = e.target.checked
-                                    ? [...advancedOptions.visualTypes, type.value]
-                                    : advancedOptions.visualTypes.filter(t => t !== type.value);
-                                  setAdvancedOptions({ ...advancedOptions, visualTypes: newTypes });
-                                }}
-                                className="w-4 h-4"
-                              />
-                              <span className="text-sm" style={{ color: 'var(--app-text)' }}>
-                                {type.label}
-                              </span>
-                            </label>
-                          ))}
-                          <p className="text-xs mt-2" style={{ color: 'var(--app-text-subtle)' }}>
-                            {t("newTask.visualSummaryHint")}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
                 </div>
               )}
             </div>

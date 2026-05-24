@@ -126,4 +126,20 @@ describe("NewTaskModal YouTube style recommendation", () => {
 
     expect(screen.getByDisplayValue("Tutorial")).toBeInTheDocument()
   })
+
+  it("does not expose the retired visual summary controls", async () => {
+    render(
+      <NewTaskModal
+        isOpen
+        onClose={vi.fn()}
+        initialVideoUrl="https://www.youtube.com/watch?v=yt-123"
+      />
+    )
+
+    await screen.findByDisplayValue("Tutorial")
+
+    expect(screen.queryByText("newTask.visualSummary")).not.toBeInTheDocument()
+    expect(screen.queryByText("newTask.autoGenerateVisualSummary")).not.toBeInTheDocument()
+    expect(screen.queryByText("newTask.visualTypes")).not.toBeInTheDocument()
+  })
 })
