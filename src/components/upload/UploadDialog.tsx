@@ -84,7 +84,7 @@ export function UploadDialog({
   const modelGroups = useMemo(() => {
     const groups = new Map<string, LLMModel[]>()
     llmModels.forEach((model) => {
-      const key = model.display_name || model.provider
+      const key = model.provider_display || model.display_name || model.provider
       const list = groups.get(key) || []
       list.push(model)
       groups.set(key, list)
@@ -153,10 +153,15 @@ export function UploadDialog({
                     <SelectGroup key={group.label}>
                       <SelectLabel>{group.label}</SelectLabel>
                       {group.models.map((model) => {
-                        const suffix = model.is_available
-                          ? (model.is_recommended ? ` ${t("task.summaryModelRecommended")}` : "")
-                          : ` ${t("task.summaryModelUnavailable")}`
-                        const label = model.model_id ? `  ${model.model_id}` : `  ${model.provider}`
+                        const parts: string[] = [model.display_name || model.model_id || model.provider]
+                        if (model.cost_tier) {
+                          parts.push(t(`task.summaryModelCost${model.cost_tier.charAt(0).toUpperCase() + model.cost_tier.slice(1)}` as const))
+                        }
+                        if (!model.is_available) {
+                          parts.push(t("task.summaryModelUnavailable"))
+                        } else if (model.is_recommended) {
+                          parts.push(t("task.summaryModelRecommended"))
+                        }
                         return (
                           <SelectItem
                             key={model.model_id || model.provider}
@@ -164,7 +169,7 @@ export function UploadDialog({
                             disabled={!model.is_available}
                             className="pl-5"
                           >
-                            {label}{suffix}
+                            {`  ${parts.join(" · ")}`}
                           </SelectItem>
                         )
                       })}

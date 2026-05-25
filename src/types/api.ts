@@ -537,6 +537,10 @@ export interface LLMModel {
   status: "healthy" | "unhealthy" | "unknown"
   is_recommended: boolean
   is_available: boolean
+  // LiteLLM 目录新增的元数据（后端 /api/v1/llm/models 返回）
+  cost_tier?: "low" | "mid" | "high"
+  recommended_for?: string[]
+  provider_display?: string
 }
 
 export interface LLMModelsResponse {
