@@ -25,12 +25,6 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
 import { FileUploader } from "./FileUploader"
 import type { LLMModel, SummaryStyleItem, TaskOptions, Language } from "@/types/api"
 import { useI18n } from "@/lib/i18n-context"
@@ -169,29 +163,24 @@ export function UploadDialog({
                           parts.push(t("task.summaryModelRecommended"))
                         }
                         const key = model.model_id || model.provider
-                        const item = (
+                        const unhealthyReason = !model.is_available ? model.health_error : null
+                        return (
                           <SelectItem
                             key={key}
                             value={key}
                             disabled={!model.is_available}
-                            className="pl-5 data-[disabled]:pointer-events-auto data-[disabled]:cursor-not-allowed"
+                            className="pl-5"
                           >
-                            {`  ${parts.join(" · ")}`}
+                            <div className="flex flex-col gap-0.5">
+                              <span>{`  ${parts.join(" · ")}`}</span>
+                              {unhealthyReason && (
+                                <span className="text-xs text-muted-foreground pl-3">
+                                  {unhealthyReason}
+                                </span>
+                              )}
+                            </div>
                           </SelectItem>
                         )
-                        if (!model.is_available && model.health_error) {
-                          return (
-                            <TooltipProvider key={key} delayDuration={150}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>{item}</TooltipTrigger>
-                                <TooltipContent side="right" className="max-w-[260px]">
-                                  {model.health_error}
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          )
-                        }
-                        return item
                       })}
                     </SelectGroup>
                   ))}
