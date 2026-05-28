@@ -541,6 +541,8 @@ export interface LLMModel {
   cost_tier?: "low" | "mid" | "high"
   recommended_for?: string[]
   provider_display?: string
+  // unhealthy 时后端给的中文友好原因（"服务商认证失败..." 等），FE 直接展示在 tooltip
+  health_error?: string | null
 }
 
 export interface LLMModelsResponse {

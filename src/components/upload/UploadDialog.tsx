@@ -25,6 +25,12 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { FileUploader } from "./FileUploader"
 import type { LLMModel, SummaryStyleItem, TaskOptions, Language } from "@/types/api"
 import { useI18n } from "@/lib/i18n-context"
@@ -162,16 +168,30 @@ export function UploadDialog({
                         } else if (model.is_recommended) {
                           parts.push(t("task.summaryModelRecommended"))
                         }
-                        return (
+                        const key = model.model_id || model.provider
+                        const item = (
                           <SelectItem
-                            key={model.model_id || model.provider}
-                            value={model.model_id || model.provider}
+                            key={key}
+                            value={key}
                             disabled={!model.is_available}
-                            className="pl-5"
+                            className="pl-5 data-[disabled]:pointer-events-auto data-[disabled]:cursor-not-allowed"
                           >
                             {`  ${parts.join(" · ")}`}
                           </SelectItem>
                         )
+                        if (!model.is_available && model.health_error) {
+                          return (
+                            <TooltipProvider key={key} delayDuration={150}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>{item}</TooltipTrigger>
+                                <TooltipContent side="right" className="max-w-[260px]">
+                                  {model.health_error}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )
+                        }
+                        return item
                       })}
                     </SelectGroup>
                   ))}

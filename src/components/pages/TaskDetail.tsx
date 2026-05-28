@@ -1766,11 +1766,13 @@ export default function TaskDetail({
             } else if (model.is_recommended) {
               parts.push(t("task.summaryModelRecommended"));
             }
+            const unhealthyReason = !model.is_available ? model.health_error || undefined : undefined;
             return (
               <option
                 key={model.model_id || model.provider}
                 value={model.model_id || model.provider}
                 disabled={!model.is_available}
+                title={unhealthyReason}
               >
                 {`  ${parts.join(" · ")}`}
               </option>
