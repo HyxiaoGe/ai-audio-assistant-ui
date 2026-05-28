@@ -2702,7 +2702,7 @@ export default function TaskDetail({
                       {t("task.compareHint")}
                     </p>
 
-                    <div className="space-y-3">
+                    <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
                       {modelGroups.map((group) => (
                         <div key={group.label} className="space-y-2">
                           <div className="text-xs uppercase tracking-wide" style={{ color: 'var(--app-text-muted)' }}>

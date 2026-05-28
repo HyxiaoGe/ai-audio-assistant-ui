@@ -147,7 +147,7 @@ export function UploadDialog({
                 <SelectTrigger id="summary-model">
                   <SelectValue placeholder={t("task.summaryModelAutoOption")} />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-80">
                   <SelectItem value="auto">{t("task.summaryModelAutoOption")}</SelectItem>
                   {modelGroups.map((group) => (
                     <SelectGroup key={group.label}>
@@ -169,7 +169,7 @@ export function UploadDialog({
                             key={key}
                             value={key}
                             disabled={!model.is_available}
-                            className="pl-5 py-0.5 leading-tight text-xs"
+                            className="pl-5"
                           >
                             {`  ${parts.join(" · ")}`}
                           </SelectItem>
