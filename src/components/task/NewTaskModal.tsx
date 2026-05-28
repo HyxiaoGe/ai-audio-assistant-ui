@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { notifyError, notifySuccess } from '@/lib/notify';
 import { X, Link as LinkIcon, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
@@ -8,6 +8,7 @@ import TabSwitch from './TabSwitch';
 import UploadZone from './UploadZone';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
+import { SummaryModelSelect } from './SummaryModelSelect';
 import { useAPIClient } from '@/lib/use-api-client';
 import { useFileUpload } from '@/hooks/use-file-upload';
 import type {
@@ -321,50 +322,6 @@ export default function NewTaskModal({
     videoUrl,
   ]);
 
-  const modelGroups = useMemo(() => {
-    const groups = new Map<string, LLMModel[]>();
-    llmModels.forEach((model) => {
-      const key = model.provider_display || model.display_name || model.provider;
-      const list = groups.get(key) || [];
-      list.push(model);
-      groups.set(key, list);
-    });
-    return Array.from(groups.entries()).map(([label, models]) => ({
-      label,
-      models,
-    }));
-  }, [llmModels]);
-
-
-  const renderModelOptions = useMemo(
-    () =>
-      modelGroups.map((group) => (
-        <optgroup key={group.label} label={group.label}>
-          {group.models.map((model) => {
-            const parts: string[] = [model.display_name || model.model_id || model.provider];
-            if (model.cost_tier) {
-              parts.push(t(`task.summaryModelCost${model.cost_tier.charAt(0).toUpperCase() + model.cost_tier.slice(1)}` as const));
-            }
-            if (!model.is_available) {
-              parts.push(t("task.summaryModelUnavailable"));
-            } else if (model.is_recommended) {
-              parts.push(t("task.summaryModelRecommended"));
-            }
-            return (
-              <option
-                key={model.model_id || model.provider}
-                value={model.model_id || model.provider}
-                disabled={!model.is_available}
-              >
-                {`  ${parts.join(" · ")}`}
-              </option>
-            );
-          })}
-        </optgroup>
-      )),
-    [modelGroups, t]
-  );
-
   const buildOptions = (): TaskOptions => {
     const selectedModelId = advancedOptions.summaryModelId;
     const selectedModel = selectedModelId
@@ -582,19 +539,15 @@ export default function NewTaskModal({
                     <label className="text-sm sm:w-32" style={{ color: 'var(--app-text-muted)' }}>
                       {t("newTask.summaryModel")}：
                     </label>
-                    <select
-                      value={advancedOptions.summaryModelId ?? ''}
-                      onChange={(e) => {
+                    <SummaryModelSelect
+                      models={llmModels}
+                      value={advancedOptions.summaryModelId}
+                      onChange={(value) => {
                         advancedTouchedRef.current = true;
-                        setAdvancedOptions({ ...advancedOptions, summaryModelId: e.target.value || null });
+                        setAdvancedOptions({ ...advancedOptions, summaryModelId: value });
                       }}
-                      disabled={llmModels.length === 0}
-                      className="glass-control flex-1 sm:max-w-xs px-3 py-2 rounded-lg text-sm disabled:opacity-50"
-                      style={{ color: 'var(--app-text)' }}
-                    >
-                      <option value="">{t("task.summaryModelAutoOption")}</option>
-                      {renderModelOptions}
-                    </select>
+                      className="glass-control flex-1 sm:max-w-xs text-sm"
+                    />
                   </div>
 
                   {/* Language Selection */}

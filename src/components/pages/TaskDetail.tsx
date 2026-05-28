@@ -28,6 +28,7 @@ import ProcessingState from '@/components/common/ProcessingState';
 import ErrorState from '@/components/common/ErrorState';
 import LoginModal from '@/components/auth/LoginModal';
 import RetryCleanupToast from '@/components/task/RetryCleanupToast';
+import { SummaryModelSelect } from '@/components/task/SummaryModelSelect';
 import { useAPIClient } from '@/lib/use-api-client';
 import { useGlobalStore } from '@/store/global-store';
 import { useAudioStore } from '@/store/audio-store';
@@ -1749,39 +1750,6 @@ export default function TaskDetail({
     },
     [modelNameMap, t]
   );
-  const renderModelOptions = useCallback(
-    () =>
-      modelGroups.map((group) => (
-        <optgroup
-          key={group.label}
-          label={group.label}
-        >
-          {group.models.map((model) => {
-            const parts: string[] = [model.display_name || model.model_id || model.provider];
-            if (model.cost_tier) {
-              parts.push(t(`task.summaryModelCost${model.cost_tier.charAt(0).toUpperCase() + model.cost_tier.slice(1)}` as const));
-            }
-            if (!model.is_available) {
-              parts.push(t("task.summaryModelUnavailable"));
-            } else if (model.is_recommended) {
-              parts.push(t("task.summaryModelRecommended"));
-            }
-            const unhealthyReason = !model.is_available ? model.health_error || undefined : undefined;
-            return (
-              <option
-                key={model.model_id || model.provider}
-                value={model.model_id || model.provider}
-                disabled={!model.is_available}
-                title={unhealthyReason}
-              >
-                {`  ${parts.join(" · ")}`}
-              </option>
-            );
-          })}
-        </optgroup>
-      )),
-    [modelGroups, t]
-  );
   const getModelKey = useCallback(
     (modelValue: string) => {
       const matched = llmModels.find(
@@ -2386,21 +2354,18 @@ export default function TaskDetail({
                           </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <select
-                            value={summaryModelSelection.overview ?? ''}
-                            onChange={(event) =>
+                          <SummaryModelSelect
+                            models={llmModels}
+                            value={summaryModelSelection.overview ?? null}
+                            onChange={(value) =>
                               setSummaryModelSelection((prev) => ({
                                 ...prev,
-                                overview: event.target.value || null,
+                                overview: value,
                               }))
                             }
                             disabled={summaryStreaming.overview || llmModels.length === 0}
-                            className="text-xs px-2 py-1 rounded-md border bg-transparent disabled:opacity-50"
-                            style={{ borderColor: 'var(--app-glass-border)', color: 'var(--app-text)' }}
-                          >
-                            <option value="">{t("task.summaryModelAutoOption")}</option>
-                            {renderModelOptions()}
-                          </select>
+                            className="text-xs"
+                          />
                           <button
                             onClick={() => regenerateSummary('overview')}
                             disabled={summaryStreaming.overview}
@@ -2454,21 +2419,18 @@ export default function TaskDetail({
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <select
-                          value={summaryModelSelection.key_points ?? ''}
-                          onChange={(event) =>
+                        <SummaryModelSelect
+                          models={llmModels}
+                          value={summaryModelSelection.key_points ?? null}
+                          onChange={(value) =>
                             setSummaryModelSelection((prev) => ({
                               ...prev,
-                              key_points: event.target.value || null,
+                              key_points: value,
                             }))
                           }
                           disabled={summaryStreaming.key_points || llmModels.length === 0}
-                          className="text-xs px-2 py-1 rounded-md border bg-transparent disabled:opacity-50"
-                          style={{ borderColor: 'var(--app-glass-border)', color: 'var(--app-text)' }}
-                        >
-                          <option value="">{t("task.summaryModelAutoOption")}</option>
-                          {renderModelOptions()}
-                        </select>
+                          className="text-xs"
+                        />
                         <button
                           onClick={() => regenerateSummary('key_points')}
                           disabled={summaryStreaming.key_points}
@@ -2542,21 +2504,18 @@ export default function TaskDetail({
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <select
-                          value={summaryModelSelection.action_items ?? ''}
-                          onChange={(event) =>
+                        <SummaryModelSelect
+                          models={llmModels}
+                          value={summaryModelSelection.action_items ?? null}
+                          onChange={(value) =>
                             setSummaryModelSelection((prev) => ({
                               ...prev,
-                              action_items: event.target.value || null,
+                              action_items: value,
                             }))
                           }
                           disabled={summaryStreaming.action_items || llmModels.length === 0}
-                          className="text-xs px-2 py-1 rounded-md border bg-transparent disabled:opacity-50"
-                          style={{ borderColor: 'var(--app-glass-border)', color: 'var(--app-text)' }}
-                        >
-                          <option value="">{t("task.summaryModelAutoOption")}</option>
-                          {renderModelOptions()}
-                        </select>
+                          className="text-xs"
+                        />
                         <button
                           onClick={() => regenerateSummary('action_items')}
                           disabled={summaryStreaming.action_items}
@@ -2645,21 +2604,18 @@ export default function TaskDetail({
                             </p>
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <select
-                              value={visualSummaryModelSelection[visualType] ?? ''}
-                              onChange={(event) =>
+                            <SummaryModelSelect
+                              models={llmModels}
+                              value={visualSummaryModelSelection[visualType] ?? null}
+                              onChange={(value) =>
                                 setVisualSummaryModelSelection((prev) => ({
                                   ...prev,
-                                  [visualType]: event.target.value || null,
+                                  [visualType]: value,
                                 }))
                               }
                               disabled={isRegenerating || llmModels.length === 0}
-                              className="text-xs px-2 py-1 rounded-md border bg-transparent disabled:opacity-50"
-                              style={{ borderColor: 'var(--app-glass-border)', color: 'var(--app-text)' }}
-                            >
-                              <option value="">{t("task.summaryModelAutoOption")}</option>
-                              {renderModelOptions()}
-                            </select>
+                              className="text-xs"
+                            />
                             <button
                               onClick={() => regenerateVisualSummary(visualType)}
                               disabled={isRegenerating}
