@@ -169,7 +169,7 @@ export function UploadDialog({
                             key={key}
                             value={key}
                             disabled={!model.is_available}
-                            className="pl-5 py-1"
+                            className="pl-5 py-0.5 leading-tight text-xs"
                           >
                             {`  ${parts.join(" · ")}`}
                           </SelectItem>
