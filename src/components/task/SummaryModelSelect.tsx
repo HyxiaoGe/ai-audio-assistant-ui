@@ -72,7 +72,7 @@ export function SummaryModelSelect({
       <SelectTrigger id={id} className={className}>
         <SelectValue placeholder={placeholder ?? t("task.summaryModelAutoOption")} />
       </SelectTrigger>
-      <SelectContent className="max-h-80">
+      <SelectContent position="popper" className="max-h-80">
         <SelectItem value={AUTO_VALUE}>{t("task.summaryModelAutoOption")}</SelectItem>
         {groups.map((group) => (
           <SelectGroup key={group.label}>
