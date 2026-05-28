@@ -159,26 +159,19 @@ export function UploadDialog({
                         }
                         if (!model.is_available) {
                           parts.push(t("task.summaryModelUnavailable"))
+                          if (model.health_error) parts.push(model.health_error)
                         } else if (model.is_recommended) {
                           parts.push(t("task.summaryModelRecommended"))
                         }
                         const key = model.model_id || model.provider
-                        const unhealthyReason = !model.is_available ? model.health_error : null
                         return (
                           <SelectItem
                             key={key}
                             value={key}
                             disabled={!model.is_available}
-                            className="pl-5"
+                            className="pl-5 py-1"
                           >
-                            <div className="flex flex-col gap-0.5">
-                              <span>{`  ${parts.join(" · ")}`}</span>
-                              {unhealthyReason && (
-                                <span className="text-xs text-muted-foreground pl-3">
-                                  {unhealthyReason}
-                                </span>
-                              )}
-                            </div>
+                            {`  ${parts.join(" · ")}`}
                           </SelectItem>
                         )
                       })}
