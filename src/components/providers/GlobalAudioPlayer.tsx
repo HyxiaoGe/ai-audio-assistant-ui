@@ -80,13 +80,8 @@ export default function GlobalAudioPlayer() {
     }
   }, [cacheKey, clearProgress, src, setCurrentTime, setIsPlaying])
 
-  useEffect(() => {
-    if (!audioRef.current || !src) return
-    if (audioRef.current.src !== src) {
-      audioRef.current.src = src
-      audioRef.current.load()
-    }
-  }, [src])
+  // 注意：audio 元素的 src 由 audio-store（registerAudio / setSource）统一设置，
+  // 并在写入时附加鉴权 token（见 audio-store）。此处不再单独赋值，避免重复 load。
 
   const handleLoadedMetadata = () => {
     const duration = audioRef.current?.duration

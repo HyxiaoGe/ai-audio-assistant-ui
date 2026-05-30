@@ -33,6 +33,7 @@ import { useAPIClient } from '@/lib/use-api-client';
 import { useGlobalStore } from '@/store/global-store';
 import { useAudioStore } from '@/store/audio-store';
 import { getToken } from '@/lib/auth-token';
+import { appendMediaToken, useMediaToken } from '@/lib/media-url';
 import { ApiError } from '@/types/api';
 import { formatDuration } from '@/lib/utils';
 import type {
@@ -114,6 +115,8 @@ export default function TaskDetail({
   const togglePlayback = useAudioStore((state) => state.toggle);
   const play = useAudioStore((state) => state.play);
   const seek = useAudioStore((state) => state.seek);
+  // 文章内联图 / 生成图走鉴权代理；<img> 不能带 Authorization 头，故附加 ?token=
+  const mediaToken = useMediaToken();
   const [activeTab, setActiveTab] = useState('summary');
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -273,7 +276,7 @@ export default function TaskDetail({
                   <ImagePlaceholder
                     description={description}
                     status={imageState?.status || "generating"}
-                    imageUrl={imageState?.url}
+                    imageUrl={appendMediaToken(imageState?.url, mediaToken) || undefined}
                   />
                 );
               }
@@ -290,7 +293,7 @@ export default function TaskDetail({
             img: ({ src, alt, ...props }) => (
               <figure style={{ margin: '16px 0' }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={src} alt={alt} {...props} style={{ maxWidth: '100%', borderRadius: '8px' }} />
+                <img src={typeof src === 'string' ? (appendMediaToken(src, mediaToken) || undefined) : src} alt={alt} {...props} style={{ maxWidth: '100%', borderRadius: '8px' }} />
                 <figcaption
                   style={{
                     fontSize: '12px',
