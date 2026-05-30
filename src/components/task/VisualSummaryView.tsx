@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import type { VisualSummaryResponse, VisualType, SummaryItem } from "@/types/api"
 import { useAPIClient } from "@/lib/use-api-client"
+import { appendMediaToken, useMediaToken } from "@/lib/media-url"
 
 interface VisualSummaryViewProps {
   taskId: string
@@ -32,6 +33,7 @@ export function VisualSummaryView({
   const [copied, setCopied] = useState(false)
   const mermaidRef = useRef<HTMLDivElement>(null)
   const client = useAPIClient()
+  const mediaToken = useMediaToken()
 
   // 初始化 Mermaid
   useEffect(() => {
@@ -122,7 +124,7 @@ export function VisualSummaryView({
 
     const link = document.createElement("a")
     const extension = data.image_url.split("?")[0]?.split(".").pop() || "png"
-    link.href = data.image_url
+    link.href = appendMediaToken(data.image_url, mediaToken)
     link.download = `${visualType}_${taskId}.${extension}`
     link.click()
   }
@@ -196,6 +198,9 @@ export function VisualSummaryView({
     )
   }
 
+  // 后端图片走鉴权代理；<img> 不能带 Authorization 头，故给同源代理 URL 附加 ?token=
+  const imageSrc = appendMediaToken(data.image_url, mediaToken)
+
   return (
     <div className={`space-y-4 ${className}`}>
       {/* 工具栏 - 仅在有按钮时显示 */}
@@ -231,7 +236,7 @@ export function VisualSummaryView({
         <div className="flex justify-center bg-muted/30 rounded-lg p-6">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={data.image_url}
+            src={imageSrc}
             alt={`${visualType} visual summary`}
             className="max-w-full h-auto"
           />
@@ -252,7 +257,7 @@ export function VisualSummaryView({
               <div className="flex justify-center bg-muted/30 rounded-lg p-6">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={data.image_url}
+                  src={imageSrc}
                   alt={`${visualType} visual summary (backend)`}
                   className="max-w-full h-auto"
                 />

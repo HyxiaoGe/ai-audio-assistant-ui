@@ -1,4 +1,6 @@
 import { create } from "zustand"
+import { getTokenSync } from "@/lib/auth-token"
+import { appendMediaToken } from "@/lib/media-url"
 
 interface AudioStore {
   audioEl: HTMLAudioElement | null
@@ -31,8 +33,10 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
   registerAudio: (el) => {
     set({ audioEl: el })
     const { src } = get()
-    if (el && src && el.src !== src) {
-      el.src = src
+    // 媒体代理需鉴权；<audio> 无法带 Authorization 头，故把 token 拼到 URL 查询串。
+    // state.src 保持为不含 token 的逻辑 URL，仅写入 DOM 时附加 token。
+    if (el && src) {
+      el.src = appendMediaToken(src, getTokenSync())
       el.load()
     }
   },
@@ -56,7 +60,7 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
       taskId: taskId ?? null,
     })
     if (audioEl && src) {
-      audioEl.src = src
+      audioEl.src = appendMediaToken(src, getTokenSync())
       audioEl.load()
     }
   },

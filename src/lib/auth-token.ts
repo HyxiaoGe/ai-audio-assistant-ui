@@ -13,6 +13,16 @@ export async function getToken(): Promise<string | null> {
 }
 
 /**
+ * Synchronously read the stored access token (no refresh). For render-time
+ * media URL building where awaiting isn't possible; pair with getToken() to
+ * refresh. Returns null on the server or when unauthenticated.
+ */
+export function getTokenSync(): string | null {
+  if (typeof window === "undefined") return null
+  return localStorage.getItem("auth_access_token")
+}
+
+/**
  * Check if user is authenticated (has stored token)
  */
 export function isAuthenticated(): boolean {
