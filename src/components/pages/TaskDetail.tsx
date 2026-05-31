@@ -22,6 +22,7 @@ import { PlayerBarContainer } from '@/components/task/PlayerBarContainer';
 import { TranscriptList, type DisplayTranscriptSegment } from '@/components/task/TranscriptList';
 import { type ActionItem, parseActionItems, parseSummaryLines } from '@/lib/summary-parse';
 import { MarkdownContent } from '@/components/task/MarkdownContent';
+import { resolveSummaryStreamBaseUrl, attachSseServerErrorListener } from '@/lib/summary-stream';
 import ProcessingState from '@/components/common/ProcessingState';
 import ErrorState from '@/components/common/ErrorState';
 import LoginModal from '@/components/auth/LoginModal';
@@ -474,13 +475,7 @@ export default function TaskDetail({
           }, 120000);
         };
 
-        const rawBaseUrl =
-          process.env.NEXT_PUBLIC_API_URL ||
-          process.env.NEXT_PUBLIC_API_BASE_URL ||
-          '';
-        const normalizedBaseUrl = /\/api\/v1\/?$/.test(rawBaseUrl)
-          ? rawBaseUrl.replace(/\/$/, '')
-          : `${rawBaseUrl.replace(/\/$/, '')}/api/v1`;
+        const normalizedBaseUrl = resolveSummaryStreamBaseUrl();
 
         const token = await getToken();
         if (token) {
@@ -679,14 +674,7 @@ export default function TaskDetail({
             });
           });
 
-          eventSource.addEventListener("error", (event) => {
-            try {
-              const payload = JSON.parse((event as MessageEvent).data);
-              handleStreamError(payload?.message);
-            } catch {
-              handleStreamError();
-            }
-          });
+          attachSseServerErrorListener(eventSource, handleStreamError);
 
           eventSource.onerror = () => {
             window.clearTimeout(connectionTimeout);
@@ -1137,13 +1125,7 @@ export default function TaskDetail({
         }, 120000);
       };
 
-      const rawBaseUrl =
-        process.env.NEXT_PUBLIC_API_URL ||
-        process.env.NEXT_PUBLIC_API_BASE_URL ||
-        '';
-      const normalizedBaseUrl = /\/api\/v1\/?$/.test(rawBaseUrl)
-        ? rawBaseUrl.replace(/\/$/, '')
-        : `${rawBaseUrl.replace(/\/$/, '')}/api/v1`;
+      const normalizedBaseUrl = resolveSummaryStreamBaseUrl();
       const token = await getToken();
 
       if (token) {
@@ -1229,14 +1211,7 @@ export default function TaskDetail({
           }
         });
 
-        eventSource.addEventListener("error", (event) => {
-          try {
-            const payload = JSON.parse((event as MessageEvent).data);
-            handleStreamError(payload?.message);
-          } catch {
-            handleStreamError();
-          }
-        });
+        attachSseServerErrorListener(eventSource, handleStreamError);
 
         eventSource.onerror = () => {
           handleStreamError();
