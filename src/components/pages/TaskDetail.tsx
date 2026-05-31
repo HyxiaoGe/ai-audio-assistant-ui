@@ -24,7 +24,7 @@ import { type ActionItem, parseActionItems, parseSummaryLines } from '@/lib/summ
 import { MarkdownContent } from '@/components/task/MarkdownContent';
 import { ActionItemToggle } from '@/components/task/ActionItemToggle';
 import { ExportMenu } from '@/components/task/ExportMenu';
-import { resolveSummaryStreamBaseUrl, attachSseServerErrorListener } from '@/lib/summary-stream';
+import { resolveSummaryStreamBaseUrl, attachSseServerErrorListener, createSummaryStreamErrorHandler } from '@/lib/summary-stream';
 import ProcessingState from '@/components/common/ProcessingState';
 import ErrorState from '@/components/common/ErrorState';
 import LoginModal from '@/components/auth/LoginModal';
@@ -509,13 +509,19 @@ export default function TaskDetail({
             }
           }, 3000);
 
-          const handleStreamError = (message?: string) => {
-            eventSource.close();
-            summaryStreamRef.current[summaryType] = null;
-            setSummaryStreaming((prev) => ({ ...prev, [summaryType]: false }));
-            notifyError(message || t("task.retryFailed"));
-            startPolling();
-          };
+          // 流在 connected 之前出错时，connected / connectionTimeout 都来不及触发 regenerate。
+          // 错误处理器先幂等补发 triggerRegenerate 再轮询，否则后端从未 regenerate，轮询空等。
+          const handleStreamError = createSummaryStreamErrorHandler({
+            cleanup: (message?: string) => {
+              window.clearTimeout(connectionTimeout);
+              eventSource.close();
+              summaryStreamRef.current[summaryType] = null;
+              setSummaryStreaming((prev) => ({ ...prev, [summaryType]: false }));
+              notifyError(message || t("task.retryFailed"));
+            },
+            triggerRegenerate,
+            startPolling,
+          });
 
           eventSource.addEventListener("connected", () => {
             connectedReceived = true;
@@ -678,7 +684,6 @@ export default function TaskDetail({
           attachSseServerErrorListener(eventSource, handleStreamError);
 
           eventSource.onerror = () => {
-            window.clearTimeout(connectionTimeout);
             handleStreamError();
           };
         } else {
