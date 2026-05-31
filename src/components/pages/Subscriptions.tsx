@@ -57,7 +57,6 @@ import {
 interface SubscriptionsProps {
   isAuthenticated: boolean;
   onOpenLogin: () => void;
-  language?: "zh" | "en";
   onToggleTheme?: () => void;
   searchParams: ReadonlyURLSearchParams;
 }
@@ -65,7 +64,6 @@ interface SubscriptionsProps {
 export default function Subscriptions({
   isAuthenticated,
   onOpenLogin,
-  language = "zh",
   onToggleTheme,
   searchParams,
 }: SubscriptionsProps) {

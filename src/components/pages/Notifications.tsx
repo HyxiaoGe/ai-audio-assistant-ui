@@ -16,7 +16,6 @@ import { ApiError } from "@/types/api";
 interface NotificationsProps {
   isAuthenticated: boolean;
   onOpenLogin: () => void;
-  language?: "zh" | "en";
   onToggleTheme?: () => void;
 }
 
@@ -25,7 +24,6 @@ const PAGE_SIZE = 20;
 export default function Notifications({
   isAuthenticated,
   onOpenLogin,
-  language = "zh",
   onToggleTheme = () => {},
 }: NotificationsProps) {
   const client = useAPIClient();
