@@ -787,6 +787,7 @@
     "videoViews": "{count} 次观看",
     "videoPublished": "发布于",
     "openOnYouTube": "在 YouTube 打开",
+    "channelActions": "频道操作",
     "syncOverview": "已同步 {synced}/{total} 个频道，共 {videos} 个视频",
     "syncComplete": "全部同步完成",
     "syncInProgress": "同步进行中...",

@@ -95,8 +95,9 @@ export default function ChannelActionMenu({
           className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
           onClick={(e) => e.stopPropagation()}
           disabled={loading}
+          aria-label={t("subscriptions.channelActions")}
         >
-          <MoreVertical className="h-4 w-4" />
+          <MoreVertical className="h-4 w-4" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
