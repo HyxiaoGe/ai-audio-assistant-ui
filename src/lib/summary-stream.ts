@@ -46,3 +46,31 @@ export function attachSseServerErrorListener(
     }
   });
 }
+
+/**
+ * 构造 regenerate 摘要流的错误处理器。关键保证：流在 connected 之前出错（onerror 或服务端
+ * error 事件）时，必须先**幂等补发** triggerRegenerate，再 startPolling —— 否则 connected
+ * 与 connectionTimeout 都没机会触发，后端从未收到 regenerate 请求，随后的轮询会永远等待一个
+ * 不会出现的新版本。triggerRegenerate 的幂等性由调用方保证；补发失败交由轮询的超时兜底，
+ * 这里只确保它被发起且不向外抛出。
+ */
+export function createSummaryStreamErrorHandler(opts: {
+  cleanup: (message?: string) => void;
+  triggerRegenerate: () => Promise<void> | void;
+  startPolling: () => void;
+}): (message?: string) => void {
+  return (message) => {
+    opts.cleanup(message);
+    try {
+      const pending = opts.triggerRegenerate();
+      if (pending && typeof (pending as Promise<void>).then === 'function') {
+        (pending as Promise<void>).catch(() => {
+          /* 补发失败由轮询的 120s 超时兜底 */
+        });
+      }
+    } catch {
+      /* 同步异常同样交由轮询兜底，不阻断后续 startPolling */
+    }
+    opts.startPolling();
+  };
+}
