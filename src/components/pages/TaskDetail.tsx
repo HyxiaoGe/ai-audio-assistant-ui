@@ -55,6 +55,12 @@ import {
 import { useI18n } from '@/lib/i18n-context';
 import { useDateFormatter } from '@/lib/use-date-formatter';
 
+// 摘要 SSE 流 / 轮询的时间参数（毫秒）。原先散落为魔数，抽成命名常量便于核对与统一。
+const SUMMARY_POLL_INTERVAL_MS = 2000; // 轮询 getSummary 检测版本号变化的间隔
+const SUMMARY_CONNECTION_TIMEOUT_MS = 3000; // 等 SSE connected 事件，超时则回退轮询
+const SUMMARY_IMAGE_TIMEOUT_MS = 90000; // summary 完成后等 images.completed 的上限（60s/张 + 30s 缓冲）
+const SUMMARY_OVERALL_TIMEOUT_MS = 120000; // 整个摘要 / 对比流程的兜底总超时
+
 // 可视化图表(思维导图/时间轴/流程图)依赖 mermaid——含 cytoscape/katex/dagre 等约 1MB+ 传递依赖。
 // 它仅在用户切到某个可视化 tab 时才挂载,故用 next/dynamic 懒加载,把 mermaid 移出 /tasks/[id]
 // 首屏 JS,只有真正打开可视化 tab 时才下载对应 chunk。ssr:false:mermaid 仅在浏览器渲染(操作 DOM)。
@@ -464,7 +470,7 @@ export default function TaskDetail({
             } catch {
               // Ignore polling errors, keep trying
             }
-          }, 2000);
+          }, SUMMARY_POLL_INTERVAL_MS);
 
           window.setTimeout(() => {
             if (summaryPollRef.current[summaryType]) {
@@ -473,7 +479,7 @@ export default function TaskDetail({
               setSummaryStreaming((prev) => ({ ...prev, [summaryType]: false }));
               notifyError(t("task.retryFailed"));
             }
-          }, 120000);
+          }, SUMMARY_OVERALL_TIMEOUT_MS);
         };
 
         const normalizedBaseUrl = resolveSummaryStreamBaseUrl();
@@ -507,7 +513,7 @@ export default function TaskDetail({
                 }
               });
             }
-          }, 3000);
+          }, SUMMARY_CONNECTION_TIMEOUT_MS);
 
           // 流在 connected 之前出错时，connected / connectionTimeout 都来不及触发 regenerate。
           // 错误处理器先幂等补发 triggerRegenerate 再轮询，否则后端从未 regenerate，轮询空等。
@@ -671,7 +677,7 @@ export default function TaskDetail({
                   }
                   return next;
                 });
-              }, 90000);
+              }, SUMMARY_IMAGE_TIMEOUT_MS);
               // Mark text streaming as complete, but images may still be loading
               setSummaryStreaming((prev) => ({ ...prev, [summaryType]: false }));
             }
@@ -741,7 +747,7 @@ export default function TaskDetail({
         // 2. 轮询检查生成状态
         const result = await client.pollVisualSummary(id, visualType, {
           maxAttempts: 30,
-          interval: 2000,
+          interval: SUMMARY_POLL_INTERVAL_MS,
         });
 
         // 3. 更新本地状态
@@ -1120,7 +1126,7 @@ export default function TaskDetail({
         };
 
         poll();
-        comparePollRef.current = window.setInterval(poll, 2000);
+        comparePollRef.current = window.setInterval(poll, SUMMARY_POLL_INTERVAL_MS);
         window.setTimeout(() => {
           if (comparePollRef.current) {
             window.clearInterval(comparePollRef.current);
@@ -1128,7 +1134,7 @@ export default function TaskDetail({
             setCompareLoading(false);
             setCompareError(t("task.compareTimeout"));
           }
-        }, 120000);
+        }, SUMMARY_OVERALL_TIMEOUT_MS);
       };
 
       const normalizedBaseUrl = resolveSummaryStreamBaseUrl();
