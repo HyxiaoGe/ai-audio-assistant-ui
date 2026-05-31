@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import { Pagination } from '@/components/common/Pagination';
 import Sidebar from '@/components/layout/Sidebar';
 import TaskCard from '@/components/task/TaskCard';
+import { TaskSearchInput } from '@/components/task/TaskSearchInput';
 import EmptyState from '@/components/common/EmptyState';
 import { Button } from '@/components/ui/button';
 import { useAPIClient } from '@/lib/use-api-client';
@@ -323,32 +323,7 @@ export default function TaskList({
 
           {/* 搜索框 */}
           <div className="mb-6">
-            <div className="relative max-w-md">
-              <div className="absolute left-3 top-1/2 -translate-y-1/2">
-                <Search className="w-5 h-5" style={{ color: "var(--app-text-subtle)" }} />
-              </div>
-              <input
-                type="text"
-                placeholder={t("tasks.searchPlaceholder")}
-                value={searchQuery}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                className="glass-control w-full pl-10 pr-4 py-2.5 rounded-lg text-sm"
-                style={{
-                  color: "var(--app-text)"
-                }}
-              />
-              {searchQuery && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  <button
-                    onClick={() => handleSearchChange('')}
-                    className="glass-chip text-xs px-2 py-1 rounded"
-                    style={{ color: "var(--app-text-subtle)" }}
-                  >
-                    {t("tasks.clearSearch")}
-                  </button>
-                </div>
-              )}
-            </div>
+            <TaskSearchInput value={searchQuery} onChange={handleSearchChange} />
             {searchQuery && (
               <p className="mt-2 text-sm" style={{ color: "var(--app-text-muted)" }}>
                 {t("tasks.searchResults", { count: filteredTasks.length })}

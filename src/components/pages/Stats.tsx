@@ -5,6 +5,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import Header from "@/components/layout/Header";
 import Sidebar from "@/components/layout/Sidebar";
 import EmptyState from "@/components/common/EmptyState";
+import { LabeledDateInput } from "@/components/common/LabeledDateInput";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -457,28 +458,18 @@ export default function Stats({
 
                   {timeRange === "custom" && (
                     <>
-                      <div className="space-y-2">
-                        <p className="text-xs text-[var(--app-text-muted)]">
-                          {t("stats.startDate")}
-                        </p>
-                        <input
-                          type="date"
-                          value={customStart}
-                          onChange={(e) => setCustomStart(e.target.value)}
-                          className="glass-control h-9 rounded-md px-3 text-sm"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <p className="text-xs text-[var(--app-text-muted)]">
-                          {t("stats.endDate")}
-                        </p>
-                        <input
-                          type="date"
-                          value={customEnd}
-                          onChange={(e) => setCustomEnd(e.target.value)}
-                          className="glass-control h-9 rounded-md px-3 text-sm"
-                        />
-                      </div>
+                      <LabeledDateInput
+                        id="stats-custom-start"
+                        label={t("stats.startDate")}
+                        value={customStart}
+                        onChange={setCustomStart}
+                      />
+                      <LabeledDateInput
+                        id="stats-custom-end"
+                        label={t("stats.endDate")}
+                        value={customEnd}
+                        onChange={setCustomEnd}
+                      />
                       <Button
                         variant="secondary"
                         size="sm"
