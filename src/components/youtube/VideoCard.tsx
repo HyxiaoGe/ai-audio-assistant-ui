@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN, enUS } from "date-fns/locale";
@@ -94,10 +95,13 @@ export default function VideoCard({
       {/* Thumbnail with duration badge */}
       <div className="relative aspect-video bg-black/10">
         {video.thumbnail_url ? (
-          <img
+          <Image
             src={video.thumbnail_url}
             alt={video.title}
-            className="w-full h-full object-cover"
+            fill
+            className="object-cover"
+            sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            unoptimized
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
@@ -150,10 +154,13 @@ export default function VideoCard({
         {showChannel && (channelTitle || video.channel_id) && (
           <div className="flex items-center gap-2">
             {channelThumbnail && (
-              <img
+              <Image
                 src={channelThumbnail}
                 alt=""
+                width={20}
+                height={20}
                 className="w-5 h-5 rounded-full"
+                unoptimized
               />
             )}
             <span
