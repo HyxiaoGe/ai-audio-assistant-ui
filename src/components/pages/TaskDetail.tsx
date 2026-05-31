@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { useAuthStore } from '@/store/auth-store';
 import { notifyError, notifySuccess } from '@/lib/notify';
 import { ArrowLeft, ChevronDown, FileText, CheckSquare, Lightbulb } from 'lucide-react';
@@ -22,7 +23,6 @@ import {
 import TabSwitch from '@/components/task/TabSwitch';
 import { PlayerBarContainer } from '@/components/task/PlayerBarContainer';
 import { TranscriptList, type DisplayTranscriptSegment } from '@/components/task/TranscriptList';
-import { VisualSummaryView } from '@/components/task/VisualSummaryView';
 import ProcessingState from '@/components/common/ProcessingState';
 import ErrorState from '@/components/common/ErrorState';
 import LoginModal from '@/components/auth/LoginModal';
@@ -55,6 +55,24 @@ import {
 } from '@/lib/image-placeholder';
 import { useI18n } from '@/lib/i18n-context';
 import { useDateFormatter } from '@/lib/use-date-formatter';
+
+// 可视化图表(思维导图/时间轴/流程图)依赖 mermaid——含 cytoscape/katex/dagre 等约 1MB+ 传递依赖。
+// 它仅在用户切到某个可视化 tab 时才挂载,故用 next/dynamic 懒加载,把 mermaid 移出 /tasks/[id]
+// 首屏 JS,只有真正打开可视化 tab 时才下载对应 chunk。ssr:false:mermaid 仅在浏览器渲染(操作 DOM)。
+const VisualSummaryView = dynamic(
+  () => import('@/components/task/VisualSummaryView').then((m) => m.VisualSummaryView),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center py-16">
+        <div
+          className="size-4 border-2 rounded-full animate-spin"
+          style={{ borderColor: 'var(--app-primary) transparent var(--app-primary) var(--app-primary)' }}
+        />
+      </div>
+    ),
+  }
+);
 
 interface TaskDetailProps {
   language?: 'zh' | 'en';
