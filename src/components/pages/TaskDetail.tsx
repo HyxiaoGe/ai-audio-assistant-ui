@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useAuthStore } from '@/store/auth-store';
 import { notifyError, notifySuccess } from '@/lib/notify';
-import { ArrowLeft, ChevronDown, FileText, Lightbulb } from 'lucide-react';
+import { ArrowLeft, FileText, Lightbulb } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,7 @@ import { TranscriptList, type DisplayTranscriptSegment } from '@/components/task
 import { type ActionItem, parseActionItems, parseSummaryLines } from '@/lib/summary-parse';
 import { MarkdownContent } from '@/components/task/MarkdownContent';
 import { ActionItemToggle } from '@/components/task/ActionItemToggle';
+import { ExportMenu } from '@/components/task/ExportMenu';
 import { resolveSummaryStreamBaseUrl, attachSseServerErrorListener } from '@/lib/summary-stream';
 import ProcessingState from '@/components/common/ProcessingState';
 import ErrorState from '@/components/common/ErrorState';
@@ -109,7 +110,6 @@ export default function TaskDetail({
   // 文章内联图 / 生成图走鉴权代理；<img> 不能带 Authorization 头，故附加 ?token=
   const mediaToken = useMediaToken();
   const [activeTab, setActiveTab] = useState('summary');
-  const [showExportMenu, setShowExportMenu] = useState(false);
   const [progress, setProgress] = useState(0);
   const [loginOpen, setLoginOpen] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
@@ -1895,33 +1895,14 @@ export default function TaskDetail({
               </button>
 
               {/* Right: Export */}
-              <div className="relative">
-                <button
-                  onClick={() => setShowExportMenu(!showExportMenu)}
-                  className="flex items-center gap-2 px-4 py-2 border rounded-lg hover:bg-[var(--app-glass-bg-strong)] transition-colors"
-                  style={{ borderColor: 'var(--app-glass-border)', color: 'var(--app-text)' }}
-                >
-                  <span className="text-sm" style={{ fontWeight: 500 }}>{t("task.export")}</span>
-                  <ChevronDown className="w-4 h-4" />
-                </button>
-
-                {showExportMenu && (
-                  <div
-                    className="absolute right-0 mt-2 w-48 rounded-lg shadow-lg border overflow-hidden z-10"
-                    style={{ background: 'var(--app-glass-bg)', borderColor: 'var(--app-glass-border)' }}
-                  >
-                    <button className="w-full px-4 py-2 text-left text-sm hover:bg-[var(--app-glass-bg-strong)]" style={{ color: 'var(--app-text)' }}>
-                      {t("task.exportPdf")}
-                    </button>
-                    <button className="w-full px-4 py-2 text-left text-sm hover:bg-[var(--app-glass-bg-strong)]" style={{ color: 'var(--app-text)' }}>
-                      {t("task.exportWord")}
-                    </button>
-                    <button className="w-full px-4 py-2 text-left text-sm hover:bg-[var(--app-glass-bg-strong)]" style={{ color: 'var(--app-text)' }}>
-                      {t("task.exportMarkdown")}
-                    </button>
-                  </div>
-                )}
-              </div>
+              <ExportMenu
+                label={t("task.export")}
+                items={[
+                  { key: "pdf", label: t("task.exportPdf") },
+                  { key: "word", label: t("task.exportWord") },
+                  { key: "markdown", label: t("task.exportMarkdown") },
+                ]}
+              />
             </div>
           </div>
 
