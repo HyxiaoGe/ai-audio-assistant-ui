@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef } from "react"
 import { useAudioStore } from "@/store/audio-store"
+import { canonicalizeAudioSrc } from "@/lib/audio-progress"
 
 const CACHE_TTL = 7 * 24 * 60 * 60 * 1000
 const PERSIST_INTERVAL_MS = 1000
@@ -25,7 +26,8 @@ export default function GlobalAudioPlayer() {
     const payload = {
       time: audio.currentTime,
       updatedAt: Date.now(),
-      src: audio.src,
+      // 存归一化后的 pathname：跨会话稳定、与 store.src 可比，且不把 token 写进 localStorage。
+      src: canonicalizeAudioSrc(audio.src) ?? audio.src,
     }
     try {
       localStorage.setItem(cacheKey, JSON.stringify(payload))
@@ -65,7 +67,8 @@ export default function GlobalAudioPlayer() {
         updatedAt?: number
         src?: string
       }
-      if (!parsed || parsed.src !== src) return
+      // 两侧都归一到 pathname 再比较：兼容旧的绝对+token 持久值，也兼容相对的 store.src。
+      if (!parsed || canonicalizeAudioSrc(parsed.src) !== canonicalizeAudioSrc(src)) return
       if (!parsed.updatedAt || Date.now() - parsed.updatedAt > CACHE_TTL) {
         clearProgress()
         return
