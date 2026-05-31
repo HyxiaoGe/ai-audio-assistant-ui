@@ -83,7 +83,10 @@ export class ApiError extends Error {
     public code: number,
     public message: string,
     public traceId: string,
-    public data?: unknown
+    public data?: unknown,
+    // 真实 HTTP 状态码：仅当响应不是统一信封（网关 5xx/HTML/空体）时由 api-client 填入，
+    // 便于把传输层故障与业务错误区分开并定位线上问题。
+    public httpStatus?: number
   ) {
     super(message)
     this.name = "ApiError"

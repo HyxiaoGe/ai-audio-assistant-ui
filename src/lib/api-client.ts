@@ -183,8 +183,34 @@ async function request<T>(
       }
     }
 
-    // 解析响应
-    const result: ApiResponse<T> = await response.json()
+    // 解析响应：先读文本再尝试按统一信封解析。网关 5xx(HTML)、空体或被截断的 body
+    // 不是 {code,message,data,traceId} 信封，盲目 response.json() 会抛 SyntaxError，
+    // 把真实 HTTP status 与 traceId 全部丢成 50000/"client_error"。
+    const traceHeader =
+      response.headers.get("X-Trace-Id") ||
+      response.headers.get("traceId") ||
+      undefined
+    const rawBody = await response.text()
+
+    let result: ApiResponse<T> | undefined
+    if (rawBody) {
+      try {
+        result = JSON.parse(rawBody) as ApiResponse<T>
+      } catch {
+        result = undefined
+      }
+    }
+
+    // body 不是统一信封：保留真实 HTTP status 与 trace header，便于定位线上故障。
+    if (!result || typeof result.code !== "number") {
+      throw new ApiError(
+        50000,
+        translateStatic("errors.networkFailedDesc", locale),
+        traceHeader ?? "client_error",
+        rawBody || undefined,
+        response.status
+      )
+    }
 
     // 检查业务状态码
     if (result.code !== 0) {
