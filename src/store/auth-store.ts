@@ -274,6 +274,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       }).catch(() => {})
     }
     clearTokens()
+    // 媒体短票随登出失效：避免同浏览器换号后把上一用户的票用于下一用户（其媒体会被
+    // 后端归属校验拒为 404）。动态 import 规避与 api-client 的静态循环依赖。
+    import("@/lib/media-ticket").then((m) => m.clearMediaTicket()).catch(() => {})
     set({ user: null, status: "unauthenticated" })
   },
 }))

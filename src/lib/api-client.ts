@@ -22,6 +22,7 @@ import {
   CreateTaskRequest,
   CreateTaskResponse,
   LLMModelsResponse,
+  MediaTicketResponse,
   NotificationListRequest,
   NotificationListResponse,
   NotificationStatsResponse,
@@ -500,6 +501,26 @@ export class APIClient {
    */
   async getSummary(taskId: string): Promise<SummaryResponse> {
     return request(`/summaries/${taskId}`, { method: "GET" }, this.token)
+  }
+
+  /**
+   * 签发短期 media 票据（scope=media），供 <img>/<audio> 用 ?token= 访问媒体代理。
+   * 用 Authorization 头鉴权，票据只绑定调用方用户。
+   */
+  async mintMediaTicket(): Promise<MediaTicketResponse> {
+    return request("/media/ticket", { method: "POST" }, this.token)
+  }
+
+  /**
+   * 签发短期 stream 票据（scope=stream，绑定 task_id + summary_type），供 SSE 用 ?token= 订阅。
+   * 用 Authorization 头鉴权并校验任务归属；票据仅能用于该任务、该摘要类型的流。
+   */
+  async mintStreamTicket(taskId: string, summaryType: string): Promise<MediaTicketResponse> {
+    return request(
+      `/summaries/${taskId}/stream-ticket?summary_type=${encodeURIComponent(summaryType)}`,
+      { method: "POST" },
+      this.token
+    )
   }
 
   /**

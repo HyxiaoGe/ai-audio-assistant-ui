@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { getToken, getTokenSync } from "@/lib/auth-token"
+import { getMediaTicket, getMediaTicketSync } from "@/lib/media-ticket"
 
 /**
  * Same-origin proxy endpoints that require an auth token. Browser <audio>/<img>
@@ -25,17 +25,19 @@ export function appendMediaToken(url: string | null | undefined, token: string |
 }
 
 /**
- * Resolve the current access token for media/image URLs. Seeds synchronously
- * from storage to avoid an initial un-tokenized request, then refreshes
- * asynchronously once on mount (covers token rotation). Returns null when
- * unauthenticated.
+ * Resolve a short-lived, media-scoped ticket for media/image URLs (NOT the
+ * long-lived access JWT — keeps the bearer token out of URLs/proxy logs).
+ * Seeds synchronously from the shared cache when one is already warm (e.g. from
+ * another media element on the page), otherwise mints once on mount. Returns
+ * null until the ticket is available; the media element then re-renders with
+ * the tokened URL. Deliberately does NOT fall back to the access JWT.
  */
 export function useMediaToken(): string | null {
-  const [token, setToken] = useState<string | null>(() => getTokenSync())
+  const [token, setToken] = useState<string | null>(() => getMediaTicketSync())
   useEffect(() => {
     let active = true
-    getToken().then((fresh) => {
-      if (active && fresh) setToken(fresh)
+    getMediaTicket().then((ticket) => {
+      if (active && ticket) setToken(ticket)
     })
     return () => {
       active = false

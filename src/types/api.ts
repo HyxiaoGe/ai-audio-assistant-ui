@@ -484,6 +484,12 @@ export interface SummaryRegenerateResponse {
   status: string
 }
 
+// 短期作用域票据（media / stream）：拼到媒体代理或 SSE 的 ?token=，替代长效 access JWT。
+export interface MediaTicketResponse {
+  token: string
+  expires_in: number
+}
+
 // ============================================================================
 // 可视化摘要相关（v1.3 新增）
 // ============================================================================
