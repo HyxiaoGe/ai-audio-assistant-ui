@@ -724,6 +724,8 @@
     "networkFailedDesc": "请检查网络后重试",
     "unknownErrorTitle": "出错了",
     "unknownError": "发生了一些错误",
+    "pageNotFoundTitle": "页面不存在",
+    "pageNotFoundDesc": "你访问的页面不存在，或已被移动。",
     "cryptoUnavailable": "当前浏览器不支持 Web Crypto API"
   },
   "subscriptions": {

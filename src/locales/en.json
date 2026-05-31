@@ -724,6 +724,8 @@
     "networkFailedDesc": "Check your connection and try again.",
     "unknownErrorTitle": "Something went wrong",
     "unknownError": "Something went wrong",
+    "pageNotFoundTitle": "Page not found",
+    "pageNotFoundDesc": "The page you’re looking for doesn’t exist or has moved.",
     "cryptoUnavailable": "Your browser does not support Web Crypto"
   },
   "subscriptions": {
