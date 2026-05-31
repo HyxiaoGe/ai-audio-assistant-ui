@@ -21,7 +21,6 @@ import TabSwitch from '@/components/task/TabSwitch';
 import { PlayerBarContainer } from '@/components/task/PlayerBarContainer';
 import { TranscriptList, type DisplayTranscriptSegment } from '@/components/task/TranscriptList';
 import { type ActionItem, parseActionItems, parseSummaryLines } from '@/lib/summary-parse';
-import { MarkdownContent } from '@/components/task/MarkdownContent';
 import { ActionItemToggle } from '@/components/task/ActionItemToggle';
 import { ExportMenu } from '@/components/task/ExportMenu';
 import { resolveSummaryStreamBaseUrl, attachSseServerErrorListener, createSummaryStreamErrorHandler } from '@/lib/summary-stream';
@@ -66,6 +65,25 @@ const SUMMARY_OVERALL_TIMEOUT_MS = 120000; // 整个摘要 / 对比流程的兜�
 // 首屏 JS,只有真正打开可视化 tab 时才下载对应 chunk。ssr:false:mermaid 仅在浏览器渲染(操作 DOM)。
 const VisualSummaryView = dynamic(
   () => import('@/components/task/VisualSummaryView').then((m) => m.VisualSummaryView),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center py-16">
+        <div
+          className="size-4 border-2 rounded-full animate-spin"
+          style={{ borderColor: 'var(--app-primary) transparent var(--app-primary) var(--app-primary)' }}
+        />
+      </div>
+    ),
+  }
+);
+
+// MarkdownContent 内含 react-markdown + remark-gfm + rehype-sanitize(约百 KB 级)。
+// 摘要/要点/行动项内容均由异步 API 闸门(首屏渲染时为空、走空状态文案),故这里改 next/dynamic
+// 把这组依赖移出 /tasks/[id] 首屏 JS;懒 chunk 在 API 拉取延迟期并行下载,内容就绪时通常已加载,
+// 无可见闪烁。ssr:false:内容仅在浏览器异步获取后才有,无需服务端渲染。
+const MarkdownContent = dynamic(
+  () => import('@/components/task/MarkdownContent').then((m) => m.MarkdownContent),
   {
     ssr: false,
     loading: () => (
