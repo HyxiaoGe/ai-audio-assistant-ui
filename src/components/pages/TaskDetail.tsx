@@ -19,10 +19,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import PlayerBar from '@/components/task/PlayerBar';
-import TranscriptItem from '@/components/task/TranscriptItem';
 import TabSwitch from '@/components/task/TabSwitch';
-import YouTubePlayerCard from '@/components/task/YouTubePlayerCard';
+import { PlayerBarContainer } from '@/components/task/PlayerBarContainer';
+import { TranscriptList, type DisplayTranscriptSegment } from '@/components/task/TranscriptList';
 import { VisualSummaryView } from '@/components/task/VisualSummaryView';
 import ProcessingState from '@/components/common/ProcessingState';
 import ErrorState from '@/components/common/ErrorState';
@@ -39,7 +38,6 @@ import { formatDuration } from '@/lib/utils';
 import type {
   TaskDetail as ApiTaskDetail,
   TranscriptSegment as ApiTranscriptSegment,
-  TranscriptWord,
   ComparisonResult,
   SummaryItem,
   SummaryRegenerateType,
@@ -61,20 +59,6 @@ import { useDateFormatter } from '@/lib/use-date-formatter';
 interface TaskDetailProps {
   language?: 'zh' | 'en';
   onToggleTheme?: () => void;
-}
-
-interface DisplayTranscriptSegment {
-  id: string;
-  speaker: string;
-  startTime: string;
-  endTime: string;
-  startSeconds: number;
-  endSeconds: number;
-  content: string;
-  words: TranscriptWord[] | null;
-  avatarColor: string;
-  isPolished: boolean;
-  originalContent: string | null;
 }
 
 interface KeyPoint {
@@ -108,7 +92,6 @@ export default function TaskDetail({
   const { formatRelativeTime } = useDateFormatter();
   const id = params?.id as string;
   const isPlaying = useAudioStore((state) => state.isPlaying);
-  const currentTime = useAudioStore((state) => state.currentTime);
   const audioDuration = useAudioStore((state) => state.duration);
   const currentSrc = useAudioStore((state) => state.src);
   const setSource = useAudioStore((state) => state.setSource);
@@ -130,16 +113,7 @@ export default function TaskDetail({
 
   const [task, setTask] = useState<ApiTaskDetail | null>(null);
   const [transcript, setTranscript] = useState<DisplayTranscriptSegment[]>([]);
-  const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
-  const [activeWordKey, setActiveWordKey] = useState<{ segmentId: string; index: number } | null>(null);
-  const [activeWordProgress, setActiveWordProgress] = useState<number | null>(null);
   const [transcriptLoading, setTranscriptLoading] = useState(true);
-  const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
-  const transcriptItemRefs = useRef(new Map<string, HTMLDivElement>());
-  const autoScrollPauseUntilRef = useRef(0);
-  const programmaticScrollRef = useRef(false);
-  const resumeScrollTimerRef = useRef<number | null>(null);
-  const activeSegmentIdRef = useRef<string | null>(null);
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const [keyPoints, setKeyPoints] = useState<KeyPoint[]>([]);
   const [summaryOverviewMarkdown, setSummaryOverviewMarkdown] = useState<string>('');
@@ -421,9 +395,6 @@ export default function TaskDetail({
     setError(null);
     setTranscriptLoading(true);
     setTranscript([]);
-    setActiveSegmentId(null);
-    setActiveWordKey(null);
-    setActiveWordProgress(null);
     try {
       const taskData = await client.getTask(id);
       setTask(taskData);
@@ -513,7 +484,6 @@ export default function TaskDetail({
     const summaryPolls = summaryPollRef.current;
     const comparePoll = comparePollRef.current;
     const compareStream = compareStreamRef.current;
-    const resumeTimer = resumeScrollTimerRef.current;
     const imagesTimeout = imagesTimeoutRef.current;
     return () => {
       (Object.keys(summaryStreams) as SummaryRegenerateType[]).forEach((type) => {
@@ -526,9 +496,6 @@ export default function TaskDetail({
         window.clearInterval(comparePoll);
       }
       compareStream?.close();
-      if (resumeTimer) {
-        window.clearTimeout(resumeTimer);
-      }
       if (imagesTimeout) {
         window.clearTimeout(imagesTimeout);
       }
@@ -1137,7 +1104,7 @@ export default function TaskDetail({
     return t("task.etaMinutes", { minutes });
   };
 
-  const handlePlayPause = () => {
+  const handlePlayPause = useCallback(() => {
     if (!task?.audio_url) return;
     if (currentSrc !== task.audio_url) {
       setSource(task.audio_url, task.id, task.title);
@@ -1145,14 +1112,14 @@ export default function TaskDetail({
       return;
     }
     togglePlayback();
-  };
+  }, [task?.audio_url, task?.id, task?.title, currentSrc, setSource, play, togglePlayback]);
 
-  const handleSeek = (time: number) => {
+  const handleSeek = useCallback((time: number) => {
     if (task?.audio_url && currentSrc !== task.audio_url) {
       setSource(task.audio_url, task.id, task.title);
     }
     seek(time);
-  };
+  }, [task?.audio_url, task?.id, task?.title, currentSrc, setSource, seek]);
 
   useEffect(() => {
     if (!task?.audio_url) return;
@@ -1178,142 +1145,28 @@ export default function TaskDetail({
     }
   }, [currentSrc, play, setSource, task?.audio_url, task?.id, task?.title]);
 
-  const handleTimeClick = (time: string) => {
+  const handleTimeClick = useCallback((time: string) => {
     // Convert time string to seconds
     const [mins, secs] = time.split(':').map(Number);
     if (Number.isNaN(mins) || Number.isNaN(secs)) return;
     const totalSeconds = mins * 60 + secs;
     handleSeek(totalSeconds);
-  };
+  }, [handleSeek]);
 
-  const handleEditTranscript = (segmentId: string, newContent: string) => {
+  const handleEditTranscript = useCallback((segmentId: string, newContent: string) => {
     setTranscript(prev =>
       prev.map(segment =>
         segment.id === segmentId ? { ...segment, content: newContent } : segment
       )
     );
-  };
+  }, []);
 
   const isActiveAudio = Boolean(task?.audio_url && currentSrc === task.audio_url);
   // 优先使用音频元素的实际 duration，如果没有则使用后端提供的 duration_seconds
   const duration = isActiveAudio
     ? (audioDuration || task?.duration_seconds || 0)
     : (task?.duration_seconds || 0);
-  const displayCurrentTime = isActiveAudio ? currentTime : 0;
   const displayIsPlaying = isActiveAudio ? isPlaying : false;
-
-  const scrollToTranscriptItem = useCallback((segmentId: string) => {
-    const container = transcriptScrollRef.current;
-    const node = transcriptItemRefs.current.get(segmentId);
-    if (!container || !node) return;
-    programmaticScrollRef.current = true;
-    node.scrollIntoView({ behavior: "smooth", block: "center" });
-    window.setTimeout(() => {
-      programmaticScrollRef.current = false;
-    }, 300);
-  }, []);
-
-  const scheduleAutoScrollResume = useCallback(() => {
-    if (resumeScrollTimerRef.current) {
-      window.clearTimeout(resumeScrollTimerRef.current);
-    }
-    resumeScrollTimerRef.current = window.setTimeout(() => {
-      const segmentId = activeSegmentIdRef.current;
-      if (!segmentId) return;
-      if (Date.now() < autoScrollPauseUntilRef.current) return;
-      scrollToTranscriptItem(segmentId);
-    }, 3000);
-  }, [scrollToTranscriptItem]);
-
-  useEffect(() => {
-    activeSegmentIdRef.current = activeSegmentId;
-  }, [activeSegmentId]);
-
-  useEffect(() => {
-    if (!isActiveAudio || transcript.length === 0) {
-      setActiveSegmentId(null);
-      setActiveWordKey(null);
-      setActiveWordProgress(null);
-      return;
-    }
-    let nextSegment: DisplayTranscriptSegment | null = null;
-    for (const segment of transcript) {
-      if (currentTime < segment.startSeconds) {
-        break;
-      }
-      nextSegment = segment;
-      if (currentTime <= segment.endSeconds) {
-        break;
-      }
-    }
-    const nextId = nextSegment?.id ?? null;
-    setActiveSegmentId((prev) => (prev === nextId ? prev : nextId));
-    let nextWordIndex: number | null = null;
-    if (nextSegment?.words && nextSegment.words.length > 0) {
-      let candidate: number | null = null;
-      for (let i = 0; i < nextSegment.words.length; i += 1) {
-        const word = nextSegment.words[i];
-        if (currentTime < word.start_time) {
-          break;
-        }
-        candidate = i;
-        if (currentTime <= word.end_time) {
-          break;
-        }
-      }
-      nextWordIndex = candidate;
-    }
-    setActiveWordKey((prev) => {
-      if (!nextId || nextWordIndex === null) {
-        return prev ? null : prev;
-      }
-      if (prev?.segmentId === nextId && prev.index === nextWordIndex) {
-        return prev;
-      }
-      return { segmentId: nextId, index: nextWordIndex };
-    });
-    if (!nextId || nextWordIndex === null || !nextSegment?.words) {
-      setActiveWordProgress(null);
-      return;
-    }
-    const word = nextSegment.words[nextWordIndex];
-    const duration = Math.max(word.end_time - word.start_time, 0.001);
-    const ratio = (currentTime - word.start_time) / duration;
-    setActiveWordProgress(Math.min(1, Math.max(0, ratio)));
-  }, [currentTime, isActiveAudio, transcript]);
-
-  useEffect(() => {
-    if (!activeSegmentId) return;
-    if (Date.now() < autoScrollPauseUntilRef.current) return;
-    scrollToTranscriptItem(activeSegmentId);
-  }, [activeSegmentId, scrollToTranscriptItem]);
-
-  useEffect(() => {
-    const container = transcriptScrollRef.current;
-    if (!container) return;
-
-    const pauseAutoScroll = () => {
-      autoScrollPauseUntilRef.current = Date.now() + 3000;
-      scheduleAutoScrollResume();
-    };
-
-    const handleScroll = () => {
-      if (programmaticScrollRef.current) return;
-      pauseAutoScroll();
-    };
-
-    container.addEventListener("scroll", handleScroll, { passive: true });
-    container.addEventListener("wheel", pauseAutoScroll, { passive: true });
-    container.addEventListener("touchmove", pauseAutoScroll, { passive: true });
-    container.addEventListener("pointerdown", pauseAutoScroll, { passive: true });
-
-    return () => {
-      container.removeEventListener("scroll", handleScroll);
-      container.removeEventListener("wheel", pauseAutoScroll);
-      container.removeEventListener("touchmove", pauseAutoScroll);
-      container.removeEventListener("pointerdown", pauseAutoScroll);
-    };
-  }, [scheduleAutoScrollResume]);
 
   const toggleActionItem = (itemId: string) => {
     setActionItems(prev =>
@@ -2222,28 +2075,19 @@ export default function TaskDetail({
             </div>
           </div>
 
-          {/* Player Section - YouTube integrated card or standard PlayerBar */}
-          {task.source_type === 'youtube' && task.youtube_info ? (
-            <YouTubePlayerCard
-              youtubeInfo={task.youtube_info}
-              sourceUrl={task.source_url}
-              currentTime={displayCurrentTime}
-              duration={duration}
-              isPlaying={displayIsPlaying}
-              onPlayPause={handlePlayPause}
-              onSeek={handleSeek}
-            />
-          ) : (
-            <div className="px-6 py-4" style={{ background: 'var(--app-glass-bg)' }}>
-              <PlayerBar
-                currentTime={displayCurrentTime}
-                duration={duration}
-                isPlaying={displayIsPlaying}
-                onPlayPause={handlePlayPause}
-                onSeek={handleSeek}
-              />
-            </div>
-          )}
+          {/* Player Section - 进度条逐帧订阅 currentTime，下沉到 PlayerBarContainer 叶子组件，避免父组件每秒重渲染 */}
+          <PlayerBarContainer
+            isActiveAudio={isActiveAudio}
+            duration={duration}
+            isPlaying={displayIsPlaying}
+            onPlayPause={handlePlayPause}
+            onSeek={handleSeek}
+            youtube={
+              task.source_type === 'youtube' && task.youtube_info
+                ? { youtubeInfo: task.youtube_info, sourceUrl: task.source_url }
+                : null
+            }
+          />
 
           {/* Two Column Layout */}
           <div className="flex-1 flex overflow-hidden border-t" style={{ borderColor: 'var(--app-glass-border)' }}>
@@ -2257,63 +2101,14 @@ export default function TaskDetail({
                 </h2>
               </div>
 
-              {/* Transcript List */}
-              <div className="flex-1 overflow-y-auto" ref={transcriptScrollRef}>
-                {transcriptLoading ? (
-                  <div className="flex items-center justify-center py-16">
-                    <div className="glass-panel rounded-lg px-6 py-4 flex items-center gap-3">
-                      <div
-                        className="size-4 border-2 border-[var(--app-primary)] border-t-transparent rounded-full animate-spin"
-                        style={{ borderColor: "var(--app-primary) transparent var(--app-primary) var(--app-primary)" }}
-                      />
-                      <span className="text-sm" style={{ color: "var(--app-text-muted)" }}>
-                        {t("transcript.loading")}
-                      </span>
-                    </div>
-                  </div>
-                ) : transcript.length > 0 ? (
-                  transcript.map((segment) => (
-                    <div
-                      key={segment.id}
-                      ref={(node) => {
-                        if (node) {
-                          transcriptItemRefs.current.set(segment.id, node);
-                        } else {
-                          transcriptItemRefs.current.delete(segment.id);
-                        }
-                      }}
-                    >
-                      <TranscriptItem
-                        speaker={segment.speaker}
-                        startTime={segment.startTime}
-                        endTime={segment.endTime}
-                        content={segment.content}
-                        words={segment.words}
-                        avatarColor={segment.avatarColor}
-                        isActive={segment.id === activeSegmentId}
-                        activeWordIndex={
-                          segment.id === activeWordKey?.segmentId ? activeWordKey.index : null
-                        }
-                        activeWordProgress={
-                          segment.id === activeWordKey?.segmentId ? activeWordProgress : null
-                        }
-                        onTimeClick={handleTimeClick}
-                        onEdit={(newContent) => handleEditTranscript(segment.id, newContent)}
-                        isPolished={segment.isPolished}
-                        originalContent={segment.originalContent}
-                      />
-                    </div>
-                  ))
-                ) : (
-                  <ErrorState
-                    type="processing"
-                    title={t("task.transcriptEmpty")}
-                    description={t("errors.processFailedDesc")}
-                    onRetry={() => window.location.reload()}
-                    retryLabel={t("task.retryProcessing")}
-                  />
-                )}
-              </div>
+              {/* Transcript List - currentTime 逐帧订阅 + 高亮派生 + 自动滚动均封装在 TranscriptList 内，配合行级 memo 把逐帧重渲染限制在高亮行 */}
+              <TranscriptList
+                transcript={transcript}
+                transcriptLoading={transcriptLoading}
+                isActiveAudio={isActiveAudio}
+                onTimeClick={handleTimeClick}
+                onEditSegment={handleEditTranscript}
+              />
             </div>
 
             {/* Right Column: Summary Panel */}
