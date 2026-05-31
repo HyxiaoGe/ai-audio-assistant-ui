@@ -23,6 +23,7 @@ import {
 import TabSwitch from '@/components/task/TabSwitch';
 import { PlayerBarContainer } from '@/components/task/PlayerBarContainer';
 import { TranscriptList, type DisplayTranscriptSegment } from '@/components/task/TranscriptList';
+import { type ActionItem, parseActionItems, parseSummaryLines } from '@/lib/summary-parse';
 import ProcessingState from '@/components/common/ProcessingState';
 import ErrorState from '@/components/common/ErrorState';
 import LoginModal from '@/components/auth/LoginModal';
@@ -82,14 +83,6 @@ interface TaskDetailProps {
 interface KeyPoint {
   text: string;
   timeReference: string;
-}
-
-interface ActionItem {
-  id: string;
-  task: string;
-  assignee: string;
-  deadline: string;
-  completed: boolean;
 }
 
 interface Speaker {
@@ -318,49 +311,14 @@ export default function TaskDetail({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const parseSummaryLines = useCallback((content?: string | null) => {
-    if (!content) return [];
-    return content
-      .split(/\n+/)
-      .map((line) =>
-        line
-          .replace(/^\s*[-*]\s+/, '')
-          .replace(/^\s*\d+\.\s+/, '')
-          .replace(/^\s*\[[xX\s]\]\s+/, '')
-          .trim()
-      )
-      .filter(Boolean);
-  }, []);
-
-  const parseActionItems = useCallback((content?: string | null): ActionItem[] => {
-    if (!content) return [];
-    const lines = content.split(/\n+/).map((line) => line.trim()).filter(Boolean);
-
-    return lines.map((line, index) => {
-      const completedMatch = line.match(/\[\s*[xX]\s*\]/);
-      const cleaned = line
-        .replace(/^\s*[-*]\s+/, '')
-        .replace(/^\s*\[[xX\s]\]\s+/, '')
-        .trim();
-
-      const assigneeMatch = cleaned.match(/@([^\s]+)/);
-      const deadlineMatch = cleaned.match(/\b(\d{4}-\d{1,2}-\d{1,2}|\d{1,2}\/\d{1,2})\b/);
-
-      const taskText = cleaned
-        .replace(/@([^\s]+)/, '')
-        .replace(/\b(\d{4}-\d{1,2}-\d{1,2}|\d{1,2}\/\d{1,2})\b/, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-
-      return {
-        id: `action-${index + 1}`,
-        task: taskText || cleaned,
-        assignee: assigneeMatch ? assigneeMatch[1] : t("task.pendingAssignee"),
-        deadline: deadlineMatch ? deadlineMatch[1] : t("task.pendingDeadline"),
-        completed: Boolean(completedMatch),
-      };
-    });
-  }, [t]);
+  // 行动项缺省占位文案（已本地化）；解析逻辑见 @/lib/summary-parse。
+  const actionItemLabels = useMemo(
+    () => ({
+      pendingAssignee: t("task.pendingAssignee"),
+      pendingDeadline: t("task.pendingDeadline"),
+    }),
+    [t]
+  );
 
   const buildSummaryState = useCallback((items: SummaryItem[]) => {
     const overview = items.find((item) => item.summary_type === 'overview' && item.is_active)?.content;
@@ -391,7 +349,7 @@ export default function TaskDetail({
 
     // Also parse to old format for backward compatibility
     const keyPointLines = parseSummaryLines(keyPointsContent);
-    const actionLines = parseActionItems(actionItemsContent);
+    const actionLines = parseActionItems(actionItemsContent, actionItemLabels);
 
     setKeyPoints(keyPointLines.map((text) => ({
       text,
@@ -405,7 +363,7 @@ export default function TaskDetail({
     setImageModelUsed(
       items.find((item) => item.summary_type === 'overview' && item.is_active)?.image_model_used ?? null
     );
-  }, [parseActionItems, parseSummaryLines]);
+  }, [actionItemLabels]);
 
   const loadTask = useCallback(async () => {
     if (!id || !authUser) return;
@@ -534,10 +492,10 @@ export default function TaskDetail({
         })));
       } else if (summaryType === 'action_items') {
         setActionItemsMarkdown(content);
-        setActionItems(parseActionItems(content));
+        setActionItems(parseActionItems(content, actionItemLabels));
       }
     },
-    [parseActionItems, parseSummaryLines]
+    [actionItemLabels]
   );
 
   // Scroll summary container to bottom (used during streaming)
