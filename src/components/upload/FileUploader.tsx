@@ -85,6 +85,16 @@ export function FileUploader({
   }
 
   /**
+   * 键盘可达：Enter/Space 打开文件选择对话框
+   */
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault()
+      handleClick()
+    }
+  }
+
+  /**
    * 文件输入框变化
    */
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -166,6 +176,9 @@ export function FileUploader({
   // 默认状态：拖拽区域
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-label={t("upload.selectFile")}
       className="glass-panel relative w-full rounded-2xl border-2 border-dashed cursor-pointer transition-all"
       style={{
         borderColor: isDragOver ? "var(--app-primary)" : "var(--app-glass-border)",
@@ -178,11 +191,14 @@ export function FileUploader({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       onClick={handleClick}
+      onKeyDown={handleKeyDown}
     >
       <input
         ref={fileInputRef}
         type="file"
         className="hidden"
+        tabIndex={-1}
+        aria-hidden="true"
         accept="audio/*,video/*,.mp3,.mp4,.wav,.m4a,.webm"
         onChange={handleFileChange}
       />
