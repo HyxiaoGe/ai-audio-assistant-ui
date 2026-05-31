@@ -17,6 +17,7 @@ import { useAuthStore } from "@/store/auth-store";
 import { toast } from "sonner";
 import { CheckCircle2, XCircle } from "lucide-react";
 import { getToken } from "@/lib/auth-token";
+import { scheduleSingleFlightTimer, closeIfCurrent } from "@/lib/ws-lifecycle";
 import { useGlobalStore } from "@/store/global-store";
 import { useAPIClient } from "@/lib/use-api-client";
 import type { TaskStatus } from "@/types/api";
@@ -263,10 +264,11 @@ export function useGlobalWebSocket() {
 
     setWsReconnecting(true);
 
-    reconnectTimeoutRef.current = setTimeout(() => {
+    // 单飞调度：先清掉上一个未触发的重连定时器，避免网络抖动下叠出多条并行连接。
+    scheduleSingleFlightTimer(reconnectTimeoutRef, delay, () => {
       reconnectAttemptsRef.current += 1;
       connectRef.current?.();
-    }, delay);
+    });
   }, [authUser, startPolling, setWsReconnecting]);
 
   // Connect to WebSocket
@@ -344,17 +346,20 @@ export function useGlobalWebSocket() {
       };
 
       ws.onclose = () => {
-        if (authTimeoutRef.current) {
-          clearTimeout(authTimeoutRef.current);
-        }
-        isAuthenticatedRef.current = false;
-        setWsConnected(false);
-        wsRef.current = null;
+        // 仅当关闭的是当前 socket 时才清理：被 connect() 取代的旧 socket 的延迟 onclose
+        // 不得清掉活 socket 的 auth 定时器/引用，也不得触发多余重连。
+        closeIfCurrent(wsRef, ws, () => {
+          if (authTimeoutRef.current) {
+            clearTimeout(authTimeoutRef.current);
+          }
+          isAuthenticatedRef.current = false;
+          setWsConnected(false);
 
-        // Auto-reconnect if enabled
-        if (enabledRef.current && authUser) {
-          reconnect();
-        }
+          // Auto-reconnect if enabled
+          if (enabledRef.current && authUser) {
+            reconnect();
+          }
+        });
       };
     } catch {
       setWsConnected(false);
