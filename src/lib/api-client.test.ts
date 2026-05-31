@@ -45,3 +45,34 @@ describe("api-client request timeout/abort", () => {
     2_000
   )
 })
+
+// 网关 5xx 返回 HTML、空体或被截断的 body 不是 {code,message,data,traceId} 信封。
+// 之前 request() 无条件 response.json()，解析失败被压成 50000/"client_error"，真实 HTTP
+// status 与 X-Trace-Id 全部丢失，线上故障无法定位。这里锁定：非信封响应必须把真实 HTTP
+// status 与 trace header 带进 ApiError。
+describe("api-client non-envelope / HTTP-error responses", () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it("preserves the real HTTP status and trace header when the body is not the JSON envelope", async () => {
+    const response = new Response("<html><body>502 Bad Gateway</body></html>", {
+      status: 502,
+      headers: { "Content-Type": "text/html", "X-Trace-Id": "trace-abc-123" },
+    })
+    const fetchMock = vi.fn(async () => response)
+    vi.stubGlobal("fetch", fetchMock)
+
+    const client = createAPIClient("test-token")
+    const err = await client.getTasks().catch((e: unknown) => e)
+
+    expect(err).toBeInstanceOf(ApiError)
+    expect((err as ApiError).httpStatus).toBe(502)
+    expect((err as ApiError).traceId).toBe("trace-abc-123")
+  })
+})
