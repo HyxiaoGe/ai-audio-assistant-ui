@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useAuthStore } from '@/store/auth-store';
 import { notifyError, notifySuccess } from '@/lib/notify';
-import { ArrowLeft, ChevronDown, FileText, CheckSquare, Lightbulb } from 'lucide-react';
+import { ArrowLeft, ChevronDown, FileText, Lightbulb } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,7 @@ import { PlayerBarContainer } from '@/components/task/PlayerBarContainer';
 import { TranscriptList, type DisplayTranscriptSegment } from '@/components/task/TranscriptList';
 import { type ActionItem, parseActionItems, parseSummaryLines } from '@/lib/summary-parse';
 import { MarkdownContent } from '@/components/task/MarkdownContent';
+import { ActionItemToggle } from '@/components/task/ActionItemToggle';
 import { resolveSummaryStreamBaseUrl, attachSseServerErrorListener } from '@/lib/summary-stream';
 import ProcessingState from '@/components/common/ProcessingState';
 import ErrorState from '@/components/common/ErrorState';
@@ -2191,19 +2192,11 @@ export default function TaskDetail({
                             background: item.completed ? 'var(--app-glass-bg-strong)' : 'var(--app-glass-bg)'
                           }}
                         >
-                          <button
-                            onClick={() => toggleActionItem(item.id)}
-                            className="flex-shrink-0 mt-0.5"
-                          >
-                            {item.completed ? (
-                              <CheckSquare className="w-5 h-5" style={{ color: 'var(--app-success)' }} />
-                            ) : (
-                              <div
-                                className="w-5 h-5 border-2 rounded"
-                                style={{ borderColor: 'var(--app-glass-border)' }}
-                              />
-                            )}
-                          </button>
+                          <ActionItemToggle
+                            completed={item.completed}
+                            label={item.task}
+                            onToggle={() => toggleActionItem(item.id)}
+                          />
                           <div className="flex-1">
                             <p
                               className="text-base mb-1"
