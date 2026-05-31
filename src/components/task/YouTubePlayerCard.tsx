@@ -128,10 +128,14 @@ export function YouTubePlayerCard({
     };
   }, [duration, isDragging, localTime, onSeek]);
 
-  const progress =
-    duration > 0 && isFinite(duration)
-      ? Math.min(100, Math.max(0, (displayTime / duration) * 100))
-      : 0;
+  const hasValidDuration = duration > 0 && isFinite(duration);
+  const progress = hasValidDuration
+    ? Math.min(100, Math.max(0, (displayTime / duration) * 100))
+    : 0;
+  // metadata 加载前 duration 可能是 0/NaN/Infinity：把 slider 的 aria 边界 clamp 到合法区间，
+  // 避免读屏宣告成 'NaN'/'Infinity'，也避免 valuenow 超过 valuemax（audit a11y #7）。
+  const ariaValueMax = hasValidDuration ? Math.round(duration) : 0;
+  const ariaValueNow = Math.min(Math.max(0, Math.round(displayTime)), ariaValueMax);
 
   const youtubeUrl = sourceUrl || `https://www.youtube.com/watch?v=${youtubeInfo.video_id}`;
   const channelUrl = `https://www.youtube.com/channel/${youtubeInfo.channel_id}`;
@@ -282,8 +286,8 @@ export function YouTubePlayerCard({
               tabIndex={0}
               aria-label={t("player.seek")}
               aria-valuemin={0}
-              aria-valuemax={duration > 0 && isFinite(duration) ? Math.round(duration) : 0}
-              aria-valuenow={Math.round(displayTime)}
+              aria-valuemax={ariaValueMax}
+              aria-valuenow={ariaValueNow}
               aria-valuetext={`${formatTime(displayTime)} / ${formatTime(duration)}`}
               className="flex-1 relative cursor-pointer"
               onMouseDown={handleMouseDown}

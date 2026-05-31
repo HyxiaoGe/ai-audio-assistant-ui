@@ -43,6 +43,15 @@ describe("YouTubePlayerCard a11y", () => {
     expect(onSeek).toHaveBeenLastCalledWith(0)
   })
 
+  it("clamps the slider's aria bounds when duration is invalid (pre-metadata)", () => {
+    // metadata 加载前 duration 可能是 NaN：valuemax 不能宣告成 'NaN'，
+    // valuenow 不能超过 valuemax（audit a11y #7）。
+    render(<YouTubePlayerCard youtubeInfo={youtubeInfo} currentTime={30} duration={NaN} />)
+    const slider = screen.getByRole("slider")
+    expect(slider).toHaveAttribute("aria-valuemax", "0")
+    expect(slider).toHaveAttribute("aria-valuenow", "0")
+  })
+
   it("gives the play/pause overlay button a state-reflecting accessible name", () => {
     const onPlayPause = vi.fn()
     const { rerender } = render(
