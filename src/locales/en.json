@@ -758,6 +758,7 @@
     "listEmptyDesc": "After syncing, your subscribed channels will appear here",
     "loadFailed": "Failed to load subscriptions",
     "searchPlaceholder": "Search channels...",
+    "clearSearch": "Clear search",
     "searchResults": "{count} channels found",
     "searchEmpty": "No matching channels found",
     "loadMore": "Load more",

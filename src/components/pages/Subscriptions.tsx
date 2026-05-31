@@ -10,7 +10,6 @@ import {
   Unlink,
   CheckCircle2,
   AlertCircle,
-  Search,
   X,
   Video as VideoIcon,
   Star,
@@ -20,7 +19,8 @@ import Header from "@/components/layout/Header";
 import Sidebar from "@/components/layout/Sidebar";
 import EmptyState from "@/components/common/EmptyState";
 import VideoCard from "@/components/youtube/VideoCard";
-import ChannelActionMenu from "@/components/youtube/ChannelActionMenu";
+import { ChannelCard } from "@/components/youtube/ChannelCard";
+import { ChannelSearchInput } from "@/components/youtube/ChannelSearchInput";
 import NewTaskModal from "@/components/task/NewTaskModal";
 import { Button } from "@/components/ui/button";
 import {
@@ -41,7 +41,6 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { Input } from "@/components/ui/input";
 import { useI18n } from "@/lib/i18n-context";
 import { useAPIClient } from "@/lib/use-api-client";
 import { notifySuccess, notifyError } from "@/lib/notify";
@@ -1179,31 +1178,10 @@ export default function Subscriptions({
                           </div>
                           {/* Search input */}
                           {subscriptions.length > 0 && (
-                            <div className="relative mt-3">
-                              <Search
-                                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4"
-                                style={{ color: "var(--app-text-muted)" }}
-                              />
-                              <Input
-                                placeholder={t("subscriptions.searchPlaceholder")}
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="pl-9 pr-9"
-                                style={{
-                                  background: "var(--app-glass-bg)",
-                                  borderColor: "var(--app-glass-border)",
-                                }}
-                              />
-                              {searchQuery && (
-                                <button
-                                  onClick={() => setSearchQuery("")}
-                                  className="absolute right-3 top-1/2 -translate-y-1/2 hover:opacity-70 transition-opacity"
-                                  style={{ color: "var(--app-text-muted)" }}
-                                >
-                                  <X className="w-4 h-4" />
-                                </button>
-                              )}
-                            </div>
+                            <ChannelSearchInput
+                              value={searchQuery}
+                              onChange={setSearchQuery}
+                            />
                           )}
                           {/* Filter buttons */}
                           {subscriptions.length > 0 && (
@@ -1280,59 +1258,15 @@ export default function Subscriptions({
                               <ScrollArea className="w-full">
                                 <div className="flex gap-3 px-1 pt-1 pb-4">
                                   {filteredSubscriptions.map((sub) => (
-                                    <div
+                                    <ChannelCard
                                       key={sub.channel_id}
-                                      className={`relative flex-shrink-0 w-[140px] p-3 rounded-xl border transition-all hover:scale-105 hover:shadow-md group cursor-pointer ${
+                                      channel={sub}
+                                      isSelected={
                                         selectedChannel?.channel_id === sub.channel_id
-                                          ? "ring-2 ring-[var(--app-primary)]"
-                                          : ""
-                                      } ${sub.is_hidden ? "opacity-50" : ""}`}
-                                      style={{
-                                        borderColor: "var(--app-glass-border)",
-                                        background: "var(--app-glass-bg)",
-                                      }}
-                                      onClick={() => handleChannelClick(sub)}
-                                    >
-                                      {/* Action menu and status indicators */}
-                                      <div className="absolute top-1 right-1 flex items-center gap-1">
-                                        {sub.is_starred && (
-                                          <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                                        )}
-                                        <ChannelActionMenu
-                                          channel={sub}
-                                          onUpdate={handleChannelSettingsUpdate}
-                                        />
-                                      </div>
-
-                                      <div className="flex flex-col items-center text-center gap-2">
-                                        <Avatar className="w-12 h-12">
-                                          <AvatarImage
-                                            src={sub.channel_thumbnail || undefined}
-                                            alt={sub.channel_title}
-                                          />
-                                          <AvatarFallback className="text-lg">
-                                            {sub.channel_title.charAt(0).toUpperCase()}
-                                          </AvatarFallback>
-                                        </Avatar>
-                                        <p
-                                          className="text-sm font-medium w-full truncate"
-                                          style={{ color: "var(--app-text)" }}
-                                          title={sub.channel_title}
-                                        >
-                                          {sub.channel_title}
-                                        </p>
-                                        {/* Auto transcribe indicator */}
-                                        {sub.auto_transcribe && (
-                                          <span
-                                            className="text-xs flex items-center gap-1"
-                                            style={{ color: "var(--app-success)" }}
-                                          >
-                                            <RefreshCw className="w-3 h-3" />
-                                            {t("subscriptions.autoTranscribe")}
-                                          </span>
-                                        )}
-                                      </div>
-                                    </div>
+                                      }
+                                      onSelect={handleChannelClick}
+                                      onSettingsUpdate={handleChannelSettingsUpdate}
+                                    />
                                   ))}
                                 </div>
                                 <ScrollBar orientation="horizontal" />
