@@ -26,3 +26,35 @@ describe("VideoCard a11y", () => {
     expect(btn).toHaveAttribute("type", "button")
   })
 })
+
+// audit perf #18：缩略图与频道头像原本是裸 <img>，无懒加载，首屏列表会同时拉取全部图片。
+// 改用 next/image 后浏览器原生懒加载（loading="lazy"），src/alt 保持不变（unoptimized 透传）。
+const videoWithThumb = {
+  video_id: "v1",
+  title: "My Video",
+  transcribed: false,
+  thumbnail_url: "https://i.ytimg.com/vi/v1/hqdefault.jpg",
+} as unknown as YouTubeVideoItem
+
+describe("VideoCard images", () => {
+  it("lazy-loads the video thumbnail and preserves its src/alt", () => {
+    render(<VideoCard video={videoWithThumb} />)
+    const thumb = screen.getByAltText("My Video")
+    expect(thumb).toHaveAttribute("loading", "lazy")
+    expect(thumb).toHaveAttribute("src", "https://i.ytimg.com/vi/v1/hqdefault.jpg")
+  })
+
+  it("lazy-loads the channel avatar and preserves its src", () => {
+    const { container } = render(
+      <VideoCard
+        video={videoWithThumb}
+        showChannel
+        channelTitle="Chan"
+        channelThumbnail="https://yt3.ggpht.com/abc"
+      />
+    )
+    const avatar = container.querySelector('img[src="https://yt3.ggpht.com/abc"]')
+    expect(avatar).not.toBeNull()
+    expect(avatar).toHaveAttribute("loading", "lazy")
+  })
+})
