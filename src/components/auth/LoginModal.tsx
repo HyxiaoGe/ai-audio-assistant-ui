@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from 'react';
-import { Mic, X } from 'lucide-react';
+import { Mic } from 'lucide-react';
 import { useI18n } from '@/lib/i18n-context';
 import { loginWithGoogle, loginWithGitHub } from '@/store/auth-store';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -24,31 +25,16 @@ export default function LoginModal({ isOpen, onClose, callbackUrl = '/tasks' }: 
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <>
-      {/* 背景遮罩 */}
-      <div
-        className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-        onClick={onClose}
-      >
-        {/* 登录模态框 */}
-        <div
-          className="glass-panel-strong relative w-full max-w-md rounded-2xl p-12"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* 关闭按钮 */}
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-[var(--app-glass-hover)]"
-            style={{ color: "var(--app-text-muted)" }}
-          >
-            <X className="w-5 h-5" />
-          </button>
+    // Radix Dialog 提供焦点陷阱 / Esc 关闭 / 焦点恢复 / role=dialog+aria-modal / 内置关闭按钮。
+    // className 覆盖：block(去掉 DialogContent 默认 grid，保留原 mb 间距) + 原有 max-w-md/圆角/内边距。
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="block w-full max-w-md sm:max-w-md rounded-2xl p-12">
+        {/* sr-only 标题：给对话框可访问名称；视觉标题仍由下方 h1 呈现 */}
+        <DialogTitle className="sr-only">{t("app.name")}</DialogTitle>
 
-          {/* Logo 和产品信息区域 */}
-          <div className="text-center mb-12">
+        {/* Logo 和产品信息区域 */}
+        <div className="text-center mb-12">
             {/* Logo 图标 */}
             <div
               className="inline-flex items-center justify-center w-12 h-12 rounded-xl mb-4"
@@ -113,8 +99,7 @@ export default function LoginModal({ isOpen, onClose, callbackUrl = '/tasks' }: 
               {t("auth.privacyPolicy")}
             </a>
           </p>
-        </div>
-      </div>
-    </>
+      </DialogContent>
+    </Dialog>
   );
 }
