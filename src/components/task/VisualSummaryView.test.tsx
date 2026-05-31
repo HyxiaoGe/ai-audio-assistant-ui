@@ -82,7 +82,10 @@ describe("VisualSummaryView media URL contract", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "下载图片" }))
 
-    expect(createdAnchor?.href).toBe("https://media.example.com/visuals/task/mindmap.png?signature=download")
+    // createdAnchor 只在 spy 回调里被赋值，TS 的控制流会把它收窄成 never；
+    // 经显式类型的局部变量读取以恢复正确类型。
+    const downloadAnchor = createdAnchor as HTMLAnchorElement | null
+    expect(downloadAnchor?.href).toBe("https://media.example.com/visuals/task/mindmap.png?signature=download")
     expect(click).toHaveBeenCalledOnce()
   })
 })

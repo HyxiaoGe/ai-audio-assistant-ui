@@ -13,7 +13,7 @@ describe("auth-store token refresh", () => {
     localStorage.setItem("auth_refresh_token", "old-refresh-token")
     localStorage.setItem("auth_token_expiry", String(Date.now() - 1_000))
 
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn<typeof fetch>(async () =>
       new Response(
         JSON.stringify({
           access_token: "new-access-token",
