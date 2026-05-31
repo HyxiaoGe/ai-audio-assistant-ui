@@ -1,6 +1,7 @@
 "use client";
 
-import ReactMarkdown from "react-markdown";
+import { useMemo } from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import type { StreamingImage } from "@/types/api";
@@ -12,6 +13,10 @@ import {
 } from "@/lib/image-placeholder";
 import { appendMediaToken } from "@/lib/media-url";
 import { useI18n } from "@/lib/i18n-context";
+
+// 插件数组无依赖：提到模块级常量，避免每次渲染都新建数组而让 ReactMarkdown 拿到新引用。
+const REMARK_PLUGINS = [remarkGfm];
+const REHYPE_PLUGINS = [rehypeSanitize];
 
 export interface MarkdownContentProps {
   /** 原始 Markdown 正文（摘要/要点/行动项，V1.2 格式）。 */
@@ -38,12 +43,12 @@ export function MarkdownContent({
 }: MarkdownContentProps) {
   const { t } = useI18n();
 
-  return (
-    <div className="prose prose-sm max-w-none markdown-summary" style={{ color: 'var(--app-text)' }}>
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeSanitize]}
-        components={{
+  // components 每次渲染都重建会让 ReactMarkdown 拿到新引用而无谓重渲染。它闭包
+  // imageModel / streamingImages / mediaToken / t，用 useMemo 按这些依赖缓存。
+  // 不把 content 放进 deps：content 是 ReactMarkdown 的 children、components 并不闭包它，
+  // 放进去会让流式更新时每帧都重建 components，等于没缓存。
+  const components = useMemo<Components>(
+    () => ({
           input: ({ ...props }) => {
             if (props.type === "checkbox") {
               return <input {...props} className="mr-2 align-middle" readOnly style={{ cursor: "default" }} />;
@@ -125,7 +130,16 @@ export function MarkdownContent({
             </figure>
           ),
           blockquote: ({ ...props }) => <blockquote {...props} className="border-l-4 pl-4 my-4 italic" style={{ borderColor: "var(--app-primary)", color: "var(--app-text-muted)" }} />,
-        }}
+    }),
+    [imageModel, streamingImages, mediaToken, t]
+  );
+
+  return (
+    <div className="prose prose-sm max-w-none markdown-summary" style={{ color: 'var(--app-text)' }}>
+      <ReactMarkdown
+        remarkPlugins={REMARK_PLUGINS}
+        rehypePlugins={REHYPE_PLUGINS}
+        components={components}
       >
         {content}
       </ReactMarkdown>
