@@ -423,11 +423,13 @@ export default function NewTaskModal({
             {t("task.newTask")}
           </h2>
           <button
+            type="button"
+            aria-label={t("common.close")}
             onClick={handleClose}
             className="p-2 rounded-lg hover:bg-[var(--app-glass-hover)] transition-colors"
             style={{ color: 'var(--app-text-muted)' }}
           >
-            <X className="w-6 h-6" />
+            <X className="w-6 h-6" aria-hidden="true" />
           </button>
         </div>
 
@@ -552,10 +554,11 @@ export default function NewTaskModal({
 
                   {/* Language Selection */}
                   <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                    <label className="text-sm sm:w-32" style={{ color: 'var(--app-text-muted)' }}>
+                    <label htmlFor="newtask-language" className="text-sm sm:w-32" style={{ color: 'var(--app-text-muted)' }}>
                       {t("newTask.language")}：
                     </label>
                     <select
+                      id="newtask-language"
                       value={advancedOptions.language}
                       onChange={(e) => {
                         advancedTouchedRef.current = true;
@@ -572,12 +575,13 @@ export default function NewTaskModal({
 
                   {/* Speaker Diarization */}
                   <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                    <label className="text-sm sm:w-32" style={{ color: 'var(--app-text-muted)' }}>
+                    <label id="newtask-diarization-label" className="text-sm sm:w-32" style={{ color: 'var(--app-text-muted)' }}>
                       {t("newTask.speakerDiarization")}：
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
+                        aria-labelledby="newtask-diarization-label"
                         checked={advancedOptions.speakerDiarization}
                         onChange={(e) => {
                           advancedTouchedRef.current = true;
@@ -591,11 +595,12 @@ export default function NewTaskModal({
 
                   {/* Summary Style */}
                   <div className="flex flex-col sm:flex-row sm:items-start gap-3">
-                    <label className="text-sm sm:w-32 pt-2" style={{ color: 'var(--app-text-muted)' }}>
+                    <label htmlFor="newtask-summary-style" className="text-sm sm:w-32 pt-2" style={{ color: 'var(--app-text-muted)' }}>
                       {t("newTask.summaryStyle")}：
                     </label>
                     <div className="flex-1 sm:max-w-xs">
                       <select
+                        id="newtask-summary-style"
                         value={advancedOptions.summaryStyle}
                         onChange={(e) => {
                           advancedTouchedRef.current = true;

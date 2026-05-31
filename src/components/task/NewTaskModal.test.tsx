@@ -164,3 +164,55 @@ describe("NewTaskModal a11y (Radix Dialog)", () => {
     await waitFor(() => expect(onClose).toHaveBeenCalled())
   })
 })
+
+// audit a11y #8/#28/#36 #37/#38 #39：头部关闭 X 按钮无可访问名称；语言/摘要风格
+// <select> 的可见 <label> 未通过 htmlFor/id 关联；说话人识别 checkbox 的无障碍
+// 名称只有「启用」，缺少字段语境。
+describe("NewTaskModal a11y (controls)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockClient.getLLMModels.mockResolvedValue({ models: [] })
+    mockClient.getSummaryStyles.mockResolvedValue({
+      styles: [
+        { id: "general", name: "General", description: "General", focus: "Key points", icon: "file-text" },
+      ],
+    })
+    mockClient.getUserPreferences.mockResolvedValue({ task_defaults: {} })
+  })
+
+  it("exposes the header close button with an accessible name", async () => {
+    const onClose = vi.fn()
+    render(<NewTaskModal isOpen onClose={onClose} />)
+    await screen.findByRole("dialog")
+
+    const closeBtn = screen.getByRole("button", { name: "common.close" })
+    fireEvent.click(closeBtn)
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it("associates the language select with its visible label", async () => {
+    render(<NewTaskModal isOpen onClose={vi.fn()} />)
+    await screen.findByRole("dialog")
+
+    const select = screen.getByLabelText(/newTask\.language/)
+    expect(select.tagName).toBe("SELECT")
+  })
+
+  it("associates the summary-style select with its visible label", async () => {
+    render(<NewTaskModal isOpen onClose={vi.fn()} />)
+    await screen.findByRole("dialog")
+
+    const select = screen.getByLabelText(/newTask\.summaryStyle/)
+    expect(select.tagName).toBe("SELECT")
+  })
+
+  it("names the speaker-diarization checkbox with its field context", async () => {
+    render(<NewTaskModal isOpen onClose={vi.fn()} />)
+    await screen.findByRole("dialog")
+
+    const checkbox = screen.getByRole("checkbox", {
+      name: /newTask\.speakerDiarization/,
+    })
+    expect(checkbox).toBeInTheDocument()
+  })
+})
