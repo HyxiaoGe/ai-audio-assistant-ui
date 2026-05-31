@@ -500,7 +500,14 @@ export default function TaskDetail({
 
         const normalizedBaseUrl = resolveSummaryStreamBaseUrl();
 
-        const token = await getToken();
+        // SSE 用短期 stream 票据（绑定 task_id+summary_type），不再把长效 access JWT 拼进 URL。
+        // 签票偶发失败时，过渡期回退到 access JWT（后端 Phase 1 仍双接受），避免流中断。
+        let token: string | null = null;
+        try {
+          token = (await client.mintStreamTicket(id, summaryType)).token;
+        } catch {
+          token = await getToken();
+        }
         if (token) {
           const streamUrl = `${normalizedBaseUrl}/summaries/${id}/stream?summary_type=${summaryType}&token=${encodeURIComponent(token)}`;
           const eventSource = new EventSource(streamUrl);
@@ -1154,7 +1161,13 @@ export default function TaskDetail({
       };
 
       const normalizedBaseUrl = resolveSummaryStreamBaseUrl();
-      const token = await getToken();
+      // 对比 SSE 同样改用 stream 票据（绑定 task_id+summary_type），失败回退 access JWT。
+      let token: string | null = null;
+      try {
+        token = (await client.mintStreamTicket(id, compareSummaryType)).token;
+      } catch {
+        token = await getToken();
+      }
 
       if (token) {
         const streamUrl = `${normalizedBaseUrl}/summaries/${id}/compare/${comparison.comparison_id}/stream?summary_type=${compareSummaryType}&token=${encodeURIComponent(token)}`;

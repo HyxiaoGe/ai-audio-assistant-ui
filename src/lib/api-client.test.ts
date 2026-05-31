@@ -76,3 +76,66 @@ describe("api-client non-envelope / HTTP-error responses", () => {
     expect((err as ApiError).traceId).toBe("trace-abc-123")
   })
 })
+
+// 媒体/SSE 短票签发：替代把长效 access JWT 拼进 ?token=。这里锁定端点路径、方法与
+// summary_type 的 URL 编码（resource 绑定靠 task_id + summary_type）。
+describe("api-client media/stream ticket minting", () => {
+  function envelope(data: unknown): Response {
+    return new Response(JSON.stringify({ code: 0, message: "ok", data, traceId: "t" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })
+  }
+
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it("mintMediaTicket POSTs to /media/ticket and returns the ticket payload", async () => {
+    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
+      async () => envelope({ token: "mt", expires_in: 300 })
+    )
+    vi.stubGlobal("fetch", fetchMock)
+
+    const client = createAPIClient("test-token")
+    const res = await client.mintMediaTicket()
+
+    expect(res).toEqual({ token: "mt", expires_in: 300 })
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toMatch(/\/media\/ticket$/)
+    expect(init?.method).toBe("POST")
+  })
+
+  it("mintStreamTicket POSTs to the task+type-scoped stream-ticket endpoint", async () => {
+    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
+      async () => envelope({ token: "st", expires_in: 300 })
+    )
+    vi.stubGlobal("fetch", fetchMock)
+
+    const client = createAPIClient("test-token")
+    const res = await client.mintStreamTicket("task1", "overview")
+
+    expect(res).toEqual({ token: "st", expires_in: 300 })
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain("/summaries/task1/stream-ticket?summary_type=overview")
+    expect(init?.method).toBe("POST")
+  })
+
+  it("URL-encodes the summary_type", async () => {
+    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
+      async () => envelope({ token: "st", expires_in: 300 })
+    )
+    vi.stubGlobal("fetch", fetchMock)
+
+    const client = createAPIClient("test-token")
+    await client.mintStreamTicket("task1", "visual_mind map")
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain("summary_type=visual_mind%20map")
+  })
+})
