@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { useAPIClient } from "@/lib/use-api-client";
 import { useI18n } from "@/lib/i18n-context";
+import { resolveNumberFormatLocale } from "@/lib/intl-locale";
 import {
   ApiError,
   StatsServicesOverviewResponse,
@@ -27,7 +28,6 @@ type TimeRangeOption = "today" | "week" | "month" | "all" | "custom";
 interface StatsProps {
   isAuthenticated: boolean;
   onOpenLogin: () => void;
-  language?: "zh" | "en";
   onToggleTheme?: () => void;
 }
 
@@ -115,11 +115,10 @@ const STAGE_ORDER_MAP = new Map(
 export default function Stats({
   isAuthenticated,
   onOpenLogin,
-  language = "zh",
   onToggleTheme = () => {},
 }: StatsProps) {
   const client = useAPIClient();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
 
   const [timeRange, setTimeRange] = useState<TimeRangeOption>("month");
   const [customStart, setCustomStart] = useState("");
@@ -203,12 +202,9 @@ export default function Stats({
   }, [fetchStats, isAuthenticated, timeQuery]);
 
   const formatPercent = (value: number) => {
-    const formatter = new Intl.NumberFormat(
-      language === "zh" ? "zh-CN" : "en-US",
-      {
-        maximumFractionDigits: 1,
-      }
-    );
+    const formatter = new Intl.NumberFormat(resolveNumberFormatLocale(locale), {
+      maximumFractionDigits: 1,
+    });
     return `${formatter.format(value)}%`;
   };
 
