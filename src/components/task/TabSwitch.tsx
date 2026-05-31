@@ -61,6 +61,8 @@ export default function TabSwitch({ tabs, activeTab, onTabChange }: TabSwitchPro
             }}
             type="button"
             role="tab"
+            id={`tab-${tab.id}`}
+            aria-controls={`tabpanel-${tab.id}`}
             aria-selected={isActive}
             tabIndex={isActive ? 0 : -1}
             onClick={() => onTabChange(tab.id)}

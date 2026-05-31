@@ -215,4 +215,14 @@ describe("NewTaskModal a11y (controls)", () => {
     })
     expect(checkbox).toBeInTheDocument()
   })
+
+  // audit a11y F179：标签内容区需标注为 tabpanel 并经 aria-labelledby 关联当前标签。
+  it("marks the active tab content as a labelled tabpanel", async () => {
+    render(<NewTaskModal isOpen onClose={vi.fn()} />)
+    await screen.findByRole("dialog")
+
+    const panel = screen.getByRole("tabpanel")
+    expect(panel).toHaveAttribute("id", "tabpanel-upload")
+    expect(panel).toHaveAttribute("aria-labelledby", "tab-upload")
+  })
 })

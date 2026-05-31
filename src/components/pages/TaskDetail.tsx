@@ -1954,7 +1954,14 @@ export default function TaskDetail({
               </div>
 
               {/* Tab Content */}
-              <div ref={summaryScrollRef} className="flex-1 overflow-y-auto p-6">
+              <div
+                ref={summaryScrollRef}
+                role="tabpanel"
+                id={`tabpanel-${activeTab}`}
+                aria-labelledby={`tab-${activeTab}`}
+                tabIndex={0}
+                className="flex-1 overflow-y-auto p-6"
+              >
                 {/* Summary Tab */}
                 {activeTab === 'summary' && (
                   <div className="space-y-6">
