@@ -123,4 +123,21 @@ describe("NotificationItem a11y", () => {
     fireEvent.keyDown(row, { key: " " });
     expect(onMarkAsRead).toHaveBeenCalledWith("notif-1");
   });
+
+  // audit a11y F111：showActions 模式下「查看详情」按钮原本嵌套在 role="button"
+  // 整行内，构成 button-in-button 反模式（交互元素嵌套交互元素），读屏语义冲突、
+  // Tab 顺序混乱。整行 button 与「查看详情」按钮应为同级关系。
+  it("does not nest the view-details button inside the row button", () => {
+    render(
+      <NotificationItem
+        notification={baseNotification}
+        onMarkAsRead={vi.fn()}
+        showActions
+      />
+    );
+    const row = screen.getByRole("button", { name: "Task completed" });
+    const viewDetails = screen.getByRole("button", { name: "View details" });
+
+    expect(row).not.toContainElement(viewDetails);
+  });
 });

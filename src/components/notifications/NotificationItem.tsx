@@ -146,63 +146,69 @@ export default function NotificationItem({
   };
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-label={notification.title}
-      onClick={handleActivate}
-      onKeyDown={handleKeyDown}
-      className={`
-        p-3 rounded-lg cursor-pointer transition-all
-        ${isRead ? 'opacity-60' : 'opacity-100'}
-        ${colors.bg}
-        hover:shadow-sm
-      `}
-    >
-      <div className="flex items-start gap-3">
-        {/* Icon */}
-        <div className="flex-shrink-0 mt-0.5">
-          <Icon className={`w-5 h-5 ${colors.icon}`} />
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-3">
-            <p className={`text-sm font-medium ${colors.text}`}>
-              {notification.title}
-            </p>
-            {!isRead && (
-              <div className="flex-shrink-0 mt-1">
-                <div className="w-2 h-2 rounded-full bg-blue-500" />
-              </div>
-            )}
+    // 外层为展示性容器：整行 button 与「查看详情」按钮作为同级，避免交互元素相互嵌套
+    // （button-in-button 反模式）。relative 用于给「查看详情」按钮提供绝对定位参照。
+    <div className="relative">
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={notification.title}
+        onClick={handleActivate}
+        onKeyDown={handleKeyDown}
+        className={`
+          p-3 rounded-lg cursor-pointer transition-all
+          ${isRead ? 'opacity-60' : 'opacity-100'}
+          ${colors.bg}
+          hover:shadow-sm
+        `}
+      >
+        <div className="flex items-start gap-3">
+          {/* Icon */}
+          <div className="flex-shrink-0 mt-0.5">
+            <Icon className={`w-5 h-5 ${colors.icon}`} />
           </div>
-          {/* Message (optional detail) */}
-          {notification.message && notification.message !== notification.title && (
-            <p className={`text-xs ${colors.text} mt-1 opacity-80 leading-relaxed`}>
-              {notification.message}
-            </p>
-          )}
-          <div className="flex items-center justify-between mt-3">
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {formatTime(notification.created_at)}
-            </p>
-            {showActions && notification.action_url && (
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  handleOpen();
-                }}
-                className="glass-chip text-xs px-2.5 py-1 rounded-md flex items-center gap-1"
-              >
-                {t("notifications.viewDetails")}
-                <ArrowUpRight className="w-3 h-3" />
-              </button>
+
+          {/* Content */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-3">
+              <p className={`text-sm font-medium ${colors.text}`}>
+                {notification.title}
+              </p>
+              {!isRead && (
+                <div className="flex-shrink-0 mt-1">
+                  <div className="w-2 h-2 rounded-full bg-blue-500" />
+                </div>
+              )}
+            </div>
+            {/* Message (optional detail) */}
+            {notification.message && notification.message !== notification.title && (
+              <p className={`text-xs ${colors.text} mt-1 opacity-80 leading-relaxed`}>
+                {notification.message}
+              </p>
             )}
+            <div className="flex items-center justify-between mt-3">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {formatTime(notification.created_at)}
+              </p>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* 「查看详情」：role="button" 整行之外的同级元素，绝对定位回原右下角位置 */}
+      {showActions && notification.action_url && (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            handleOpen();
+          }}
+          className="absolute bottom-3 right-3 z-10 glass-chip text-xs px-2.5 py-1 rounded-md flex items-center gap-1"
+        >
+          {t("notifications.viewDetails")}
+          <ArrowUpRight className="w-3 h-3" aria-hidden="true" />
+        </button>
+      )}
     </div>
   );
 }
