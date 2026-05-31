@@ -61,6 +61,9 @@
       "yuanPerHour": "¥{value}/hr"
     }
   },
+  "player": {
+    "seek": "Audio progress"
+  },
   "transcript": {
     "selectSpeaker": "Select speaker",
     "title": "Transcript",

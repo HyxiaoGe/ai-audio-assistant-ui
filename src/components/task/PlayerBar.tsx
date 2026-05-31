@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Play, Pause } from 'lucide-react';
+import { useI18n } from '@/lib/i18n-context';
+import { seekKeyToTime } from '@/lib/seek-keyboard';
 
 interface PlayerBarProps {
   currentTime?: number;
@@ -20,11 +22,20 @@ export default function PlayerBar({
   const [localTime, setLocalTime] = useState(currentTime);
   const progressBarRef = useRef<HTMLDivElement>(null);
   const displayTime = isDragging ? localTime : currentTime;
+  const { t } = useI18n();
 
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // 键盘 seek：方向键 ±5s、PageUp/Down ±10s、Home/End 跳到首尾。非 seek 键不拦截（保留 Tab 导航）。
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const next = seekKeyToTime(e.key, currentTime, duration);
+    if (next === null) return;
+    e.preventDefault();
+    onSeek(next);
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -95,10 +106,18 @@ export default function PlayerBar({
       </span>
 
       {/* Progress Bar */}
-      <div 
+      <div
         ref={progressBarRef}
         className="flex-1 relative cursor-pointer"
         onMouseDown={handleMouseDown}
+        onKeyDown={handleKeyDown}
+        role="slider"
+        tabIndex={0}
+        aria-label={t('player.seek')}
+        aria-valuemin={0}
+        aria-valuemax={duration}
+        aria-valuenow={displayTime}
+        aria-valuetext={`${formatTime(displayTime)} / ${formatTime(duration)}`}
         style={{ height: '32px' }}
       >
         <div className="absolute top-1/2 -translate-y-1/2 w-full">
