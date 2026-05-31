@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import type { VisualSummaryResponse, VisualType, SummaryItem } from "@/types/api"
 import { useAPIClient } from "@/lib/use-api-client"
 import { appendMediaToken, useMediaToken } from "@/lib/media-url"
+import { initMermaid } from "@/lib/mermaid-init"
 
 interface VisualSummaryViewProps {
   taskId: string
@@ -35,16 +36,9 @@ export function VisualSummaryView({
   const client = useAPIClient()
   const mediaToken = useMediaToken()
 
-  // 初始化 Mermaid
+  // 初始化 Mermaid（模块级幂等单例，多个可视化实例只初始化一次；strict 安全配置见 mermaid-init.ts）
   useEffect(() => {
-    mermaid.initialize({
-      startOnLoad: false,
-      theme: "default",
-      // strict：图表文本来自后端 LLM 生成内容（不可信），strict 会启用 mermaid 内置
-      // DOMPurify 净化并禁用 label 内 HTML / click 交互，阻断经 innerHTML 注入的存储型 XSS。
-      securityLevel: "strict",
-      fontFamily: "ui-sans-serif, system-ui, sans-serif",
-    })
+    initMermaid()
   }, [])
 
   // 加载可视化摘要数据
