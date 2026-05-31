@@ -178,10 +178,12 @@
     "languageToggleZh": "中/EN",
     "languageToggleEn": "EN/中",
     "switchToDark": "切换到深色模式",
-    "switchToLight": "切换到浅色模式"
+    "switchToLight": "切换到浅色模式",
+    "userMenu": "账户菜单"
   },
   "audio": {
-    "untitled": "未命名音频"
+    "untitled": "未命名音频",
+    "openTask": "打开任务详情"
   },
   "notifications": {
     "title": "通知",
