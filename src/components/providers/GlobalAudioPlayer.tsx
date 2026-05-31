@@ -16,6 +16,7 @@ export default function GlobalAudioPlayer() {
   const setDuration = useAudioStore((state) => state.setDuration)
   const setCurrentTime = useAudioStore((state) => state.setCurrentTime)
   const setIsPlaying = useAudioStore((state) => state.setIsPlaying)
+  const reloadWithFreshToken = useAudioStore((state) => state.reloadWithFreshToken)
   const getAudioState = useAudioStore.getState
 
   const cacheKey = taskId ? `audio:progress:${taskId}` : null
@@ -186,6 +187,11 @@ export default function GlobalAudioPlayer() {
       onEnded={() => {
         setIsPlaying(false)
         clearProgress()
+      }}
+      // 媒体代理鉴权基于 URL 上的 token；token 过期会让请求 401，<audio> 随即触发 error。
+      // 交给 store 用新 token 重建 src 并重载（保留进度、按原播放态续播，带重试上限）。
+      onError={() => {
+        void reloadWithFreshToken()
       }}
     />
   )
