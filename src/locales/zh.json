@@ -18,7 +18,8 @@
     "unknown": "未知",
     "justNow": "刚刚",
     "edit": "编辑",
-    "admin": "管理员"
+    "admin": "管理员",
+    "close": "关闭"
   },
   "admin": {
     "console": "后台管理",

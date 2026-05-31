@@ -18,7 +18,8 @@
     "unknown": "Unknown",
     "justNow": "just now",
     "edit": "Edit",
-    "admin": "Admin"
+    "admin": "Admin",
+    "close": "Close"
   },
   "admin": {
     "console": "Admin",
