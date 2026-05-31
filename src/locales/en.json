@@ -178,10 +178,12 @@
     "languageToggleZh": "中/EN",
     "languageToggleEn": "EN/中",
     "switchToDark": "Switch to dark mode",
-    "switchToLight": "Switch to light mode"
+    "switchToLight": "Switch to light mode",
+    "userMenu": "Account menu"
   },
   "audio": {
-    "untitled": "Untitled audio"
+    "untitled": "Untitled audio",
+    "openTask": "Open task details"
   },
   "notifications": {
     "title": "Notifications",

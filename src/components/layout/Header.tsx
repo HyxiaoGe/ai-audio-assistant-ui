@@ -29,6 +29,7 @@ export default function Header({
   const [isMounted, setIsMounted] = useState(false);
   const [hoverRatio, setHoverRatio] = useState<number | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const authUser = useAuthStore((s) => s.user);
   const authStatus = useAuthStore((s) => s.status);
   const authLogout = useAuthStore((s) => s.logout);
@@ -84,9 +85,18 @@ export default function Header({
         setIsMenuOpen(false);
       }
     };
+    // 键盘可关闭：Escape 收起菜单并把焦点还原到触发按钮（避免键盘陷阱，符合菜单 Esc 约定）。
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsMenuOpen(false);
+        menuTriggerRef.current?.focus();
+      }
+    };
     document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
     };
   }, [isMenuOpen]);
 
@@ -101,9 +111,14 @@ export default function Header({
   const displayTitle = audioTitle || t("audio.untitled");
   const shouldMarquee = displayTitle.length > 10;
   const marqueeDuration = Math.min(Math.max(displayTitle.length * 0.45, 7), 15);
-  const progress = duration > 0 && isFinite(duration)
+  const hasValidDuration = duration > 0 && isFinite(duration);
+  const progress = hasValidDuration
     ? Math.min(100, Math.max(0, (currentTime / duration) * 100))
     : 0;
+  // metadata 加载前 duration 可能是 0/NaN/Infinity：clamp slider 的 aria 边界，
+  // 避免读屏宣告 'NaN'/'Infinity'，也避免 valuenow 超过 valuemax（audit a11y #7）。
+  const ariaValueMax = hasValidDuration ? Math.round(duration) : 0;
+  const ariaValueNow = Math.min(Math.max(0, Math.round(currentTime)), ariaValueMax);
 
   const formatTime = (seconds: number) => {
     if (!seconds || !isFinite(seconds)) return "00:00";
@@ -145,6 +160,16 @@ export default function Header({
     if (!audioTaskId) return;
     router.push(`/tasks/${audioTaskId}`);
   };
+
+  // 整行「打开任务」键盘可达：仅当焦点在容器本身时响应 Enter/Space，
+  // 内部播放/进度条/停止按钮的按键事件冒泡上来时 target!==currentTarget，不会误触跳转。
+  const handleMiniPlayerKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return;
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      handleMiniPlayerClick();
+    }
+  };
   
   return (
     <header 
@@ -177,12 +202,18 @@ export default function Header({
           <div
             className="hidden lg:flex items-center gap-2 rounded-full px-3 py-1.5 glass-control cursor-pointer"
             onClick={handleMiniPlayerClick}
+            onKeyDown={handleMiniPlayerKeyDown}
+            role="button"
+            tabIndex={0}
+            aria-label={t("audio.openTask")}
           >
             <button
+              type="button"
               onClick={(event) => {
                 event.stopPropagation();
                 togglePlayback();
               }}
+              aria-label={isPlaying ? t("player.pause") : t("player.play")}
               className="size-6 flex items-center justify-center rounded-full transition-transform hover:scale-105"
               style={{ background: "var(--app-glass-bg)" }}
             >
@@ -224,8 +255,8 @@ export default function Header({
               tabIndex={0}
               aria-label={t('player.seek')}
               aria-valuemin={0}
-              aria-valuemax={duration}
-              aria-valuenow={currentTime}
+              aria-valuemax={ariaValueMax}
+              aria-valuenow={ariaValueNow}
               aria-valuetext={`${formatTime(currentTime)} / ${formatTime(duration)}`}
               style={{ width: '110px', height: '8px' }}
             >
@@ -265,32 +296,36 @@ export default function Header({
             </span>
 
             <button
+              type="button"
               onClick={(event) => {
                 event.stopPropagation();
                 stop();
               }}
               className="size-6 flex items-center justify-center rounded-full transition-colors hover:bg-[var(--app-glass-hover)]"
               style={{ color: "var(--app-text-muted)" }}
+              aria-label={t("common.dismiss")}
               title={t("common.dismiss")}
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
           </div>
         )}
         {/* 主题切换 */}
-        <button 
+        <button
+          type="button"
           onClick={onToggleTheme}
           className="w-6 h-6 flex items-center justify-center transition-all hover:opacity-70 duration-300"
-          style={{ 
+          style={{
             color: isMounted && isDark ? "var(--app-warning)" : "var(--app-primary)",
             transform: isMounted && isDark ? 'rotate(180deg)' : 'rotate(0deg)'
           }}
+          aria-label={isMounted && isDark ? t("header.switchToLight") : t("header.switchToDark")}
           title={isMounted && isDark ? t("header.switchToLight") : t("header.switchToDark")}
         >
           {isMounted && isDark ? (
-            <Sun className="w-5 h-5" />
+            <Sun className="w-5 h-5" aria-hidden="true" />
           ) : (
-            <Moon className="w-5 h-5" />
+            <Moon className="w-5 h-5" aria-hidden="true" />
           )}
         </button>
 
@@ -312,7 +347,12 @@ export default function Header({
         ) : isAuthenticated ? (
           <div className="relative" ref={menuRef}>
             <button
+              ref={menuTriggerRef}
+              type="button"
               onClick={() => setIsMenuOpen((prev) => !prev)}
+              aria-label={t("header.userMenu")}
+              aria-haspopup="menu"
+              aria-expanded={isMenuOpen}
               className="flex items-center gap-2 hover:opacity-70 transition-opacity"
             >
               <div className={`relative ${isAdmin ? "admin-gradient-ring" : ""}`}>
@@ -325,20 +365,24 @@ export default function Header({
                   <AvatarFallback>{avatarName.charAt(0).toUpperCase()}</AvatarFallback>
                 </Avatar>
               </div>
-              <ChevronDown className="w-4 h-4" style={{ color: "var(--app-text-subtle)" }} />
+              <ChevronDown className="w-4 h-4" style={{ color: "var(--app-text-subtle)" }} aria-hidden="true" />
             </button>
 
             {isMenuOpen && (
               <div
+                role="menu"
+                aria-label={t("header.userMenu")}
                 className="glass-panel-strong absolute right-0 mt-2 w-40 rounded-lg border z-10 overflow-hidden"
                 style={{ borderColor: "var(--app-glass-border)" }}
               >
                 <button
+                  type="button"
+                  role="menuitem"
                   onClick={handleLogout}
                   className="w-full px-3 py-2 flex items-center gap-2 text-sm transition-colors hover:bg-[var(--app-sidebar-item-hover)]"
                   style={{ color: "var(--app-text)" }}
                 >
-                  <LogOut className="w-4 h-4" />
+                  <LogOut className="w-4 h-4" aria-hidden="true" />
                   {t("auth.logout")}
                 </button>
               </div>
