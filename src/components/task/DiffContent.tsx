@@ -44,6 +44,17 @@ export default function DiffContent({
     });
   };
 
+  // 键盘可达：Enter/Space 切换原文/校对文本
+  const handleToggleKeyDown = (
+    event: React.KeyboardEvent<HTMLSpanElement>,
+    index: number
+  ) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      toggleOriginal(index);
+    }
+  };
+
   return (
     <span>
       {segments.map((seg, i) => {
@@ -56,7 +67,11 @@ export default function DiffContent({
           return (
             <span
               key={i}
+              role="button"
+              tabIndex={0}
+              aria-pressed={showingOriginal}
               onClick={() => toggleOriginal(i)}
+              onKeyDown={(event) => handleToggleKeyDown(event, i)}
               title={
                 showingOriginal
                   ? t("transcript.clickToShowPolished")
@@ -96,6 +111,10 @@ export default function DiffContent({
           if (!seg.originalText) return null;
           const showingOriginal = showOriginalSet.has(i);
           if (!showingOriginal) return null;
+          // 注：纯 delete 段仅在 showOriginalSet.has(i) 时渲染，而能把 i 加入该集合的
+          // 只有本段自身的点击；该段在 !showingOriginal 时已 return null，故实际不可达
+          // （鼠标和键盘都无法触达）。因此此处不附加 role/tabIndex/键盘语义，避免给
+          // 永不挂载的节点添加误导性无障碍属性（尤其 aria-pressed 恒为 true）。保持 master 原样。
           return (
             <span
               key={i}
