@@ -8,6 +8,7 @@ import TabSwitch from './TabSwitch';
 import UploadZone from './UploadZone';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
+import { Dialog, DialogContent, DialogTitle } from '../ui/dialog';
 import { SummaryModelSelect } from './SummaryModelSelect';
 import { useAPIClient } from '@/lib/use-api-client';
 import { useFileUpload } from '@/hooks/use-file-upload';
@@ -397,23 +398,22 @@ export default function NewTaskModal({
     ? selectedFile && !isUploading
     : videoUrl.trim().length > 0 && !isCreating;
 
-  if (!isOpen) return null;
-
   return (
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(15, 23, 42, 0.6)' }}
-      onClick={handleClose}
-    >
-      <div
-        className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl border"
+    // Radix Dialog 提供焦点陷阱 / Esc / 焦点恢复 / role=dialog。沿用原本的实心 surface 外观：
+    // 用 inline style 覆盖 DialogContent 自带的 glass 背景，className 覆盖 grid→block、去内边距、放宽到 max-w-3xl。
+    // showCloseButton={false}：保留头部原有的 X 按钮（走 handleClose 做状态清理）。
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
+      <DialogContent
+        showCloseButton={false}
+        className="block w-full max-w-3xl sm:max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl border p-0"
         style={{
           background: 'var(--app-surface)',
           borderColor: 'var(--app-glass-border)',
           boxShadow: 'var(--app-glass-shadow)',
         }}
-        onClick={(e) => e.stopPropagation()}
       >
+        {/* sr-only 标题：给对话框可访问名称；视觉标题仍由下方头部 h2 呈现 */}
+        <DialogTitle className="sr-only">{t("task.newTask")}</DialogTitle>
         {/* Header */}
         <div
           className="sticky top-0 z-10 flex items-center justify-between px-8 py-6 border-b"
@@ -679,7 +679,7 @@ export default function NewTaskModal({
               : t("newTask.startProcessing")}
           </Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

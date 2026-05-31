@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { describe, expect, it, vi, beforeEach } from "vitest"
 import NewTaskModal from "./NewTaskModal"
 
@@ -141,5 +141,26 @@ describe("NewTaskModal YouTube style recommendation", () => {
     expect(screen.queryByText("newTask.visualSummary")).not.toBeInTheDocument()
     expect(screen.queryByText("newTask.autoGenerateVisualSummary")).not.toBeInTheDocument()
     expect(screen.queryByText("newTask.visualTypes")).not.toBeInTheDocument()
+  })
+})
+
+// audit #2：新建任务模态改用 Radix Dialog 后，必须是可访问的 dialog 且支持 Esc 关闭。
+describe("NewTaskModal a11y (Radix Dialog)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockClient.getLLMModels.mockResolvedValue({ models: [] })
+    mockClient.getSummaryStyles.mockResolvedValue({ styles: [] })
+    mockClient.getUserPreferences.mockResolvedValue({ task_defaults: {} })
+  })
+
+  it("renders an accessible dialog and closes on Escape", async () => {
+    const onClose = vi.fn()
+    render(<NewTaskModal isOpen onClose={onClose} />)
+
+    const dialog = await screen.findByRole("dialog")
+    expect(dialog).toHaveAccessibleName()
+
+    fireEvent.keyDown(dialog, { key: "Escape" })
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
   })
 })

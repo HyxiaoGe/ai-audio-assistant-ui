@@ -2455,24 +2455,16 @@ export default function TaskDetail({
                 })}
               </div>
 
-              {compareDialogOpen && (
-                <div
-                  className="fixed inset-0 z-50 flex items-center justify-center p-4"
-                  style={{ background: 'rgba(15, 23, 42, 0.6)' }}
-                  onClick={() => setCompareDialogOpen(false)}
-                >
-                  <div
-                    className="glass-panel-strong w-full max-w-lg rounded-2xl p-6 space-y-4"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
-                        {t("task.compareTitle")}
-                      </h3>
-                    </div>
-                    <p className="text-sm" style={{ color: 'var(--app-text-subtle)' }}>
-                      {t("task.compareHint")}
-                    </p>
+              {/* 对比弹窗：改用 Radix Dialog（焦点陷阱 / Esc / 焦点恢复 / role=dialog）。
+                  原本就用 glass-panel-strong + max-w-lg，与 DialogContent 默认基本一致，仅覆盖 grid→block 与圆角。 */}
+              <Dialog open={compareDialogOpen} onOpenChange={setCompareDialogOpen}>
+                <DialogContent className="block w-full max-w-lg sm:max-w-lg rounded-2xl space-y-4">
+                  <DialogTitle className="text-lg" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
+                    {t("task.compareTitle")}
+                  </DialogTitle>
+                  <DialogDescription className="text-sm" style={{ color: 'var(--app-text-subtle)' }}>
+                    {t("task.compareHint")}
+                  </DialogDescription>
 
                     <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
                       {modelGroups.map((group) => (
@@ -2540,9 +2532,8 @@ export default function TaskDetail({
                         {compareLoading ? t("task.compareLoadingButton") : t("task.compareStart")}
                       </button>
                     </div>
-                  </div>
-                </div>
-              )}
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
         </main>
