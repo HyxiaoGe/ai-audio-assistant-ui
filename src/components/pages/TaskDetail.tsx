@@ -6,9 +6,6 @@ import dynamic from 'next/dynamic';
 import { useAuthStore } from '@/store/auth-store';
 import { notifyError, notifySuccess } from '@/lib/notify';
 import { ArrowLeft, ChevronDown, FileText, CheckSquare, Lightbulb } from 'lucide-react';
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import rehypeSanitize from "rehype-sanitize";
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
 import { Button } from '@/components/ui/button';
@@ -24,6 +21,7 @@ import TabSwitch from '@/components/task/TabSwitch';
 import { PlayerBarContainer } from '@/components/task/PlayerBarContainer';
 import { TranscriptList, type DisplayTranscriptSegment } from '@/components/task/TranscriptList';
 import { type ActionItem, parseActionItems, parseSummaryLines } from '@/lib/summary-parse';
+import { MarkdownContent } from '@/components/task/MarkdownContent';
 import ProcessingState from '@/components/common/ProcessingState';
 import ErrorState from '@/components/common/ErrorState';
 import LoginModal from '@/components/auth/LoginModal';
@@ -33,7 +31,7 @@ import { useAPIClient } from '@/lib/use-api-client';
 import { useGlobalStore } from '@/store/global-store';
 import { useAudioStore } from '@/store/audio-store';
 import { getToken } from '@/lib/auth-token';
-import { appendMediaToken, useMediaToken } from '@/lib/media-url';
+import { useMediaToken } from '@/lib/media-url';
 import { ApiError } from '@/types/api';
 import { formatDuration } from '@/lib/utils';
 import type {
@@ -47,12 +45,9 @@ import type {
   StreamingImage,
   SSEImageReadyEvent,
 } from '@/types/api';
-import { ImagePlaceholder } from '@/components/task/ImagePlaceholder';
-import { formatModelName } from '@/lib/model-name';
 import {
   extractPlaceholderDescription,
   findImagePlaceholders,
-  extractImagePlaceholder,
 } from '@/lib/image-placeholder';
 import { useI18n } from '@/lib/i18n-context';
 import { useDateFormatter } from '@/lib/use-date-formatter';
@@ -207,103 +202,6 @@ export default function TaskDetail({
     { name: t("transcript.speakerE"), color: 'var(--app-purple)' },
     { name: t("transcript.unknownSpeaker"), color: 'var(--app-text-subtle)' }
   ]), [t]);
-
-  // Render Markdown content for summaries
-  const renderMarkdownContent = (content: string, options?: { imageModel?: string | null }) => {
-    return (
-      <div className="prose prose-sm max-w-none markdown-summary" style={{ color: 'var(--app-text)' }}>
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          rehypePlugins={[rehypeSanitize]}
-          components={{
-            input: ({ ...props }) => {
-              if (props.type === "checkbox") {
-                return <input {...props} className="mr-2 align-middle" readOnly style={{ cursor: "default" }} />;
-              }
-              return <input {...props} />;
-            },
-            table: ({ ...props }) => (
-              <div className="overflow-x-auto my-4">
-                <table {...props} className="min-w-full border-collapse" style={{ border: "1px solid var(--app-glass-border)" }} />
-              </div>
-            ),
-            th: ({ ...props }) => (
-              <th {...props} className="px-4 py-2 text-left font-semibold" style={{ backgroundColor: "var(--app-glass-bg)", borderBottom: "2px solid var(--app-glass-border)" }} />
-            ),
-            td: ({ ...props }) => (
-              <td {...props} className="px-4 py-2" style={{ borderBottom: "1px solid var(--app-glass-border)" }} />
-            ),
-            ul: ({ ...props }) => <ul {...props} className="space-y-2 my-4" />,
-            ol: ({ ...props }) => <ol {...props} className="space-y-2 my-4" />,
-            li: ({ children, ...props }) => {
-              const content = String(children);
-              const isHighPriority = content.includes("高优先级") || content.includes("紧急");
-              const isLowPriority = content.includes("低优先级") || content.includes("可选");
-              return (
-                <li {...props} className="leading-relaxed" style={isHighPriority ? { color: "var(--app-danger)" } : isLowPriority ? { color: "var(--app-text-subtle)" } : undefined}>
-                  {children}
-                </li>
-              );
-            },
-            h1: ({ ...props }) => <h1 {...props} className="text-2xl font-bold mt-6 mb-4" style={{ color: "var(--app-text)" }} />,
-            h2: ({ ...props }) => <h2 {...props} className="text-xl font-semibold mt-5 mb-3" style={{ color: "var(--app-text)" }} />,
-            h3: ({ ...props }) => <h3 {...props} className="text-lg font-semibold mt-4 mb-2" style={{ color: "var(--app-text)" }} />,
-            p: ({ children, ...props }) => {
-              // Check if children contain an image placeholder
-              const text = String(children);
-              const placeholderMatch = extractImagePlaceholder(text);
-
-              if (placeholderMatch) {
-                const description = extractPlaceholderDescription(placeholderMatch);
-                const imageState = streamingImages.get(placeholderMatch);
-
-                return (
-                  <ImagePlaceholder
-                    description={description}
-                    status={imageState?.status || "generating"}
-                    imageUrl={appendMediaToken(imageState?.url, mediaToken) || undefined}
-                  />
-                );
-              }
-
-              return <p {...props} className="my-3 leading-relaxed">{children}</p>;
-            },
-            code: ({ className, children, ...props }) => {
-              const isInline = !className;
-              if (isInline) {
-                return <code {...props} className="px-1.5 py-0.5 rounded text-sm" style={{ backgroundColor: "var(--app-glass-bg)", color: "var(--app-primary)" }}>{children}</code>;
-              }
-              return <code {...props} className={`block p-3 rounded text-sm overflow-x-auto ${className || ""}`} style={{ backgroundColor: "var(--app-glass-bg)" }}>{children}</code>;
-            },
-            img: ({ src, alt, ...props }) => (
-              <figure style={{ margin: '16px 0' }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={typeof src === 'string' ? (appendMediaToken(src, mediaToken) || undefined) : src} alt={alt} {...props} style={{ maxWidth: '100%', borderRadius: '8px' }} />
-                <figcaption
-                  style={{
-                    fontSize: '12px',
-                    color: 'var(--app-text-subtle)',
-                    marginTop: '6px',
-                    textAlign: 'center',
-                  }}
-                >
-                  {alt}
-                  {options?.imageModel && (
-                    <span style={{ marginLeft: '8px', opacity: 0.7 }}>
-                      · {t("summary.imageGeneratedBy", { model: formatModelName(options.imageModel) })}
-                    </span>
-                  )}
-                </figcaption>
-              </figure>
-            ),
-            blockquote: ({ ...props }) => <blockquote {...props} className="border-l-4 pl-4 my-4 italic" style={{ borderColor: "var(--app-primary)", color: "var(--app-text-muted)" }} />,
-          }}
-        >
-          {content}
-        </ReactMarkdown>
-      </div>
-    );
-  };
 
   const formatTimestamp = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -2151,11 +2049,11 @@ export default function TaskDetail({
                         </div>
                       </div>
                       {summaryStreaming.overview && summaryStreamContent.overview ? (
-                        renderMarkdownContent(summaryStreamContent.overview, { imageModel: imageModelUsed })
+                        <MarkdownContent content={summaryStreamContent.overview} imageModel={imageModelUsed} streamingImages={streamingImages} mediaToken={mediaToken} />
                       ) : compareMode && compareSummaryType === "overview" ? (
                         renderCompareView()
                       ) : summaryOverviewMarkdown ? (
-                        renderMarkdownContent(summaryOverviewMarkdown, { imageModel: imageModelUsed })
+                        <MarkdownContent content={summaryOverviewMarkdown} imageModel={imageModelUsed} streamingImages={streamingImages} mediaToken={mediaToken} />
                       ) : (
                         <p className="text-base leading-7" style={{ color: 'var(--app-text-subtle)' }}>
                           {getSummaryEmptyText("overview", "task.summaryEmpty")}
@@ -2216,12 +2114,12 @@ export default function TaskDetail({
                       </div>
                     </div>
                     {summaryStreaming.key_points && summaryStreamContent.key_points ? (
-                      renderMarkdownContent(summaryStreamContent.key_points)
+                      <MarkdownContent content={summaryStreamContent.key_points} streamingImages={streamingImages} mediaToken={mediaToken} />
                     ) : compareMode && compareSummaryType === "key_points" ? (
                       renderCompareView()
                     ) : keyPointsMarkdown ? (
                       // V1.2 format: Render full Markdown content
-                      renderMarkdownContent(keyPointsMarkdown)
+                      <MarkdownContent content={keyPointsMarkdown} streamingImages={streamingImages} mediaToken={mediaToken} />
                     ) : keyPoints.length > 0 ? (
                       // Old format with time references
                       keyPoints.map((point, index) => (
@@ -2301,12 +2199,12 @@ export default function TaskDetail({
                       </div>
                     </div>
                     {summaryStreaming.action_items && summaryStreamContent.action_items ? (
-                      renderMarkdownContent(summaryStreamContent.action_items)
+                      <MarkdownContent content={summaryStreamContent.action_items} streamingImages={streamingImages} mediaToken={mediaToken} />
                     ) : compareMode && compareSummaryType === "action_items" ? (
                       renderCompareView()
                     ) : actionItemsMarkdown ? (
                       // V1.2 format: Render full Markdown content
-                      renderMarkdownContent(actionItemsMarkdown)
+                      <MarkdownContent content={actionItemsMarkdown} streamingImages={streamingImages} mediaToken={mediaToken} />
                     ) : actionItems.length > 0 ? (
                       // Old format with task/assignee/deadline structure
                       actionItems.map((item) => (
