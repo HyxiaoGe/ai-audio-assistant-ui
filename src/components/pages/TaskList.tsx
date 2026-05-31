@@ -49,6 +49,8 @@ export default function TaskList({
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [retryingTaskId, setRetryingTaskId] = useState<string | null>(null);
+  // 自增计数：重试成功后 +1，触发列表与状态计数重新拉取，避免卡片停留在 failed 态。
+  const [reloadKey, setReloadKey] = useState(0);
   const tasksPerPage = 10;
 
   useEffect(() => {
@@ -98,7 +100,7 @@ export default function TaskList({
     return () => {
       isMounted = false;
     };
-  }, [client, currentPage, filterStatus, isAuthenticated, onOpenLogin, t]);
+  }, [client, currentPage, filterStatus, isAuthenticated, onOpenLogin, t, reloadKey]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -136,7 +138,7 @@ export default function TaskList({
     return () => {
       isMounted = false;
     };
-  }, [client, isAuthenticated, onOpenLogin]);
+  }, [client, isAuthenticated, onOpenLogin, reloadKey]);
 
   const formatDurationLabel = (seconds?: number) => {
     if (!seconds || seconds <= 0) return '--';
@@ -196,6 +198,8 @@ export default function TaskList({
       }
 
       notifySuccess(t("task.retrySuccess"));
+      // 重试已提交：刷新列表与计数，让卡片从 failed 前进到 processing。
+      setReloadKey((k) => k + 1);
     } catch (err) {
       if (err instanceof ApiError) {
         notifyError(err.message);
