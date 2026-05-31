@@ -98,3 +98,29 @@ describe("NotificationItem", () => {
     expect(push).toHaveBeenCalledWith("/tasks/task-1");
   });
 });
+
+// audit a11y #15：整行可点击但无 role/tabIndex/键盘处理，键盘与读屏用户不可达。
+describe("NotificationItem a11y", () => {
+  it("exposes the row as a focusable button named by the title", () => {
+    render(<NotificationItem notification={baseNotification} onMarkAsRead={vi.fn()} />);
+    const row = screen.getByRole("button", { name: "Task completed" });
+    expect(row).toHaveAttribute("tabindex", "0");
+  });
+
+  it("activates on Enter and Space from the keyboard", () => {
+    const onMarkAsRead = vi.fn();
+    render(
+      <NotificationItem notification={baseNotification} onMarkAsRead={onMarkAsRead} />
+    );
+    const row = screen.getByRole("button", { name: "Task completed" });
+
+    fireEvent.keyDown(row, { key: "Enter" });
+    expect(onMarkAsRead).toHaveBeenCalledWith("notif-1");
+    expect(push).toHaveBeenCalledWith("/tasks/task-1");
+
+    onMarkAsRead.mockClear();
+    push.mockClear();
+    fireEvent.keyDown(row, { key: " " });
+    expect(onMarkAsRead).toHaveBeenCalledWith("notif-1");
+  });
+});

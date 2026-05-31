@@ -133,9 +133,25 @@ export default function NotificationItem({
     }
   };
 
+  const handleActivate = showActions ? handleMarkRead : handleOpen;
+
+  // 键盘可达：仅当焦点在整行本身时响应 Enter/Space（内部「查看详情」按钮的按键冒泡
+  // 上来时 target!==currentTarget，不会重复触发）。
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return;
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      handleActivate();
+    }
+  };
+
   return (
     <div
-      onClick={showActions ? handleMarkRead : handleOpen}
+      role="button"
+      tabIndex={0}
+      aria-label={notification.title}
+      onClick={handleActivate}
+      onKeyDown={handleKeyDown}
       className={`
         p-3 rounded-lg cursor-pointer transition-all
         ${isRead ? 'opacity-60' : 'opacity-100'}
