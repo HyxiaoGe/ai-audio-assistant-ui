@@ -445,7 +445,13 @@ export default function NewTaskModal({
           </div>
 
           {/* Tab Content */}
-          <div className="space-y-6">
+          <div
+            role="tabpanel"
+            id={`tabpanel-${activeTab}`}
+            aria-labelledby={`tab-${activeTab}`}
+            tabIndex={0}
+            className="space-y-6"
+          >
             {activeTab === 'upload' ? (
               // Upload File Tab
               <div className="flex justify-center">

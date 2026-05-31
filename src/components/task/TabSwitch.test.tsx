@@ -92,4 +92,15 @@ describe("TabSwitch a11y", () => {
     fireEvent.keyDown(tabEls[2], { key: "End" });
     expect(onTabChange).toHaveBeenLastCalledWith("c");
   });
+
+  // audit a11y F179：标签与面板缺少程序化关联。每个 tab 需有稳定 id 并经
+  // aria-controls 指向对应面板（消费方为面板补 role=tabpanel + id + aria-labelledby）。
+  it("links each tab to its panel via id and aria-controls", () => {
+    render(<TabSwitch tabs={abc} activeTab="b" onTabChange={vi.fn()} />);
+    const tabEls = screen.getAllByRole("tab");
+    expect(tabEls[0]).toHaveAttribute("id", "tab-a");
+    expect(tabEls[0]).toHaveAttribute("aria-controls", "tabpanel-a");
+    expect(tabEls[1]).toHaveAttribute("id", "tab-b");
+    expect(tabEls[1]).toHaveAttribute("aria-controls", "tabpanel-b");
+  });
 });
