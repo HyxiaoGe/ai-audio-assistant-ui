@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Play, Pause, ThumbsUp, MessageSquare, Eye, ExternalLink } from "lucide-react";
 import { useI18n } from "@/lib/i18n-context";
 import { useDateFormatter } from "@/lib/use-date-formatter";
+import { seekKeyToTime } from "@/lib/seek-keyboard";
 import type { YouTubeVideoInfo } from "@/types/api";
 
 interface YouTubePlayerCardProps {
@@ -95,6 +96,13 @@ export function YouTubePlayerCard({
     setLocalTime(newTime);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    const next = seekKeyToTime(e.key, currentTime, duration);
+    if (next === null) return;
+    e.preventDefault();
+    onSeek(next);
+  };
+
   useEffect(() => {
     if (!isDragging) return;
 
@@ -158,7 +166,9 @@ export function YouTubePlayerCard({
             )}
             {/* Play/Pause overlay button */}
             <button
+              type="button"
               onClick={onPlayPause}
+              aria-label={isPlaying ? t("player.pause") : t("player.play")}
               className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors group"
             >
               <div
@@ -246,6 +256,7 @@ export function YouTubePlayerCard({
               href={youtubeUrl}
               target="_blank"
               rel="noopener noreferrer"
+              aria-label={t("task.youtubeInfo.openOnYouTube")}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-opacity hover:opacity-90 flex-shrink-0"
               style={{ background: "#FF0000", color: "#fff" }}
             >
@@ -267,8 +278,16 @@ export function YouTubePlayerCard({
             {/* Progress Bar */}
             <div
               ref={progressBarRef}
+              role="slider"
+              tabIndex={0}
+              aria-label={t("player.seek")}
+              aria-valuemin={0}
+              aria-valuemax={duration > 0 && isFinite(duration) ? Math.round(duration) : 0}
+              aria-valuenow={Math.round(displayTime)}
+              aria-valuetext={`${formatTime(displayTime)} / ${formatTime(duration)}`}
               className="flex-1 relative cursor-pointer"
               onMouseDown={handleMouseDown}
+              onKeyDown={handleKeyDown}
               style={{ height: "24px" }}
             >
               <div className="absolute top-1/2 -translate-y-1/2 w-full">

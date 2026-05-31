@@ -62,7 +62,9 @@
     }
   },
   "player": {
-    "seek": "音频进度"
+    "seek": "音频进度",
+    "play": "播放",
+    "pause": "暂停"
   },
   "transcript": {
     "selectSpeaker": "选择说话人",

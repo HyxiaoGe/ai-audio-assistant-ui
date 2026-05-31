@@ -62,7 +62,9 @@
     }
   },
   "player": {
-    "seek": "Audio progress"
+    "seek": "Audio progress",
+    "play": "Play",
+    "pause": "Pause"
   },
   "transcript": {
     "selectSpeaker": "Select speaker",
