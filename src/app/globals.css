@@ -88,8 +88,11 @@
   --app-text: #0f172a;
   --app-text-strong: #1e293b;
   --app-text-muted: #64748b;
-  --app-text-subtle: #94a3b8;
-  --app-text-faint: #cbd5e1;
+  /* a11y F117：浅色模式下原 #94a3b8 / #cbd5e1 对比度不达 WCAG AA。
+     subtle 加深至 AA 正文阈值(≥4.5:1)，faint 加深至大字号阈值(≥3.0:1)，
+     faint 仍为三档中最浅，保留视觉层级。详见 globals.contrast.test.ts。 */
+  --app-text-subtle: #677488;
+  --app-text-faint: #828ea0;
   --app-primary: #3b82f6;
   --app-primary-strong: #2563eb;
   --app-primary-soft: #dbeafe;
