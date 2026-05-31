@@ -54,6 +54,13 @@ export default function UploadZone({
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleClick();
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
@@ -150,6 +157,9 @@ export default function UploadZone({
   // State: Default or Drag Over
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-label={t("upload.selectFile")}
       className="glass-panel w-full rounded-2xl border-2 border-dashed cursor-pointer transition-all"
       style={{
         borderColor: isDragOver ? "var(--app-primary)" : "var(--app-glass-border)",
@@ -160,11 +170,14 @@ export default function UploadZone({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       onClick={handleClick}
+      onKeyDown={handleKeyDown}
     >
       <input
         ref={fileInputRef}
         type="file"
         className="hidden"
+        tabIndex={-1}
+        aria-hidden="true"
         accept="audio/*,video/*,.mp3,.mp4,.wav,.m4a"
         onChange={handleFileChange}
       />

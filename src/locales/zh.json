@@ -604,6 +604,7 @@
     "chooseAgain": "重新选择",
     "dropHere": "将文件拖放到此处，或",
     "clickToUpload": "点击上传",
+    "selectFile": "选择文件上传",
     "supportedFormats": "支持 MP3、MP4、WAV、M4A、WebM，最大 500MB",
     "uploadSuccessProcessing": "文件上传成功，开始处理",
     "errors": {

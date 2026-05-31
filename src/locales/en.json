@@ -604,6 +604,7 @@
     "chooseAgain": "Choose again",
     "dropHere": "Drop a file here, or",
     "clickToUpload": "click to upload",
+    "selectFile": "Select a file to upload",
     "supportedFormats": "Supports MP3, MP4, WAV, M4A, WebM, up to 500MB",
     "uploadSuccessProcessing": "Upload complete, processing started",
     "errors": {
