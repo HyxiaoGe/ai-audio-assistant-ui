@@ -63,12 +63,12 @@ export function useGlobalWebSocket() {
   const enabledRef = useRef(true);
   const toastHistoryRef = useRef(new Map<string, number>());
 
-  const {
-    updateTask,
-    loadNotifications,
-    setWsConnected,
-    setWsReconnecting,
-  } = useGlobalStore();
+  // 用 per-field selector 订阅，避免无 selector 的整店订阅在任意 global state 变化时
+  // 都触发本 hook 重跑（这些都是 zustand 稳定 action）。返回值处已用 selector，这里对齐。
+  const updateTask = useGlobalStore((s) => s.updateTask);
+  const loadNotifications = useGlobalStore((s) => s.loadNotifications);
+  const setWsConnected = useGlobalStore((s) => s.setWsConnected);
+  const setWsReconnecting = useGlobalStore((s) => s.setWsReconnecting);
 
   const shouldShowToast = useCallback((taskId: string, status: "completed" | "failed") => {
     const key = `${taskId}:${status}`;
