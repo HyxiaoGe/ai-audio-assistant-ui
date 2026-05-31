@@ -81,6 +81,9 @@ const DEFAULT_HEADERS = {
   "Content-Type": "application/json",
 }
 
+// 单次请求的最长等待时间：后端/nginx 接受连接却不响应时，靠它把挂死的请求兜底为可恢复的错误。
+const REQUEST_TIMEOUT_MS = 30_000
+
 // ============================================================================
 // 辅助函数
 // ============================================================================
@@ -159,10 +162,15 @@ async function request<T>(
     headers["Authorization"] = `Bearer ${authToken}`
   }
 
+  // 超时/中断控制：到点 abort，所有 fetch 共用同一信号；finally 里清理定时器。
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
   try {
     let response = await fetch(url, {
       ...options,
       headers,
+      signal: controller.signal,
     })
 
     // 401 时自动刷新 token 并重试
@@ -171,7 +179,7 @@ async function request<T>(
       const newToken = await useAuthStore.getState().getAccessToken()
       if (newToken && newToken !== authToken) {
         headers["Authorization"] = `Bearer ${newToken}`
-        response = await fetch(url, { ...options, headers })
+        response = await fetch(url, { ...options, headers, signal: controller.signal })
       }
     }
 
@@ -188,6 +196,20 @@ async function request<T>(
     // 如果已经是 ApiError，直接抛出
     if (error instanceof ApiError) {
       throw error
+    }
+
+    // 超时/中断：AbortController 触发（浏览器与 undici 均抛 AbortError 的 DOMException），
+    // 映射为可本地化的失败，让调用方像处理任何网络错误一样收尾，而不是无限挂起。
+    const isAbort =
+      (error instanceof DOMException && error.name === "AbortError") ||
+      (error instanceof Error && error.name === "AbortError")
+    if (isAbort) {
+      throw new ApiError(
+        50000,
+        translateStatic("errors.networkFailedDesc", locale),
+        "client_timeout",
+        error
+      )
     }
 
     // 网络错误或其他错误
@@ -211,6 +233,8 @@ async function request<T>(
       translateStatic("errors.unknownError", locale),
       "client_error"
     )
+  } finally {
+    clearTimeout(timeoutId)
   }
 }
 
