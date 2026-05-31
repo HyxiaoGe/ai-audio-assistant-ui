@@ -124,11 +124,13 @@ export default function VideoCard({
         {/* Hover overlay with YouTube link */}
         <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
+            type="button"
             onClick={handleOpenYouTube}
             className="p-2 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+            aria-label={t("subscriptions.openOnYouTube")}
             title={t("subscriptions.openOnYouTube")}
           >
-            <ExternalLink className="w-5 h-5 text-white" />
+            <ExternalLink className="w-5 h-5 text-white" aria-hidden="true" />
           </button>
         </div>
       </div>

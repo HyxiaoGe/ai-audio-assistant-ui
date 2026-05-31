@@ -787,6 +787,7 @@
     "videoViews": "{count} views",
     "videoPublished": "Published",
     "openOnYouTube": "Open on YouTube",
+    "channelActions": "Channel actions",
     "syncOverview": "Synced {synced}/{total} channels, {videos} videos",
     "syncComplete": "Fully synced",
     "syncInProgress": "Syncing...",
