@@ -80,7 +80,6 @@ const VisualSummaryView = dynamic(
 );
 
 interface TaskDetailProps {
-  language?: 'zh' | 'en';
   onToggleTheme?: () => void;
 }
 
@@ -95,7 +94,6 @@ interface Speaker {
 }
 
 export default function TaskDetail({
-  language = 'zh',
   onToggleTheme = () => {}
 }: TaskDetailProps) {
   const router = useRouter();

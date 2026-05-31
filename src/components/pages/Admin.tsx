@@ -15,14 +15,12 @@ import { ShieldAlert, TrendingUp, Clock, DollarSign, Zap } from 'lucide-react';
 interface AdminProps {
   isAuthenticated?: boolean;
   onOpenLogin?: () => void;
-  language?: 'zh' | 'en';
   onToggleTheme?: () => void;
 }
 
 export default function Admin({
   isAuthenticated = false,
   onOpenLogin = () => {},
-  language = 'zh',
   onToggleTheme = () => {}
 }: AdminProps) {
   const { t } = useI18n();

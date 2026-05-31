@@ -19,7 +19,6 @@ interface DashboardProps {
   onOpenLogin: () => void;
   onOpenNewTask?: () => void;
   userName?: string | null;
-  language?: 'zh' | 'en';
   onToggleTheme?: () => void;
 }
 
@@ -28,7 +27,6 @@ export default function Dashboard({
   onOpenLogin,
   onOpenNewTask,
   userName,
-  language = 'zh',
   onToggleTheme = () => {}
 }: DashboardProps) {
   const router = useRouter();

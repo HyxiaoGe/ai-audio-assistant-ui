@@ -30,7 +30,6 @@ function AuthCallbackContent() {
         router.replace(redirect)
       })
       .catch(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setError("Login failed. Please try again.")
       })
   }, [searchParams, exchangeCode, router])

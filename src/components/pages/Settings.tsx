@@ -35,7 +35,6 @@ import {
 interface SettingsProps {
   isAuthenticated?: boolean;
   onOpenLogin?: () => void;
-  language?: 'zh' | 'en';
   onToggleTheme?: () => void;
 }
 
@@ -94,7 +93,6 @@ const loadLocalSettings = (): LocalSettings => {
 export default function Settings({ 
   isAuthenticated = false, 
   onOpenLogin = () => {},
-  language = 'zh',
   onToggleTheme = () => {}
 }: SettingsProps) {
   const {
