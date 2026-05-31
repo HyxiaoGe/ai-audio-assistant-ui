@@ -43,3 +43,47 @@ describe("PlayerBar seek slider a11y", () => {
     expect(onSeek).not.toHaveBeenCalled()
   })
 })
+
+// audit a11y：主播放/暂停按钮原为图标按钮，无可访问名、无 type（WCAG 4.1.2）。
+describe("PlayerBar play/pause button a11y", () => {
+  it("has a state-reflecting accessible name and an explicit button type", () => {
+    const onPlayPause = vi.fn()
+    const { rerender } = render(
+      <PlayerBar duration={100} isPlaying={false} onPlayPause={onPlayPause} />
+    )
+
+    const playBtn = screen.getByRole("button", { name: "player.play" })
+    expect(playBtn).toHaveAttribute("type", "button")
+    fireEvent.click(playBtn)
+    expect(onPlayPause).toHaveBeenCalled()
+
+    rerender(<PlayerBar duration={100} isPlaying onPlayPause={onPlayPause} />)
+    expect(screen.getByRole("button", { name: "player.pause" })).toBeInTheDocument()
+  })
+})
+
+// audit a11y：metadata 加载前 duration 可能是 0 / NaN / Infinity；slider 的
+// aria-valuemax/valuenow 直接取 duration 会被读屏宣告成 'NaN'/'Infinity'，
+// 且 valuenow 可能 > valuemax。修复后须 clamp 到合法区间。
+describe("PlayerBar slider bounds guard", () => {
+  it("clamps aria bounds when duration is NaN (pre-metadata)", () => {
+    render(<PlayerBar currentTime={10} duration={NaN} />)
+    const slider = screen.getByRole("slider")
+    expect(slider).toHaveAttribute("aria-valuemax", "0")
+    expect(slider).toHaveAttribute("aria-valuenow", "0")
+  })
+
+  it("clamps aria bounds when duration is Infinity (streaming)", () => {
+    render(<PlayerBar currentTime={50} duration={Infinity} />)
+    const slider = screen.getByRole("slider")
+    expect(slider).toHaveAttribute("aria-valuemax", "0")
+    expect(slider).toHaveAttribute("aria-valuenow", "0")
+  })
+
+  it("never lets aria-valuenow exceed aria-valuemax", () => {
+    render(<PlayerBar currentTime={999} duration={100} />)
+    const slider = screen.getByRole("slider")
+    expect(slider).toHaveAttribute("aria-valuemax", "100")
+    expect(slider).toHaveAttribute("aria-valuenow", "100")
+  })
+})

@@ -74,9 +74,14 @@ export default function PlayerBar({
   }, [duration, isDragging, localTime, onSeek]);
 
   // Guard against invalid duration (0, NaN, Infinity)
-  const progress = duration > 0 && isFinite(duration)
+  const hasValidDuration = duration > 0 && isFinite(duration);
+  const progress = hasValidDuration
     ? Math.min(100, Math.max(0, (displayTime / duration) * 100))
     : 0;
+  // metadata 加载前 duration 可能是 0/NaN/Infinity：把 slider 的 aria 边界 clamp 到合法区间，
+  // 避免读屏宣告成 'NaN'/'Infinity'，也避免 valuenow 超过 valuemax。
+  const ariaValueMax = hasValidDuration ? duration : 0;
+  const ariaValueNow = Math.min(Math.max(0, displayTime), ariaValueMax);
 
   return (
     <div 
@@ -85,7 +90,9 @@ export default function PlayerBar({
     >
       {/* Play/Pause Button */}
       <button
+        type="button"
         onClick={onPlayPause}
+        aria-label={isPlaying ? t('player.pause') : t('player.play')}
         className="flex items-center justify-center rounded-full transition-transform hover:scale-105"
         style={{
           width: '48px',
@@ -115,8 +122,8 @@ export default function PlayerBar({
         tabIndex={0}
         aria-label={t('player.seek')}
         aria-valuemin={0}
-        aria-valuemax={duration}
-        aria-valuenow={displayTime}
+        aria-valuemax={ariaValueMax}
+        aria-valuenow={ariaValueNow}
         aria-valuetext={`${formatTime(displayTime)} / ${formatTime(duration)}`}
         style={{ height: '32px' }}
       >
