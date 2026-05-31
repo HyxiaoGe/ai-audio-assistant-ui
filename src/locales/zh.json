@@ -758,6 +758,7 @@
     "listEmptyDesc": "同步订阅后，你的频道将显示在这里",
     "loadFailed": "加载订阅列表失败",
     "searchPlaceholder": "搜索频道...",
+    "clearSearch": "清除搜索",
     "searchResults": "找到 {count} 个频道",
     "searchEmpty": "没有找到匹配的频道",
     "loadMore": "加载更多",
