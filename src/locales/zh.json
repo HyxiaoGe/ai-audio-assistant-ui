@@ -61,6 +61,9 @@
       "yuanPerHour": "¥{value}/小时"
     }
   },
+  "player": {
+    "seek": "音频进度"
+  },
   "transcript": {
     "selectSpeaker": "选择说话人",
     "title": "转写结果",

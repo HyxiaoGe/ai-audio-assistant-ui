@@ -12,6 +12,7 @@ import { useTheme } from "next-themes";
 import NotificationBell from '@/components/notifications/NotificationBell';
 import { useAudioStore } from '@/store/audio-store';
 import { useUserStore } from '@/store/user-store';
+import { seekKeyToTime } from '@/lib/seek-keyboard';
 
 interface HeaderProps {
   isAuthenticated: boolean;
@@ -131,6 +132,15 @@ export default function Header({
     setHoverRatio(null);
   };
 
+  // 键盘 seek：与 PlayerBar 共用 seekKeyToTime（方向键 ±5s / PageUp-Down ±10s / Home-End）。
+  const handleProgressKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const next = seekKeyToTime(event.key, currentTime, duration);
+    if (next === null) return;
+    event.preventDefault();
+    event.stopPropagation();
+    seek(next);
+  };
+
   const handleMiniPlayerClick = () => {
     if (!audioTaskId) return;
     router.push(`/tasks/${audioTaskId}`);
@@ -209,6 +219,14 @@ export default function Header({
               onMouseMove={handleProgressHover}
               onMouseLeave={handleProgressLeave}
               onClick={(event) => event.stopPropagation()}
+              onKeyDown={handleProgressKeyDown}
+              role="slider"
+              tabIndex={0}
+              aria-label={t('player.seek')}
+              aria-valuemin={0}
+              aria-valuemax={duration}
+              aria-valuenow={currentTime}
+              aria-valuetext={`${formatTime(currentTime)} / ${formatTime(duration)}`}
               style={{ width: '110px', height: '8px' }}
             >
               {hoverRatio !== null && duration > 0 && isFinite(duration) && (
