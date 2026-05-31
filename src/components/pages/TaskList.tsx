@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search } from 'lucide-react';
 import Header from '@/components/layout/Header';
+import { Pagination } from '@/components/common/Pagination';
 import Sidebar from '@/components/layout/Sidebar';
 import TaskCard from '@/components/task/TaskCard';
 import EmptyState from '@/components/common/EmptyState';
@@ -431,62 +432,11 @@ export default function TaskList({
           </div>
 
           {/* 分页 */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2 mt-8">
-              <button
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
-                className="glass-chip flex items-center justify-center w-9 h-9 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-
-              {/* 页码显示 */}
-              <div className="flex items-center gap-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
-                  // 只显示当前页前后2页
-                  if (
-                    page === 1 ||
-                    page === totalPages ||
-                    (page >= currentPage - 1 && page <= currentPage + 1)
-                  ) {
-                    return (
-                      <button
-                        key={page}
-                        onClick={() => handlePageChange(page)}
-                        className="glass-chip flex items-center justify-center min-w-9 h-9 px-3 rounded-lg text-sm"
-                        data-active={page === currentPage}
-                      >
-                        {page}
-                      </button>
-                    );
-                  } else if (
-                    page === currentPage - 2 ||
-                    page === currentPage + 2
-                  ) {
-                    return (
-                      <span
-                        key={page}
-                        className="flex items-center justify-center w-9 h-9 text-sm"
-                        style={{ color: "var(--app-text-subtle)" }}
-                      >
-                        ...
-                      </span>
-                    );
-                  }
-                  return null;
-                })}
-              </div>
-
-              <button
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages}
-                className="glass-chip flex items-center justify-center w-9 h-9 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          )}
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+          />
 
           {/* 分页信息 */}
           {filteredTasks.length > 0 && (

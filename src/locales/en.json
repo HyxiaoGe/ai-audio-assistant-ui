@@ -185,6 +185,10 @@
     "untitled": "Untitled audio",
     "openTask": "Open task details"
   },
+  "pagination": {
+    "previous": "Previous page",
+    "next": "Next page"
+  },
   "notifications": {
     "title": "Notifications",
     "empty": "No notifications yet",

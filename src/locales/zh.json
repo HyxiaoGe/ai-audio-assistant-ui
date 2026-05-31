@@ -185,6 +185,10 @@
     "untitled": "未命名音频",
     "openTask": "打开任务详情"
   },
+  "pagination": {
+    "previous": "上一页",
+    "next": "下一页"
+  },
   "notifications": {
     "title": "通知",
     "empty": "暂无通知",
