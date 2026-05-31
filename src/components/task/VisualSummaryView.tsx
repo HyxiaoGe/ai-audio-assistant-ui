@@ -40,7 +40,9 @@ export function VisualSummaryView({
     mermaid.initialize({
       startOnLoad: false,
       theme: "default",
-      securityLevel: "loose",
+      // strict：图表文本来自后端 LLM 生成内容（不可信），strict 会启用 mermaid 内置
+      // DOMPurify 净化并禁用 label 内 HTML / click 交互，阻断经 innerHTML 注入的存储型 XSS。
+      securityLevel: "strict",
       fontFamily: "ui-sans-serif, system-ui, sans-serif",
     })
   }, [])
