@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { Edit2, Check, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n-context';
@@ -6,6 +6,7 @@ import type { TranscriptWord } from '@/types/api';
 import DiffContent from '@/components/task/DiffContent';
 
 interface TranscriptItemProps {
+  segmentId: string;
   speaker: string;
   startTime: string;
   endTime: string;
@@ -15,13 +16,16 @@ interface TranscriptItemProps {
   isActive?: boolean;
   activeWordIndex?: number | null;
   activeWordProgress?: number | null;
-  onEdit?: (newContent: string) => void;
+  // 接收 segmentId，使父组件可传入稳定（useCallback）的处理器而非每行新建闭包——
+  // 这是让 React.memo 真正生效的前提。
+  onEdit?: (segmentId: string, newContent: string) => void;
   onTimeClick?: (time: string) => void;
   isPolished?: boolean;
   originalContent?: string | null;
 }
 
-export default function TranscriptItem({
+function TranscriptItem({
+  segmentId,
   speaker,
   startTime,
   endTime,
@@ -52,7 +56,7 @@ export default function TranscriptItem({
   };
 
   const handleSaveEdit = () => {
-    onEdit(editedContent);
+    onEdit(segmentId, editedContent);
     setIsEditing(false);
   };
 
@@ -222,3 +226,7 @@ export default function TranscriptItem({
     </div>
   );
 }
+
+// memo：播放每帧只有正在高亮的行的 isActive/activeWordIndex/activeWordProgress 变化，
+// 其余行的 props 引用不变（父组件传入稳定的 onEdit/onTimeClick），默认浅比较即可跳过重渲染。
+export default memo(TranscriptItem);
