@@ -11,7 +11,7 @@ vi.mock("@/lib/auth-sdk", () => ({
 
 import { silentLogin } from "auth-client-web"
 
-import { clearSsoReturn, markSsoProbed, maybeSilentLogin, takeSsoReturnPath } from "./sso-probe"
+import { clearSsoReturn, isSafeReturnPath, markSsoProbed, maybeSilentLogin, takeSsoReturnPath } from "./sso-probe"
 
 const mockedSilentLogin = vi.mocked(silentLogin)
 
@@ -33,6 +33,29 @@ describe("sso-probe: one-shot silent SSO on app load", () => {
     expect(mockedSilentLogin).toHaveBeenCalledTimes(1)
     expect(sessionStorage.getItem(PROBED_KEY)).toBe("1")
     expect(sessionStorage.getItem(RETURN_KEY)).toBe("/stats?tab=usage")
+  })
+
+  it('does NOT capture a protocol-relative path (open-redirect guard): stores "/" instead of //evil.com', () => {
+    // window.location.pathname 可以字面就是 "//evil.com/x"（浏览器不折叠前导双斜杠）；
+    // 若原样喂给回调消费端的 router.replace 会被解析成站外 origin，造成客户端开放重定向。
+    const fired = maybeSilentLogin("//evil.com/x?a=1")
+
+    expect(fired).toBe(true) // 探测照常发起（用户本就无 token）
+    expect(sessionStorage.getItem(RETURN_KEY)).toBe("/") // 但站外路径被拒，落库回退为 "/"
+  })
+
+  it("normalizes a backslash-prefixed path that resolves off-origin to a safe \"/\" capture", () => {
+    maybeSilentLogin("/\\evil.com")
+
+    expect(sessionStorage.getItem(RETURN_KEY)).toBe("/")
+  })
+
+  it("isSafeReturnPath accepts same-origin relative paths and rejects off-origin vectors", () => {
+    expect(isSafeReturnPath("/stats?tab=usage")).toBe(true)
+    expect(isSafeReturnPath("/")).toBe(true)
+    expect(isSafeReturnPath("//evil.com")).toBe(false)
+    expect(isSafeReturnPath("/\\evil.com")).toBe(false)
+    expect(isSafeReturnPath("///evil.com")).toBe(false)
   })
 
   it("does NOT fire when a local access token already exists", () => {

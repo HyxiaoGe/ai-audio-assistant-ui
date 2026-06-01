@@ -56,6 +56,27 @@ describe("auth-store completeLogin: silent SSO probe outcomes", () => {
     expect(sessionStorage.getItem(RETURN_KEY)).toBeNull()
   })
 
+  it("silent HIT with an unsafe captured return is dropped (open-redirect guard): uses the SDK default", async () => {
+    // 纵深防御：即便有东西把站外路径塞进了 RETURN_KEY（落库端本应已挡回），
+    // 消费端也必须独立校验、丢弃，绝不把它当成 router.replace 的目标。
+    sessionStorage.setItem(RETURN_KEY, "//evil.com/x")
+    mockedHandleCallback.mockResolvedValue({ status: "authenticated", user: USER, redirectPath: "/tasks" })
+
+    const result = await useAuthStore.getState().completeLogin()
+
+    expect(result).toEqual({ ok: true, redirectPath: "/tasks" }) // 站外路径被丢，回退到 SDK 默认
+    expect(sessionStorage.getItem(RETURN_KEY)).toBeNull() // 仍被消费清除，不残留
+  })
+
+  it("silent MISS with an unsafe captured return falls back to /login, not the off-origin path", async () => {
+    sessionStorage.setItem(RETURN_KEY, "//evil.com")
+    mockedHandleCallback.mockResolvedValue({ status: "unauthenticated", error: "login_required" })
+
+    const result = await useAuthStore.getState().completeLogin()
+
+    expect(result).toEqual({ ok: false, redirectPath: "/login", error: "login_required" })
+  })
+
   it("interactive MISS (no silent marker): falls back to /login", async () => {
     mockedHandleCallback.mockResolvedValue({ status: "unauthenticated", error: "login_required" })
 
