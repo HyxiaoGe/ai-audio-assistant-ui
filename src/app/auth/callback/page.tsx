@@ -18,9 +18,10 @@ function AuthCallbackContent() {
     // SDK 的 handleCallback 自己从 window.location 读 code/state 并校验 state、换 token。
     completeLogin()
       .then((result) => {
-        if (result.ok || result.error === "login_required") {
-          // 成功 → 目标页；静默探测未命中（login_required）→ 软回到原页，交互式失败 → /login。
-          // 两种回跳路径都已由 store 据「是否静默探测」算入 result.redirectPath。
+        if (result.ok || result.error === "login_required" || result.error === "no_callback") {
+          // 成功 → 目标页；静默探测未命中（login_required）→ 软回到原页；无回调参数
+          // （no_callback，如单点登出后从 /auth/logout 302 裸回跳）→ 软回 /login。
+          // 仅真实 OAuth 错误才落到下方错误屏。回跳路径都已由 store 算入 result.redirectPath。
           router.replace(result.redirectPath)
         } else {
           setError("Login failed. Please try again.")

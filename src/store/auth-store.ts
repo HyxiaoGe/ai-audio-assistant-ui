@@ -202,9 +202,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     // 媒体短票先失效再翻转登录态：避免登出瞬间仍有组件用旧票拼出媒体 URL（同浏览器换号
     // 后旧票会被后端归属校验拒为 404）。动态 import 规避与 api-client 的静态循环依赖。
     await import("@/lib/media-ticket").then((m) => m.clearMediaTicket()).catch(() => {})
-    // 撤销是 best-effort：失败不能阻断本地登出，否则用户卡在已登录态
+    // 全局单点登出：本地清理后由 SDK 顶层表单 POST 到 /auth/logout 销毁共享 IdP 会话，
+    // 做到「一处登出、处处登出」（否则只撤销本应用 token，IdP 会话仍在、会被静默重登）。
+    // 撤销是 best-effort：失败不能阻断本地登出，否则用户卡在已登录态。
     try {
-      await sdkLogout()
+      await sdkLogout({ global: true })
     } catch {
       // ignore: 本地清理在下方无条件执行
     }

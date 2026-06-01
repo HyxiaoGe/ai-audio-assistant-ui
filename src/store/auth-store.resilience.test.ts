@@ -108,13 +108,16 @@ describe("auth-store resilience: transient vs definitive auth failure", () => {
     expect(useAuthStore.getState().user).toBeNull()
   })
 
-  // ── logout() ordering ───────────────────────────────────────────────────────
-  it("logout: clears the media ticket BEFORE flipping the store to unauthenticated", async () => {
+  // ── logout() ordering + global single-logout ────────────────────────────────
+  it("logout: global single-logout, clearing the media ticket BEFORE flipping the store out", async () => {
     useAuthStore.setState({ user: CACHED_USER, status: "authenticated" })
     mockedSdkLogout.mockResolvedValue(undefined)
 
     await useAuthStore.getState().logout()
 
+    // drives the SDK's cross-app Single Logout (destroys the shared IdP session), not just
+    // a per-app token revoke
+    expect(mockedSdkLogout).toHaveBeenCalledWith({ global: true })
     expect(clearMediaTicket).toHaveBeenCalledTimes(1)
     // at the moment the ticket was cleared, the store had not yet flipped out
     expect(statusWhenTicketCleared).not.toBe("unauthenticated")

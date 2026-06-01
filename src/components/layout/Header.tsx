@@ -101,8 +101,10 @@ export default function Header({
   }, [isMenuOpen]);
 
   const handleLogout = async () => {
+    // 全局单点登出：authLogout() 委托 SDK 顶层表单 POST 到 /auth/logout 销毁共享 IdP 会话，
+    // auth-service 再 302 裸回跳 /auth/callback → /login。不再 router.push('/login')，
+    // 避免客户端跳转与整页表单导航相互竞态。
     await authLogout();
-    router.push('/login');
   };
 
   const pathSegments = pathname.split("/").filter(Boolean);
