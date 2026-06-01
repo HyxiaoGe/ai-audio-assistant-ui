@@ -32,7 +32,7 @@ import { SummaryModelSelect } from '@/components/task/SummaryModelSelect';
 import { useAPIClient } from '@/lib/use-api-client';
 import { useGlobalStore } from '@/store/global-store';
 import { useAudioStore } from '@/store/audio-store';
-import { getToken } from '@/lib/auth-token';
+import { resolveStreamToken } from '@/lib/stream-ticket';
 import { useMediaToken } from '@/lib/media-url';
 import { ApiError } from '@/types/api';
 import { formatDuration } from '@/lib/utils';
@@ -500,14 +500,9 @@ export default function TaskDetail({
 
         const normalizedBaseUrl = resolveSummaryStreamBaseUrl();
 
-        // SSE 用短期 stream 票据（绑定 task_id+summary_type），不再把长效 access JWT 拼进 URL。
-        // 签票偶发失败时，过渡期回退到 access JWT（后端 Phase 1 仍双接受），避免流中断。
-        let token: string | null = null;
-        try {
-          token = (await client.mintStreamTicket(id, summaryType)).token;
-        } catch {
-          token = await getToken();
-        }
+        // SSE 用短期 stream 票据（绑定 task_id+summary_type）拼进 ?token=；签票失败返回 null，
+        // 不回退长效 access JWT，转走下方 else 的 HTTP regenerate + 轮询兜底。
+        const token = await resolveStreamToken(client, id, summaryType);
         if (token) {
           const streamUrl = `${normalizedBaseUrl}/summaries/${id}/stream?summary_type=${summaryType}&token=${encodeURIComponent(token)}`;
           const eventSource = new EventSource(streamUrl);
@@ -1161,13 +1156,9 @@ export default function TaskDetail({
       };
 
       const normalizedBaseUrl = resolveSummaryStreamBaseUrl();
-      // 对比 SSE 同样改用 stream 票据（绑定 task_id+summary_type），失败回退 access JWT。
-      let token: string | null = null;
-      try {
-        token = (await client.mintStreamTicket(id, compareSummaryType)).token;
-      } catch {
-        token = await getToken();
-      }
+      // 对比 SSE 同样用 stream 票据拼进 ?token=；签票失败返回 null（不回退长 JWT），
+      // 转走下方 else 的 startPollingFallback。
+      const token = await resolveStreamToken(client, id, compareSummaryType);
 
       if (token) {
         const streamUrl = `${normalizedBaseUrl}/summaries/${id}/compare/${comparison.comparison_id}/stream?summary_type=${compareSummaryType}&token=${encodeURIComponent(token)}`;
