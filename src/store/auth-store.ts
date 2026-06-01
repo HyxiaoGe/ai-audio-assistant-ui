@@ -18,7 +18,7 @@ import {
 } from "auth-client-web"
 
 import { configureAuth } from "@/lib/auth-sdk"
-import { clearSsoReturn, markSsoProbed, takeSsoReturnPath } from "@/lib/sso-probe"
+import { clearSsoReturn, isSafeReturnPath, markSsoProbed, takeSsoReturnPath } from "@/lib/sso-probe"
 
 const ACCESS_TOKEN_KEY = "auth_access_token"
 const USER_INFO_KEY = "auth_user_info"
@@ -157,8 +157,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   completeLogin: async () => {
     configureAuth()
     const result = await sdkHandleCallback()
-    // 若本次回调源自静默探测，取回探测前记下的原始路径（HIT/MISS 都回到此处）
-    const silentReturn = takeSsoReturnPath()
+    // 若本次回调源自静默探测，取回探测前记下的原始路径（HIT/MISS 都回到此处）。
+    // 消费端再独立校验一次开放重定向：不安全（站外/协议相对）路径直接丢弃回退，
+    // 与探测落库端的校验形成纵深防御——绝不把站外路径喂给 router.replace。
+    const rawReturn = takeSsoReturnPath()
+    const silentReturn = rawReturn && isSafeReturnPath(rawReturn) ? rawReturn : null
 
     if (result.status === "authenticated") {
       const user = normalizeUser(result.user as unknown as Record<string, unknown>)

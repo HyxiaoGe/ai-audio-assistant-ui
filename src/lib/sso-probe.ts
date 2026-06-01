@@ -29,6 +29,18 @@ function session(): Storage | null {
   }
 }
 
+/**
+ * 回跳路径是否为安全的同源相对路径。
+ *
+ * 防客户端开放重定向（CWE-601）：探测前的原始路径取自 `window.location.pathname`，
+ * 浏览器不会折叠前导双斜杠——访问 `https://app//evil.com` 时 pathname 字面就是
+ * `//evil.com`，`new URL("//evil.com", origin).origin` 会解析成站外，喂给 router.replace
+ * 即跳出本站。要求：去掉反斜杠歧义（`/\` 在部分浏览器等价于 `//`）后，必须是单个前导斜杠。
+ */
+export function isSafeReturnPath(path: string): boolean {
+  return /^\/(?!\/)/.test(path.replace(/\\/g, "/"))
+}
+
 /** 落「已探测/勿探测」守卫——登出时调用以阻止登出后被静默重新登入。 */
 export function markSsoProbed(): void {
   try {
@@ -84,10 +96,12 @@ export function maybeSilentLogin(currentPath: string): boolean {
   if (probed) return false // 本标签页已探测过
   if (token) return false // 已有本地会话
 
-  // 跳转前同步落守卫 + 原始路径（sessionStorage 同步写入，跨这次顶层跳转存活）
+  // 跳转前同步落守卫 + 原始路径（sessionStorage 同步写入，跨这次顶层跳转存活）。
+  // 落库端先把站外/协议相对路径挡回 "/"——与回调消费端的校验形成纵深防御（防开放重定向）。
+  const safeReturn = isSafeReturnPath(currentPath) ? currentPath : "/"
   try {
     s.setItem(PROBED_KEY, "1")
-    s.setItem(RETURN_KEY, currentPath)
+    s.setItem(RETURN_KEY, safeReturn)
   } catch {
     return false
   }
