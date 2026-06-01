@@ -180,7 +180,15 @@ async function request<T>(
       const newToken = await useAuthStore.getState().getAccessToken()
       if (newToken && newToken !== authToken) {
         headers["Authorization"] = `Bearer ${newToken}`
-        response = await fetch(url, { ...options, headers, signal: controller.signal })
+        // 重试用全新的 controller/timeout：首个 controller 可能已接近或到达超时被 abort，
+        // 复用其信号会让重试立刻以 AbortError 失败。
+        const retryController = new AbortController()
+        const retryTimeoutId = setTimeout(() => retryController.abort(), REQUEST_TIMEOUT_MS)
+        try {
+          response = await fetch(url, { ...options, headers, signal: retryController.signal })
+        } finally {
+          clearTimeout(retryTimeoutId)
+        }
       }
     }
 
