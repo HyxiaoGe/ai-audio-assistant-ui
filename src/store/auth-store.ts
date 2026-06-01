@@ -18,6 +18,7 @@ import {
 } from "auth-client-web"
 
 import { configureAuth } from "@/lib/auth-sdk"
+import { clearSsoReturn, markSsoProbed, takeSsoReturnPath } from "@/lib/sso-probe"
 
 const ACCESS_TOKEN_KEY = "auth_access_token"
 const USER_INFO_KEY = "auth_user_info"
@@ -156,20 +157,23 @@ export const useAuthStore = create<AuthState>((set) => ({
   completeLogin: async () => {
     configureAuth()
     const result = await sdkHandleCallback()
+    // 若本次回调源自静默探测，取回探测前记下的原始路径（HIT/MISS 都回到此处）
+    const silentReturn = takeSsoReturnPath()
 
     if (result.status === "authenticated") {
       const user = normalizeUser(result.user as unknown as Record<string, unknown>)
       setStored(USER_INFO_KEY, JSON.stringify(user))
       set({ user, status: "authenticated" })
-      return { ok: true, redirectPath: result.redirectPath || "/tasks" }
+      return { ok: true, redirectPath: silentReturn || result.redirectPath || "/tasks" }
     }
 
     set({ user: null, status: "unauthenticated" })
-    return {
-      ok: false,
-      redirectPath: "/login",
-      error: result.status === "unauthenticated" ? result.error : "no_callback",
+    const error = result.status === "unauthenticated" ? result.error : "no_callback"
+    // 静默探测未命中（login_required）：软回到原页，不强制 /login（audio 是软门禁，未登录也可浏览）
+    if (error === "login_required" && silentReturn) {
+      return { ok: false, redirectPath: silentReturn, error }
     }
+    return { ok: false, redirectPath: "/login", error }
   },
 
   getAccessToken: async () => {
@@ -189,21 +193,32 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: async () => {
     configureAuth()
-    // 先让媒体短票失效，再翻转登录态：避免登出瞬间仍有组件用旧票拼出媒体 URL（同浏览器换号
+    // 先落探测守卫：即便随后撤销/清理抛错，也保证登出后本标签页不被静默重新登入
+    //（IdP 会话仍在，无守卫会被立刻 SSO 回去）。
+    markSsoProbed()
+    // 媒体短票先失效再翻转登录态：避免登出瞬间仍有组件用旧票拼出媒体 URL（同浏览器换号
     // 后旧票会被后端归属校验拒为 404）。动态 import 规避与 api-client 的静态循环依赖。
     await import("@/lib/media-ticket").then((m) => m.clearMediaTicket()).catch(() => {})
-    await sdkLogout()
+    // 撤销是 best-effort：失败不能阻断本地登出，否则用户卡在已登录态
+    try {
+      await sdkLogout()
+    } catch {
+      // ignore: 本地清理在下方无条件执行
+    }
     set({ user: null, status: "unauthenticated" })
   },
 }))
 
 // ── OAuth 登录入口（顶层跳转 /auth/authorize，带 PKCE + state）────────────────
+// 交互式登录前清掉残留的静默探测原始路径，避免被放弃的探测劫持本次登录的重定向目标。
 export function loginWithGoogle(redirectPath: string = "/tasks") {
   configureAuth()
+  clearSsoReturn()
   void sdkLogin("google", { redirectPath })
 }
 
 export function loginWithGitHub(redirectPath: string = "/tasks") {
   configureAuth()
+  clearSsoReturn()
   void sdkLogin("github", { redirectPath })
 }
