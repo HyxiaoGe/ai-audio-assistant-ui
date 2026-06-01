@@ -77,6 +77,47 @@ describe("api-client non-envelope / HTTP-error responses", () => {
   })
 })
 
+// 401 自动刷新重试：之前重试复用首个 AbortController，若首个已到超时点被 abort，
+// 重试会立刻 AbortError。这里锁定：重试必须用全新的 abort 信号。
+describe("api-client 401 retry uses a fresh AbortController", () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it("retries the 401 with a new abort signal, not the original one", async () => {
+    // 一个未过期的存储 token，让 store.getAccessToken 直接返回它（不触发网络刷新）。
+    localStorage.setItem("auth_access_token", "fresh-token")
+    localStorage.setItem("auth_refresh_token", "rt")
+    localStorage.setItem("auth_token_expiry", String(Date.now() + 600_000))
+
+    let call = 0
+    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async () => {
+      call += 1
+      if (call === 1) return new Response("unauth", { status: 401 })
+      return new Response(JSON.stringify({ code: 0, message: "ok", data: { ok: true }, traceId: "t" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    // 初始 Authorization 为 "test-token"，与刷新后的 "fresh-token" 不同 → 触发重试。
+    const client = createAPIClient("test-token")
+    await client.getTasks()
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const sig1 = (fetchMock.mock.calls[0][1] as RequestInit).signal
+    const sig2 = (fetchMock.mock.calls[1][1] as RequestInit).signal
+    expect(sig1).toBeTruthy()
+    expect(sig2).toBeTruthy()
+    expect(sig2).not.toBe(sig1)
+  })
+})
+
 // 媒体/SSE 短票签发：替代把长效 access JWT 拼进 ?token=。这里锁定端点路径、方法与
 // summary_type 的 URL 编码（resource 绑定靠 task_id + summary_type）。
 describe("api-client media/stream ticket minting", () => {

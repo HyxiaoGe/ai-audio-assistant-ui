@@ -1,24 +1,26 @@
 /**
- * Auth Store - 基于 auth-service 的认证状态管理
+ * Auth Store — 认证状态层。
  *
- * 替代 NextAuth，直接管理 auth-service 的 access_token / refresh_token
+ * P3.2：token 的获取/刷新/换码/登出「机制」全部委托给共享 SDK auth-client-web
+ * （登录走 /auth/authorize 带 PKCE + state；回调走 handleCallback 校验 state；刷新有
+ * 合流 + 轮转）。本 store 退化为「audio 形态的 {user,status} 真相源」+ SDK↔audio 用户
+ * 形态映射（SDK 的 avatarUrl → audio 的 avatar_url）。SDK 通过 configureAuth 绑定到本
+ * store 历史使用的 localStorage 键，故为零登出迁移。
  */
 
 import { create } from "zustand"
+import {
+  fetchUserInfo as sdkFetchUserInfo,
+  getAccessToken as sdkGetAccessToken,
+  handleCallback as sdkHandleCallback,
+  login as sdkLogin,
+  logout as sdkLogout,
+} from "auth-client-web"
 
-const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_URL || "http://localhost:8100"
-const AUTH_CLIENT_ID = process.env.NEXT_PUBLIC_AUTH_CLIENT_ID || ""
+import { configureAuth } from "@/lib/auth-sdk"
 
 const ACCESS_TOKEN_KEY = "auth_access_token"
-const REFRESH_TOKEN_KEY = "auth_refresh_token"
-const TOKEN_EXPIRY_KEY = "auth_token_expiry"
 const USER_INFO_KEY = "auth_user_info"
-const REFRESH_LOCK_NAME = "auth-token-refresh"
-
-let refreshInFlight: Promise<{ access_token: string; refresh_token: string; expires_in: number } | null> | null = null
-type BrowserLockManager = {
-  request: <T>(name: string, callback: () => Promise<T>) => Promise<T>
-}
 
 export interface AuthUserPreferences {
   locale: string
@@ -35,13 +37,19 @@ export interface AuthUser {
   preferences: AuthUserPreferences
 }
 
+const DEFAULT_PREFERENCES: AuthUserPreferences = {
+  locale: "zh",
+  timezone: "Asia/Shanghai",
+  theme: "system",
+}
+
 interface AuthState {
   user: AuthUser | null
   status: "loading" | "authenticated" | "unauthenticated"
 
   // Actions
   initialize: () => Promise<void>
-  exchangeCode: (code: string) => Promise<void>
+  completeLogin: () => Promise<{ ok: boolean; redirectPath: string; error?: string }>
   getAccessToken: () => Promise<string | null>
   logout: () => Promise<void>
 }
@@ -56,117 +64,37 @@ function setStored(key: string, value: string): void {
   localStorage.setItem(key, value)
 }
 
-function removeStored(key: string): void {
-  if (typeof window === "undefined") return
-  localStorage.removeItem(key)
-}
-
-function clearTokens(): void {
-  removeStored(ACCESS_TOKEN_KEY)
-  removeStored(REFRESH_TOKEN_KEY)
-  removeStored(TOKEN_EXPIRY_KEY)
-  removeStored(USER_INFO_KEY)
-}
-
-function isTokenExpired(): boolean {
-  const expiry = getStored(TOKEN_EXPIRY_KEY)
-  if (!expiry) return true
-  // Add 30 second buffer
-  return Date.now() >= parseInt(expiry, 10) - 30_000
-}
-
-function getFreshStoredTokenResult(): { access_token: string; refresh_token: string; expires_in: number } | null {
-  if (isTokenExpired()) return null
-
-  const accessToken = getStored(ACCESS_TOKEN_KEY)
-  const refreshToken = getStored(REFRESH_TOKEN_KEY)
-  const expiry = getStored(TOKEN_EXPIRY_KEY)
-  if (!accessToken || !refreshToken || !expiry) return null
-
+/**
+ * 偏好按字段归一：present 且为 string 的字段保留，缺失/类型不符的字段单独填默认。
+ * 不能「缺一个字段就把整组偏好替换成默认」——那会丢掉用户真实的 locale/timezone。
+ */
+function normalizePreferences(raw: unknown): AuthUserPreferences {
+  const v = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {}
   return {
-    access_token: accessToken,
-    refresh_token: refreshToken,
-    expires_in: Math.max(0, Math.floor((parseInt(expiry, 10) - Date.now()) / 1000)),
+    locale: typeof v.locale === "string" ? v.locale : DEFAULT_PREFERENCES.locale,
+    timezone: typeof v.timezone === "string" ? v.timezone : DEFAULT_PREFERENCES.timezone,
+    theme: typeof v.theme === "string" ? v.theme : DEFAULT_PREFERENCES.theme,
   }
 }
 
-async function performTokenRefresh(): Promise<{ access_token: string; refresh_token: string; expires_in: number } | null> {
-  const refreshToken = getStored(REFRESH_TOKEN_KEY)
-  if (!refreshToken) return null
-
-  try {
-    const res = await fetch(`${AUTH_URL}/auth/token/refresh`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    })
-
-    if (!res.ok) {
-      clearTokens()
-      return null
-    }
-
-    const data = await res.json()
-    setStored(ACCESS_TOKEN_KEY, data.access_token)
-    setStored(REFRESH_TOKEN_KEY, data.refresh_token)
-    setStored(TOKEN_EXPIRY_KEY, (Date.now() + data.expires_in * 1000).toString())
-    return data
-  } catch {
-    clearTokens()
-    return null
-  }
-}
-
-async function refreshTokens(): Promise<{ access_token: string; refresh_token: string; expires_in: number } | null> {
-  const lockManager =
-    typeof navigator !== "undefined"
-      ? (navigator as Navigator & { locks?: BrowserLockManager }).locks
-      : undefined
-
-  if (lockManager) {
-    return lockManager.request(REFRESH_LOCK_NAME, async () => {
-      const freshToken = getFreshStoredTokenResult()
-      if (freshToken) return freshToken
-      return refreshTokensInCurrentContext()
-    })
-  }
-
-  return refreshTokensInCurrentContext()
-}
-
-async function refreshTokensInCurrentContext(): Promise<{
-  access_token: string
-  refresh_token: string
-  expires_in: number
-} | null> {
-  if (refreshInFlight) {
-    return refreshInFlight
-  }
-
-  refreshInFlight = performTokenRefresh().finally(() => {
-    refreshInFlight = null
-  })
-
-  return refreshInFlight
-}
-
-async function fetchUserInfo(accessToken: string): Promise<AuthUser | null> {
-  try {
-    const res = await fetch(`${AUTH_URL}/auth/userinfo`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
-    if (!res.ok) return null
-    const data = await res.json()
-    return {
-      id: data.id,
-      email: data.email,
-      name: data.name || "",
-      avatar_url: data.avatar_url,
-      is_superuser: data.is_superuser ?? false,
-      preferences: data.preferences ?? { locale: "zh", timezone: "Asia/Shanghai", theme: "system" },
-    }
-  } catch {
-    return null
+/**
+ * 把任意来源的用户对象归一化为 audio 的 AuthUser：SDK 形态用 avatarUrl、audio 历史缓存
+ * 形态用 avatar_url，两者都容忍；缺失字段给安全默认；id 一律强制为字符串。
+ */
+export function normalizeUser(raw: Record<string, unknown>): AuthUser {
+  const avatar =
+    typeof raw.avatar_url === "string"
+      ? raw.avatar_url
+      : typeof raw.avatarUrl === "string"
+        ? raw.avatarUrl
+        : undefined
+  return {
+    id: String(raw.id ?? ""),
+    email: typeof raw.email === "string" ? raw.email : "",
+    name: typeof raw.name === "string" ? raw.name : "",
+    avatar_url: avatar,
+    is_superuser: raw.is_superuser === true,
+    preferences: normalizePreferences(raw.preferences),
   }
 }
 
@@ -175,129 +103,107 @@ export const useAuthStore = create<AuthState>((set) => ({
   status: "loading",
 
   initialize: async () => {
-    const accessToken = getStored(ACCESS_TOKEN_KEY)
-    if (!accessToken) {
+    configureAuth()
+
+    if (!getStored(ACCESS_TOKEN_KEY)) {
       set({ user: null, status: "unauthenticated" })
       return
     }
 
-    // Try to restore user from cache
-    const cachedUser = getStored(USER_INFO_KEY)
-    if (cachedUser) {
+    // 先用缓存即时上屏；记下缓存用户，后续遇到瞬时网络故障时据此保持已登录
+    let cachedUser: AuthUser | null = null
+    const cached = getStored(USER_INFO_KEY)
+    if (cached) {
       try {
-        set({ user: JSON.parse(cachedUser), status: "authenticated" })
+        cachedUser = normalizeUser(JSON.parse(cached))
+        set({ user: cachedUser, status: "authenticated" })
       } catch {
         // ignore parse errors
       }
     }
 
-    // Refresh token if expired
-    if (isTokenExpired()) {
-      const result = await refreshTokens()
-      if (!result) {
-        set({ user: null, status: "unauthenticated" })
-        return
-      }
+    // 校验/刷新 token。SDK 语义：定论失败（无 refresh token / 轮转被拒）返回 null 且已清空其
+    // 自身会话；瞬时网络故障则 throw。两者必须区别对待——瞬时故障不能把用户登出。
+    let token: string | null
+    try {
+      token = await sdkGetAccessToken()
+    } catch {
+      // 瞬时故障此刻无法校验：有缓存用户就维持已登录（真过期时下次 API 调用会触发 401 重认证）；
+      // 无可展示用户则落到未登录。
+      if (!cachedUser) set({ user: null, status: "unauthenticated" })
+      return
+    }
+    if (token === null) {
+      set({ user: null, status: "unauthenticated" })
+      return
     }
 
-    // Fetch fresh user info
-    const token = getStored(ACCESS_TOKEN_KEY)
-    if (token) {
-      const user = await fetchUserInfo(token)
-      if (user) {
-        setStored(USER_INFO_KEY, JSON.stringify(user))
-        set({ user, status: "authenticated" })
-      } else {
-        // Token might be invalid, try refresh
-        const result = await refreshTokens()
-        if (result) {
-          const retryUser = await fetchUserInfo(result.access_token)
-          if (retryUser) {
-            setStored(USER_INFO_KEY, JSON.stringify(retryUser))
-            set({ user: retryUser, status: "authenticated" })
-            return
-          }
-        }
-        clearTokens()
-        set({ user: null, status: "unauthenticated" })
-      }
+    // token 有效 → 拉最新 userinfo 富化；userinfo 仅瞬时失败时不应把有效会话登出
+    const sdkUser = await sdkFetchUserInfo(token).catch(() => null)
+    if (sdkUser) {
+      const user = normalizeUser(sdkUser as unknown as Record<string, unknown>)
+      setStored(USER_INFO_KEY, JSON.stringify(user))
+      set({ user, status: "authenticated" })
+    } else if (cachedUser) {
+      // token 有效但 userinfo 瞬时失败 → 保持缓存用户的已登录态
+      set({ user: cachedUser, status: "authenticated" })
+    } else {
+      // token 有效但既无最新 userinfo 也无缓存可展示 → 无法呈现用户
+      set({ user: null, status: "unauthenticated" })
     }
   },
 
-  exchangeCode: async (code: string) => {
-    const res = await fetch(`${AUTH_URL}/auth/oauth/token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, client_id: AUTH_CLIENT_ID }),
-    })
+  completeLogin: async () => {
+    configureAuth()
+    const result = await sdkHandleCallback()
 
-    if (!res.ok) {
-      throw new Error("Token exchange failed")
-    }
-
-    const data = await res.json()
-    setStored(ACCESS_TOKEN_KEY, data.access_token)
-    setStored(REFRESH_TOKEN_KEY, data.refresh_token)
-    setStored(TOKEN_EXPIRY_KEY, (Date.now() + data.expires_in * 1000).toString())
-
-    // Fetch user info
-    const user = await fetchUserInfo(data.access_token)
-    if (user) {
+    if (result.status === "authenticated") {
+      const user = normalizeUser(result.user as unknown as Record<string, unknown>)
       setStored(USER_INFO_KEY, JSON.stringify(user))
       set({ user, status: "authenticated" })
+      return { ok: true, redirectPath: result.redirectPath || "/tasks" }
+    }
+
+    set({ user: null, status: "unauthenticated" })
+    return {
+      ok: false,
+      redirectPath: "/login",
+      error: result.status === "unauthenticated" ? result.error : "no_callback",
     }
   },
 
   getAccessToken: async () => {
-    const token = getStored(ACCESS_TOKEN_KEY)
-    if (!token) return null
-
-    if (isTokenExpired()) {
-      const result = await refreshTokens()
-      if (!result) {
+    configureAuth()
+    try {
+      const token = await sdkGetAccessToken()
+      if (token === null) {
+        // 定论失败：SDK 已清空自身会话 → 同步反映到 audio 自己的 store（两者非同一 store）
         set({ user: null, status: "unauthenticated" })
-        return null
       }
-      return result.access_token
+      return token
+    } catch {
+      // 瞬时网络故障：不要登出，只让这次取 token 失败（调用方据 null 跳过重试）
+      return null
     }
-
-    return token
   },
 
   logout: async () => {
-    const refreshToken = getStored(REFRESH_TOKEN_KEY)
-    if (refreshToken) {
-      fetch(`${AUTH_URL}/auth/token/revoke`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refresh_token: refreshToken }),
-      }).catch(() => {})
-    }
-    clearTokens()
-    // 媒体短票随登出失效：避免同浏览器换号后把上一用户的票用于下一用户（其媒体会被
-    // 后端归属校验拒为 404）。动态 import 规避与 api-client 的静态循环依赖。
-    import("@/lib/media-ticket").then((m) => m.clearMediaTicket()).catch(() => {})
+    configureAuth()
+    // 先让媒体短票失效，再翻转登录态：避免登出瞬间仍有组件用旧票拼出媒体 URL（同浏览器换号
+    // 后旧票会被后端归属校验拒为 404）。动态 import 规避与 api-client 的静态循环依赖。
+    await import("@/lib/media-ticket").then((m) => m.clearMediaTicket()).catch(() => {})
+    await sdkLogout()
     set({ user: null, status: "unauthenticated" })
   },
 }))
 
-// Helper functions for OAuth redirects
-const AUTH_REDIRECT_KEY = "auth_redirect_path"
-
+// ── OAuth 登录入口（顶层跳转 /auth/authorize，带 PKCE + state）────────────────
 export function loginWithGoogle(redirectPath: string = "/tasks") {
-  setStored(AUTH_REDIRECT_KEY, redirectPath)
-  const callbackUrl = `${window.location.origin}/auth/callback`
-  window.location.href = `${AUTH_URL}/auth/oauth/google?client_id=${AUTH_CLIENT_ID}&redirect_uri=${encodeURIComponent(callbackUrl)}`
+  configureAuth()
+  void sdkLogin("google", { redirectPath })
 }
 
 export function loginWithGitHub(redirectPath: string = "/tasks") {
-  setStored(AUTH_REDIRECT_KEY, redirectPath)
-  const callbackUrl = `${window.location.origin}/auth/callback`
-  window.location.href = `${AUTH_URL}/auth/oauth/github?client_id=${AUTH_CLIENT_ID}&redirect_uri=${encodeURIComponent(callbackUrl)}`
-}
-
-export function getAndClearRedirectPath(): string {
-  const path = getStored(AUTH_REDIRECT_KEY) || "/tasks"
-  removeStored(AUTH_REDIRECT_KEY)
-  return path
+  configureAuth()
+  void sdkLogin("github", { redirectPath })
 }

@@ -1,14 +1,13 @@
 "use client"
 
 import { Suspense, useEffect, useRef, useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
-import { useAuthStore, getAndClearRedirectPath } from "@/store/auth-store"
+import { useRouter } from "next/navigation"
+import { useAuthStore } from "@/store/auth-store"
 import { Loader2 } from "lucide-react"
 
 function AuthCallbackContent() {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const exchangeCode = useAuthStore((s) => s.exchangeCode)
+  const completeLogin = useAuthStore((s) => s.completeLogin)
   const [error, setError] = useState<string | null>(null)
   const processed = useRef(false)
 
@@ -16,23 +15,22 @@ function AuthCallbackContent() {
     if (processed.current) return
     processed.current = true
 
-    const code = searchParams.get("code")
-    const redirect = getAndClearRedirectPath()
-
-    if (!code) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setError("No authorization code received")
-      return
-    }
-
-    exchangeCode(code)
-      .then(() => {
-        router.replace(redirect)
+    // SDK 的 handleCallback 自己从 window.location 读 code/state 并校验 state、换 token。
+    completeLogin()
+      .then((result) => {
+        if (result.ok) {
+          router.replace(result.redirectPath)
+        } else if (result.error === "login_required") {
+          // 静默探测未命中 IdP 会话（P3.2b）：无声落到登录页，不报错。
+          router.replace("/login")
+        } else {
+          setError("Login failed. Please try again.")
+        }
       })
       .catch(() => {
         setError("Login failed. Please try again.")
       })
-  }, [searchParams, exchangeCode, router])
+  }, [completeLogin, router])
 
   if (error) {
     return (
