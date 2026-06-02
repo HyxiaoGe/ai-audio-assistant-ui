@@ -15,6 +15,7 @@ import {
   handleCallback as sdkHandleCallback,
   login as sdkLogin,
   logout as sdkLogout,
+  refresh as sdkRefresh,
 } from "auth-client-web"
 
 import { configureAuth } from "@/lib/auth-sdk"
@@ -52,6 +53,7 @@ interface AuthState {
   initialize: () => Promise<void>
   completeLogin: () => Promise<{ ok: boolean; redirectPath: string; error?: string }>
   getAccessToken: () => Promise<string | null>
+  revalidateToken: () => Promise<string | null>
   logout: () => Promise<void>
 }
 
@@ -190,6 +192,24 @@ export const useAuthStore = create<AuthState>((set) => ({
       return token
     } catch {
       // 瞬时网络故障：不要登出，只让这次取 token 失败（调用方据 null 跳过重试）
+      return null
+    }
+  },
+
+  revalidateToken: async () => {
+    configureAuth()
+    // 跨应用单点登出探测：getAccessToken 在 token 未过期时直接返回本地缓存，察觉不到「别处已登出」
+    // ——别处登出后这张 access token 签名仍有效、只是被服务端吊销标记拦截。这里强制走一次 SDK
+    // refresh()（必然访问服务端）：别处登出已吊销 refresh token → refresh 定论失败返回 null（SDK
+    // 已清空自身会话）→ 同步把 audio 翻转为未登录；会话仍在则只是轮转 token，瞬时网络故障则 throw
+    // ——后者绝不能登出（与 getAccessToken 同一套语义）。
+    try {
+      const token = await sdkRefresh()
+      if (token === null) {
+        set({ user: null, status: "unauthenticated" })
+      }
+      return token
+    } catch {
       return null
     }
   },

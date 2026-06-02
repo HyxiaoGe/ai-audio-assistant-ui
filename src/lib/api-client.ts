@@ -174,10 +174,13 @@ async function request<T>(
       signal: controller.signal,
     })
 
-    // 401 时自动刷新 token 并重试
+    // 401 时强制服务端校验后重试。用 revalidateToken（走 SDK refresh 真往返）而非
+    // getAccessToken（未过期时直接返回本地缓存）：401 已表明服务端不接受这张令牌，可能是
+    // 真过期、也可能是跨应用单点登出后被吊销标记拦截（签名仍有效、本地无从察觉）。会话仍在
+    // 则拿到轮转后的新令牌重试；别处已登出则返回 null（store 内部已翻转为未登录）→ 不重试。
     if (response.status === 401 && typeof window !== "undefined") {
       const { useAuthStore } = await import("@/store/auth-store")
-      const newToken = await useAuthStore.getState().getAccessToken()
+      const newToken = await useAuthStore.getState().revalidateToken()
       if (newToken && newToken !== authToken) {
         headers["Authorization"] = `Bearer ${newToken}`
         // 重试用全新的 controller/timeout：首个 controller 可能已接近或到达超时被 abort，

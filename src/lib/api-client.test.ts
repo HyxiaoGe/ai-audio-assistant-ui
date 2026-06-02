@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { ApiError } from "@/types/api"
+import { useAuthStore } from "@/store/auth-store"
 import { createAPIClient } from "./api-client"
 
 // 后端/nginx 接受了连接却永不响应（过载、worker 卡死、上游断开）时，request() 之前没有超时，
@@ -80,19 +81,21 @@ describe("api-client non-envelope / HTTP-error responses", () => {
 // 401 自动刷新重试：之前重试复用首个 AbortController，若首个已到超时点被 abort，
 // 重试会立刻 AbortError。这里锁定：重试必须用全新的 abort 信号。
 describe("api-client 401 retry uses a fresh AbortController", () => {
+  let origRevalidate: () => Promise<string | null>
+
   beforeEach(() => {
     localStorage.clear()
+    origRevalidate = useAuthStore.getState().revalidateToken
   })
   afterEach(() => {
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
+    useAuthStore.setState({ revalidateToken: origRevalidate })
   })
 
   it("retries the 401 with a new abort signal, not the original one", async () => {
-    // 一个未过期的存储 token，让 store.getAccessToken 直接返回它（不触发网络刷新）。
-    localStorage.setItem("auth_access_token", "fresh-token")
-    localStorage.setItem("auth_refresh_token", "rt")
-    localStorage.setItem("auth_token_expiry", String(Date.now() + 600_000))
+    // 让 401 处理器拿到一个与初始令牌不同的新令牌以触发重试（不打真实网络）。
+    useAuthStore.setState({ revalidateToken: vi.fn().mockResolvedValue("fresh-token") })
 
     let call = 0
     const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async () => {
@@ -115,6 +118,72 @@ describe("api-client 401 retry uses a fresh AbortController", () => {
     expect(sig1).toBeTruthy()
     expect(sig2).toBeTruthy()
     expect(sig2).not.toBe(sig1)
+  })
+})
+
+// 跨应用单点登出（SLO）：401 意味着服务端已不接受这张令牌——可能是真过期，也可能是别处
+// 登出后被吊销标记拦截（令牌签名仍有效、本地缓存察觉不到）。因此 401 重试**必须**强制一次
+// 服务端往返（store.revalidateToken → SDK refresh），不能信任 getAccessToken 的本地缓存：
+//   - 会话仍在 → 拿到轮转后的新令牌 → 带新令牌重试；
+//   - 别处已登出 → refresh 定论失败 → revalidateToken 返回 null → 不重试，401 上抛，
+//     同时（由 store 内部）把会话翻转为未登录。
+describe("api-client 401 forces a server-side revalidation (SLO)", () => {
+  let origRevalidate: () => Promise<string | null>
+  let origGetAccess: () => Promise<string | null>
+
+  beforeEach(() => {
+    localStorage.clear()
+    origRevalidate = useAuthStore.getState().revalidateToken
+    origGetAccess = useAuthStore.getState().getAccessToken
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+    useAuthStore.setState({ revalidateToken: origRevalidate, getAccessToken: origGetAccess })
+  })
+
+  it("on 401 calls revalidateToken (server round-trip), not the cached getAccessToken, then retries", async () => {
+    const revalidateToken = vi.fn().mockResolvedValue("rotated-token")
+    // getAccessToken 会返回与初始令牌相同的缓存值——若 401 处理器错误地用了它，则不会触发重试。
+    const getAccessToken = vi.fn().mockResolvedValue("test-token")
+    useAuthStore.setState({ revalidateToken, getAccessToken })
+
+    let call = 0
+    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async () => {
+      call += 1
+      if (call === 1) return new Response("unauth", { status: 401 })
+      return new Response(JSON.stringify({ code: 0, message: "ok", data: { ok: true }, traceId: "t" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    const client = createAPIClient("test-token")
+    await client.getTasks()
+
+    expect(revalidateToken).toHaveBeenCalledTimes(1)
+    expect(getAccessToken).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    // 重试带上轮转后的新令牌
+    const retryHeaders = (fetchMock.mock.calls[1][1] as RequestInit).headers as Record<string, string>
+    expect(retryHeaders["Authorization"]).toBe("Bearer rotated-token")
+  })
+
+  it("when revalidation returns null (logged out elsewhere) it does NOT retry and surfaces the 401", async () => {
+    const revalidateToken = vi.fn().mockResolvedValue(null)
+    useAuthStore.setState({ revalidateToken })
+
+    const fetchMock = vi.fn(async () => new Response("unauth", { status: 401 }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const client = createAPIClient("test-token")
+    const err = await client.getTasks().catch((e: unknown) => e)
+
+    expect(revalidateToken).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(1) // 无新令牌 → 不重试
+    expect(err).toBeInstanceOf(ApiError)
   })
 })
 
