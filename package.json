@@ -14,7 +14,6 @@
     "src/**/*.{ts,tsx,js,jsx}": "eslint src"
   },
   "dependencies": {
-    "auth-client-web": "git+https://github.com/HyxiaoGe/auth-client-web.git#v0.1.0",
     "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
@@ -27,6 +26,7 @@
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-tooltip": "^1.2.8",
+    "auth-client-web": "github:HyxiaoGe/auth-client-web#v0.1.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
