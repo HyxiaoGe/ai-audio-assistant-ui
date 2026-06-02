@@ -19,7 +19,7 @@ import {
 } from "auth-client-web"
 
 import { configureAuth } from "@/lib/auth-sdk"
-import { clearSsoReturn, isSafeReturnPath, markSsoProbed, takeSsoReturnPath } from "@/lib/sso-probe"
+import { clearSsoReturn, isSafeReturnPath, markLoggedOut, takeSsoReturnPath } from "@/lib/sso-probe"
 
 const ACCESS_TOKEN_KEY = "auth_access_token"
 const USER_INFO_KEY = "auth_user_info"
@@ -216,9 +216,9 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: async () => {
     configureAuth()
-    // 先落探测守卫：即便随后撤销/清理抛错，也保证登出后本标签页不被静默重新登入
-    //（IdP 会话仍在，无守卫会被立刻 SSO 回去）。
-    markSsoProbed()
+    // 先落登出守卫：即便随后撤销/清理抛错，也保证登出后本标签页不被静默重新登入
+    //（IdP 会话仍在，无守卫会被立刻 SSO 回去；这道守卫连「手动刷新放行重探」也一并拦死）。
+    markLoggedOut()
     // 媒体短票先失效再翻转登录态：避免登出瞬间仍有组件用旧票拼出媒体 URL（同浏览器换号
     // 后旧票会被后端归属校验拒为 404）。动态 import 规避与 api-client 的静态循环依赖。
     await import("@/lib/media-ticket").then((m) => m.clearMediaTicket()).catch(() => {})

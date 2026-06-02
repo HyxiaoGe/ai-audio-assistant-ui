@@ -1,22 +1,28 @@
 /**
- * 应用加载时的一次性静默 SSO 探测（P3.2b）。
+ * 应用加载时的静默 SSO 探测（P3.2b）。
  *
  * 若本地无 token，顶层跳转到 auth-service 的 /auth/authorize?prompt=none：存在 IdP 会话则
  * 静默签发授权码（无 UI，跨应用免登）；无会话则原样带回 login_required（由回调页软回到原页）。
  *
- * 关键不变量：
- *  - 每个标签页至多探测一次（PROBED 守卫在跳转前同步落库，回来后阻止再探，杜绝重定向死循环）。
+ * 关键不变量（两道守卫各管一摊，刻意拆成两个键，不再共用一个）：
+ *  - 每标签页默认只探一次（PROBED 去重守卫在跳转前同步落库，回来后阻止再探，杜绝重定向死循环）。
+ *    例外：用户「真·手动刷新」（performance navigation type === "reload"，见 isReload）放行再探一次——
+ *    这样在别处（如 fusion）登录后切回本页刷新即可补登；而自动跳转返回那一圈是 "navigate"、永远进
+ *    不来，死循环重新引入不了。sessionStorage 跨刷新存活，故纯布尔守卫本会把刷新也一并拦死——这正是
+ *    之前「登了 fusion、刷新 audio 也不自动登」的根因，reload 放行即为修复。
+ *  - 显式登出另有一道 LOGGED_OUT 守卫（markLoggedOut，登出时落）：它连「reload 再探」也一并拦死，
+ *    保证「一处登出后即便 IdP 会话仍在、刷新本页也绝不被静默登回去」。登出守卫与去重守卫互不影响。
  *  - 探测前记下原始路径（RETURN），HIT/MISS 都据此回到用户本来要去的页面。
  *  - 回调换码期间（/auth/callback）绝不探测，避免冲掉正在进行的换码。
  *  - sessionStorage 不可用时直接放弃探测（失败保守，绝不冒死循环风险）。
- *  - 登出调用 markSsoProbed() 落守卫，防止登出后被静默重新登入。
  */
 
 import { silentLogin as sdkSilentLogin } from "auth-client-web"
 
 import { configureAuth } from "@/lib/auth-sdk"
 
-const PROBED_KEY = "audio_sso_probed"
+const PROBED_KEY = "audio_sso_probed" // 探测去重：每标签一次；但真·手动刷新（reload）放行再探
+const LOGGED_OUT_KEY = "audio_sso_logged_out" // 显式登出守卫：reload 也不绕过，绝不自动重登
 const RETURN_KEY = "audio_sso_return"
 const ACCESS_TOKEN_KEY = "auth_access_token"
 const CALLBACK_PATH = "/auth/callback"
@@ -26,6 +32,23 @@ function session(): Storage | null {
     return typeof window !== "undefined" ? window.sessionStorage : null
   } catch {
     return null
+  }
+}
+
+/**
+ * 本次页面加载是不是用户「真·手动刷新」(F5/Cmd-R)。
+ *
+ * 静默探测的整个往返——顶层跳到 /authorize、auth-service 302 跳回、回调页 router.replace 回原页
+ * ——在浏览器里都算 "navigate"；只有显式刷新才是 "reload"。据此让「刷新补探」放行，而自动跳转那一圈
+ * 永远进不来，不会把重定向死循环放回来。拿不到导航类型的环境（老浏览器/SSR）保守按「非 reload」，
+ * 退回原本的「每标签一次」行为。
+ */
+function isReload(): boolean {
+  try {
+    const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined
+    return nav?.type === "reload"
+  } catch {
+    return false
   }
 }
 
@@ -41,10 +64,15 @@ export function isSafeReturnPath(path: string): boolean {
   return /^\/(?!\/)/.test(path.replace(/\\/g, "/"))
 }
 
-/** 落「已探测/勿探测」守卫——登出时调用以阻止登出后被静默重新登入。 */
-export function markSsoProbed(): void {
+/**
+ * 落「已登出 / 勿自动重登」守卫——登出时调用。
+ *
+ * 即便 IdP 会话仍在、用户随后刷新本页，也绝不被静默登回去：这道守卫连 maybeSilentLogin 里
+ * 「reload 放行重探」都一并拦死，与每标签去重的 PROBED 守卫分属两个键、互不影响。
+ */
+export function markLoggedOut(): void {
   try {
-    session()?.setItem(PROBED_KEY, "1")
+    session()?.setItem(LOGGED_OUT_KEY, "1")
   } catch {
     // ignore
   }
@@ -85,16 +113,19 @@ export function maybeSilentLogin(currentPath: string): boolean {
   if (!s) return false // 无 sessionStorage → 保守放弃，绝不死循环
   if (currentPath.startsWith(CALLBACK_PATH)) return false // 换码进行中，勿探测
 
+  let loggedOut: string | null
   let probed: string | null
   let token: string | null
   try {
+    loggedOut = s.getItem(LOGGED_OUT_KEY)
     probed = s.getItem(PROBED_KEY)
     token = window.localStorage.getItem(ACCESS_TOKEN_KEY)
   } catch {
     return false
   }
-  if (probed) return false // 本标签页已探测过
   if (token) return false // 已有本地会话
+  if (loggedOut) return false // 显式登出过：绝不自动重登（刷新也不绕过）
+  if (probed && !isReload()) return false // 本标签已探过；仅「真·手动刷新」放行再探一次
 
   // 跳转前同步落守卫 + 原始路径（sessionStorage 同步写入，跨这次顶层跳转存活）。
   // 落库端先把站外/协议相对路径挡回 "/"——与回调消费端的校验形成纵深防御（防开放重定向）。
