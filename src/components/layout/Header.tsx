@@ -13,6 +13,7 @@ import NotificationBell from '@/components/notifications/NotificationBell';
 import { useAudioStore } from '@/store/audio-store';
 import { useUserStore } from '@/store/user-store';
 import { seekKeyToTime } from '@/lib/seek-keyboard';
+import { proxiedAvatar } from '@/lib/avatar-url';
 
 interface HeaderProps {
   isAuthenticated: boolean;
@@ -360,7 +361,7 @@ export default function Header({
               <div className={`relative ${isAdmin ? "admin-gradient-ring" : ""}`}>
                 <Avatar size="sm">
                   <AvatarImage
-                    src={resolvedAvatarSrc || undefined}
+                    src={proxiedAvatar(resolvedAvatarSrc) || undefined}
                     referrerPolicy="no-referrer"
                     onError={() => setAvatarSrc("")}
                   />
