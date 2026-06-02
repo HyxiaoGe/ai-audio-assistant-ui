@@ -22,7 +22,7 @@ const mockedSdkLogout = vi.mocked(sdkLogout)
 const mockedSdkLogin = vi.mocked(sdkLogin)
 
 const RETURN_KEY = "audio_sso_return"
-const PROBED_KEY = "audio_sso_probed"
+const LOGGED_OUT_KEY = "audio_sso_logged_out"
 
 const USER = { id: "u1", email: "a@b.c", name: "Ada", avatarUrl: "http://i/a.png" }
 
@@ -93,13 +93,13 @@ describe("auth-store completeLogin: silent SSO probe outcomes", () => {
     expect(result).toEqual({ ok: true, redirectPath: "/tasks" })
   })
 
-  it("logout sets the probe-suppress guard so we don't silently re-login right after logout", async () => {
+  it("logout sets the logged-out guard so we don't silently re-login right after logout", async () => {
     mockedSdkLogout.mockResolvedValue(undefined)
     useAuthStore.setState({ user: { ...USER, is_superuser: false, preferences: { locale: "zh", timezone: "Asia/Shanghai", theme: "system" } } as never, status: "authenticated" })
 
     await useAuthStore.getState().logout()
 
-    expect(sessionStorage.getItem(PROBED_KEY)).toBe("1")
+    expect(sessionStorage.getItem(LOGGED_OUT_KEY)).toBe("1")
   })
 
   it("logout still sets the guard and unauthenticates even if the SDK revoke rejects", async () => {
@@ -109,7 +109,7 @@ describe("auth-store completeLogin: silent SSO probe outcomes", () => {
 
     await expect(useAuthStore.getState().logout()).resolves.toBeUndefined() // 本地登出绝不因撤销失败而抛
 
-    expect(sessionStorage.getItem(PROBED_KEY)).toBe("1")
+    expect(sessionStorage.getItem(LOGGED_OUT_KEY)).toBe("1")
     expect(useAuthStore.getState().status).toBe("unauthenticated")
   })
 
