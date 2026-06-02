@@ -78,6 +78,21 @@ export function markLoggedOut(): void {
   }
 }
 
+/**
+ * 探测前记下的原始路径是否还在（peek，不消费）。
+ *
+ * 回调页据此区分两种落到 /auth/callback 的来源：本次有 RETURN ⇒ 是「静默探测中转」
+ *（用户只是刷新了已登录页，并未主动发起登录）⇒ 渲染中性加载态，绝不显示「登录中」误导文案；
+ * 无 RETURN ⇒ 是用户主动发起的交互式登录 ⇒ 正常显示「登录中」。消费仍由 takeSsoReturnPath 负责。
+ */
+export function hasPendingSsoReturn(): boolean {
+  try {
+    return session()?.getItem(RETURN_KEY) != null
+  } catch {
+    return false
+  }
+}
+
 /** 读取并清除探测前记下的原始路径（HIT/MISS 均据此回到原页）。 */
 export function takeSsoReturnPath(): string | null {
   const s = session()
