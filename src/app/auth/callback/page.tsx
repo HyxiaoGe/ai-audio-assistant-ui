@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuthStore } from "@/store/auth-store"
+import { hasPendingSsoReturn } from "@/lib/sso-probe"
 import { Loader2 } from "lucide-react"
 
 function AuthCallbackContent() {
@@ -10,6 +11,9 @@ function AuthCallbackContent() {
   const completeLogin = useAuthStore((s) => s.completeLogin)
   const [error, setError] = useState<string | null>(null)
   const processed = useRef(false)
+  // 是否为静默探测中转：在 completeLogin 消费 RETURN 之前（首帧）一次性判定。
+  // 中转 ⇒ 渲染中性加载态（用户没主动登录，不该看到「登录中」）；交互式登录 ⇒ 显示「登录中」。
+  const [isSilent] = useState(hasPendingSsoReturn)
 
   useEffect(() => {
     if (processed.current) return
@@ -49,6 +53,16 @@ function AuthCallbackContent() {
     )
   }
 
+  // 静默探测中转：中性加载态，不显示「登录中」误导文案（用户只是刷新了已登录页）。
+  if (isSilent) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="w-5 h-5 animate-spin" style={{ color: "var(--app-text-muted)" }} />
+      </div>
+    )
+  }
+
+  // 用户主动发起的交互式登录：正常显示「登录中」。
   return (
     <div className="flex min-h-screen items-center justify-center">
       <div className="flex items-center gap-3" style={{ color: "var(--app-text-muted)" }}>

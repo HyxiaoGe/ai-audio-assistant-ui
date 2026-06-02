@@ -50,4 +50,23 @@ describe("AuthCallbackPage", () => {
     await screen.findByText("Login failed. Please try again.")
     expect(replaceMock).not.toHaveBeenCalled()
   })
+
+  // #1 root fix: the callback page is the shared landing for an interactive login AND for a
+  // silent SSO probe transit. It must only claim "Logging in..." for a user-initiated login;
+  // a silent probe (the user merely reloaded an already-logged-in page) must render a NEUTRAL
+  // loader so it never surprises the user with a login-in-progress screen they never asked for.
+  it("interactive login (no pending silent return): shows the 'Logging in...' copy", () => {
+    sessionStorage.clear()
+    completeLoginMock.mockReturnValue(new Promise(() => {})) // pending: stay on the loading screen
+    render(<AuthCallbackPage />)
+    expect(screen.getByText("Logging in...")).toBeInTheDocument()
+  })
+
+  it("silent probe transit (pending return): renders a neutral loader, NOT 'Logging in...'", () => {
+    sessionStorage.setItem("audio_sso_return", "/tasks") // a probe captured the origin before redirecting
+    completeLoginMock.mockReturnValue(new Promise(() => {})) // pending: stay on the transit screen
+    render(<AuthCallbackPage />)
+    expect(screen.queryByText("Logging in...")).not.toBeInTheDocument()
+    sessionStorage.clear()
+  })
 })

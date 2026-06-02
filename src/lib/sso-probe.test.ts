@@ -11,7 +11,14 @@ vi.mock("@/lib/auth-sdk", () => ({
 
 import { silentLogin } from "auth-client-web"
 
-import { clearSsoReturn, isSafeReturnPath, markLoggedOut, maybeSilentLogin, takeSsoReturnPath } from "./sso-probe"
+import {
+  clearSsoReturn,
+  hasPendingSsoReturn,
+  isSafeReturnPath,
+  markLoggedOut,
+  maybeSilentLogin,
+  takeSsoReturnPath,
+} from "./sso-probe"
 
 const mockedSilentLogin = vi.mocked(silentLogin)
 
@@ -141,5 +148,21 @@ describe("sso-probe: silent SSO on app load", () => {
     sessionStorage.setItem(RETURN_KEY, "/stats")
     clearSsoReturn()
     expect(sessionStorage.getItem(RETURN_KEY)).toBeNull()
+  })
+
+  // hasPendingSsoReturn lets the callback page tell a SILENT-probe transit (RETURN captured
+  // before the probe) apart from a user-initiated interactive login — so it renders a neutral
+  // loader for the probe instead of a misleading "Logging in...". It must PEEK, never consume
+  // (completeLogin still owns taking the value).
+  it("hasPendingSsoReturn: true while a return path is pending, and does NOT consume it", () => {
+    sessionStorage.setItem(RETURN_KEY, "/tasks")
+    expect(hasPendingSsoReturn()).toBe(true)
+    expect(sessionStorage.getItem(RETURN_KEY)).toBe("/tasks") // peek, not take
+    // takeSsoReturnPath remains the consumer
+    expect(takeSsoReturnPath()).toBe("/tasks")
+  })
+
+  it("hasPendingSsoReturn: false when no probe is in flight (a genuine interactive login)", () => {
+    expect(hasPendingSsoReturn()).toBe(false)
   })
 })
