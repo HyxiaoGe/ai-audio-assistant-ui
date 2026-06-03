@@ -24,7 +24,8 @@ import {
   type WsRouterDeps,
   type WsNotificationData,
 } from "@/lib/ws-message-router";
-import { notifySuccess, notifyError, notifyWarning } from "@/lib/notify";
+import { notifySuccess, notifyError, notifyWarning, notifyInfo } from "@/lib/notify";
+import { getNotificationVariant } from "@/lib/notification-variant";
 import { translateStatic } from "@/lib/i18n-static";
 
 // Backend may send either the auth handshake (data.type === "authenticated")
@@ -166,14 +167,20 @@ export function useGlobalWebSocket() {
           }
         : undefined;
       const opts = action ? { action } : undefined;
-      if (data.priority === "high") {
-        if (data.type === "youtube_reauth_required") {
-          notifyWarning(message, opts);
-        } else {
+      // 配色按 type 推导，与铃铛行（NotificationItem）共用同一 getNotificationVariant，
+      // 二者绝不失配（如 visual_failed 失败 → 两处都红，而非 toast 绿、行内红）。
+      switch (getNotificationVariant(data.type)) {
+        case "error":
           notifyError(message, opts);
-        }
-      } else {
-        notifySuccess(message, opts);
+          break;
+        case "warning":
+          notifyWarning(message, opts);
+          break;
+        case "info":
+          notifyInfo(message, opts);
+          break;
+        default:
+          notifySuccess(message, opts);
       }
     },
     [router]

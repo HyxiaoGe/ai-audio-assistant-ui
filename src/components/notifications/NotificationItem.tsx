@@ -5,31 +5,12 @@ import { CheckCircle2, XCircle, Info, AlertTriangle, ArrowUpRight } from 'lucide
 import { useRouter } from 'next/navigation';
 import type { Notification } from '@/store/global-store';
 import { useI18n } from '@/lib/i18n-context';
+import { getNotificationVariant } from '@/lib/notification-variant';
 
 interface NotificationItemProps {
   notification: Notification;
   onMarkAsRead?: (id: string) => void;
   showActions?: boolean;
-}
-
-/**
- * Map a backend notification `type` to a visual variant.
- */
-function getNotificationVariant(
-  type: string
-): "success" | "error" | "info" | "warning" {
-  switch (type) {
-    case "task_completed":
-      return "success";
-    case "task_failed":
-    case "visual_failed":
-      return "error";
-    case "quota_alert":
-    case "youtube_reauth_required":
-      return "warning";
-    default:
-      return "info";
-  }
 }
 
 const iconMap = {
