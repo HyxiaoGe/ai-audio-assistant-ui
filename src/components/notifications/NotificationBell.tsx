@@ -7,9 +7,12 @@ import NotificationPanel from './NotificationPanel';
 
 export default function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
+  const [ring, setRing] = useState(false);
+  const prevUnread = useRef(0);
   const panelRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const unreadCount = useGlobalStore((state) => state.unreadCount);
+  const loadNotifications = useGlobalStore((state) => state.loadNotifications);
 
   // Close panel when clicking outside
   useEffect(() => {
@@ -33,8 +36,27 @@ export default function NotificationBell() {
     };
   }, [isOpen]);
 
+  // One-shot bell ring when the unread count increases (no permanent loop).
+  // setState is deferred via setTimeout to avoid cascading renders inside the effect body.
+  useEffect(() => {
+    if (unreadCount > prevUnread.current) {
+      const startTimer = setTimeout(() => setRing(true), 0);
+      const stopTimer = setTimeout(() => setRing(false), 1000);
+      prevUnread.current = unreadCount;
+      return () => {
+        clearTimeout(startTimer);
+        clearTimeout(stopTimer);
+      };
+    }
+    prevUnread.current = unreadCount;
+  }, [unreadCount]);
+
   const togglePanel = () => {
-    setIsOpen(!isOpen);
+    const next = !isOpen;
+    setIsOpen(next);
+    if (next) {
+      loadNotifications();
+    }
   };
 
   return (
@@ -48,16 +70,14 @@ export default function NotificationBell() {
       >
         <Bell
           className={`w-5 h-5 ${
-            unreadCount > 0 ? 'animate-pulse text-blue-600 dark:text-blue-400' : ''
-          }`}
+            unreadCount > 0 ? 'text-blue-600 dark:text-blue-400' : ''
+          } ${ring ? 'animate-bounce' : ''}`}
+          style={ring ? { animationIterationCount: 1 } : undefined}
         />
 
         {/* Badge */}
         {unreadCount > 0 && (
-          <span
-            className="absolute -top-1 -right-1 flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full animate-bounce"
-            style={{ animationDuration: '2s' }}
-          >
+          <span className="absolute -top-1 -right-1 flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}

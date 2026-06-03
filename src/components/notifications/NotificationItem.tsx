@@ -5,29 +5,12 @@ import { CheckCircle2, XCircle, Info, AlertTriangle, ArrowUpRight } from 'lucide
 import { useRouter } from 'next/navigation';
 import type { Notification } from '@/store/global-store';
 import { useI18n } from '@/lib/i18n-context';
+import { getNotificationVariant } from '@/lib/notification-variant';
 
 interface NotificationItemProps {
   notification: Notification;
   onMarkAsRead?: (id: string) => void;
   showActions?: boolean;
-}
-
-/**
- * Derive notification type (success/error/info/warning) from backend data
- */
-function getNotificationType(notification: Notification): 'success' | 'error' | 'info' | 'warning' {
-  if (notification.category === 'task') {
-    if (notification.action === 'completed') return 'success';
-    if (notification.action === 'failed') return 'error';
-    return 'info';
-  }
-
-  // System notifications
-  if (notification.priority === 'urgent' || notification.priority === 'high') {
-    return 'warning';
-  }
-
-  return 'info';
 }
 
 const iconMap = {
@@ -69,10 +52,18 @@ export default function NotificationItem({
   const { t, locale } = useI18n();
   const [now, setNow] = useState(() => Date.now());
 
-  const notificationType = getNotificationType(notification);
+  const notificationType = getNotificationVariant(notification.type);
   const Icon = iconMap[notificationType];
   const colors = colorMap[notificationType];
   const isRead = !!notification.read_at;
+
+  const titleKey = `notif.${notification.type}.title`;
+  const bodyKey = `notif.${notification.type}.body`;
+  const renderedTitle = t(titleKey, notification.params as Record<string, string | number>);
+  const renderedBody = t(bodyKey, notification.params as Record<string, string | number>);
+  // useI18n's t() returns the key itself when missing -> use that as the "missing" signal.
+  const displayTitle = renderedTitle === titleKey ? (notification.title ?? "") : renderedTitle;
+  const displayBody = renderedBody === bodyKey ? (notification.message ?? "") : renderedBody;
 
   useEffect(() => {
     const timestamp = new Date(notification.created_at).getTime();
@@ -133,7 +124,7 @@ export default function NotificationItem({
     }
   };
 
-  const handleActivate = showActions ? handleMarkRead : handleOpen;
+  const handleActivate = handleOpen;
 
   // 键盘可达：仅当焦点在整行本身时响应 Enter/Space（内部「查看详情」按钮的按键冒泡
   // 上来时 target!==currentTarget，不会重复触发）。
@@ -152,12 +143,13 @@ export default function NotificationItem({
       <div
         role="button"
         tabIndex={0}
-        aria-label={notification.title}
+        aria-label={displayTitle}
         onClick={handleActivate}
         onKeyDown={handleKeyDown}
         className={`
           p-3 rounded-lg cursor-pointer transition-all
           ${isRead ? 'opacity-60' : 'opacity-100'}
+          ${!isRead ? 'animate-in fade-in slide-in-from-top-1 duration-300' : ''}
           ${colors.bg}
           hover:shadow-sm
         `}
@@ -172,7 +164,7 @@ export default function NotificationItem({
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-3">
               <p className={`text-sm font-medium ${colors.text}`}>
-                {notification.title}
+                {displayTitle}
               </p>
               {!isRead && (
                 <div className="flex-shrink-0 mt-1">
@@ -181,9 +173,9 @@ export default function NotificationItem({
               )}
             </div>
             {/* Message (optional detail) */}
-            {notification.message && notification.message !== notification.title && (
+            {displayBody && displayBody !== displayTitle && (
               <p className={`text-xs ${colors.text} mt-1 opacity-80 leading-relaxed`}>
-                {notification.message}
+                {displayBody}
               </p>
             )}
             <div className="flex items-center justify-between mt-3">

@@ -12,35 +12,41 @@
 
 "use client";
 
-import { useEffect, useRef, useCallback, createElement } from "react";
+import { useEffect, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth-store";
-import { toast } from "sonner";
-import { CheckCircle2, XCircle } from "lucide-react";
 import { getToken } from "@/lib/auth-token";
 import { scheduleSingleFlightTimer, closeIfCurrent } from "@/lib/ws-lifecycle";
-import { useGlobalStore } from "@/store/global-store";
+import { useGlobalStore, type TaskProgress } from "@/store/global-store";
 import { useAPIClient } from "@/lib/use-api-client";
-import type { TaskStatus } from "@/types/api";
+import {
+  routeWebSocketMessage,
+  type WsRouterDeps,
+  type WsNotificationData,
+} from "@/lib/ws-message-router";
+import { notifySuccess, notifyError, notifyWarning, notifyInfo } from "@/lib/notify";
+import { getNotificationVariant } from "@/lib/notification-variant";
+import { translateStatic } from "@/lib/i18n-static";
 
-// WebSocket message types from backend
+// Backend may send either the auth handshake (data.type === "authenticated")
+// or a unified envelope { kind, data, traceId }.
 interface WebSocketMessage {
-  code: number;
-  message: string;
-  data: {
-    type: string;
-    status?: TaskStatus;
-    stage?: string;
-    progress?: number;
-    task_id?: string;
-    task_title?: string;
-    user_id?: string;
-    notification?: {
-      message: string;
-      type?: "success" | "error" | "info" | "warning";
-      link?: string;
-    };
+  kind?: string;
+  data?: {
+    type?: string;
+    [key: string]: unknown;
   };
-  traceId: string;
+  traceId?: string;
+}
+
+function interpolateTitle(
+  template: string,
+  vars?: Record<string, string | number>
+): string {
+  if (!vars) return template;
+  return template.replace(/\{(\w+)\}/g, (m, k) =>
+    vars[k] === undefined ? m : String(vars[k])
+  );
 }
 
 const MAX_RECONNECT_ATTEMPTS = 999; // Infinite reconnect
@@ -49,9 +55,45 @@ const MAX_RECONNECT_DELAY = 60000; // 60 seconds (cap)
 const AUTH_TIMEOUT_MS = 5000;
 const POLLING_INTERVAL = 5000; // 5 seconds
 
+interface WsRouterStoreActions {
+  addNotificationFromWebSocket: (data: WsNotificationData) => void;
+  // 与 store 的 updateTask 签名精确对齐，避免把 store 函数赋给 Record<string,unknown>
+  // 形参的逆变不兼容（strictFunctionTypes 下会报错）。
+  updateTask: (taskId: string, data: Partial<TaskProgress>) => void;
+  loadNotifications: () => void;
+  refreshUnread: () => void;
+  showNotificationToast: (data: WsNotificationData) => void;
+}
+
+export function buildWsRouterDeps(actions: WsRouterStoreActions): WsRouterDeps {
+  return {
+    addNotificationFromWebSocket: actions.addNotificationFromWebSocket,
+    // WsTaskProgressData 与 Partial<TaskProgress> 字段重叠但不互相可赋（status: string vs TaskStatus、
+    // task_id 必填 vs 可选），经 unknown 桥接；运行时同一对象，仅编译期断言。
+    updateTask: (taskId, data) =>
+      actions.updateTask(taskId, data as unknown as Partial<TaskProgress>),
+    loadNotifications: actions.loadNotifications,
+    refreshUnread: actions.refreshUnread,
+    showNotificationToast: actions.showNotificationToast,
+  };
+}
+
+export function makeVisibilityRefetch(
+  loadNotifications: () => void,
+  refreshUnread: () => void
+): () => void {
+  return () => {
+    if (typeof document === "undefined") return;
+    if (document.visibilityState !== "visible") return;
+    loadNotifications();
+    refreshUnread();
+  };
+}
+
 export function useGlobalWebSocket() {
   const authUser = useAuthStore((s) => s.user);
   const client = useAPIClient();
+  const router = useRouter();
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const pollingIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
@@ -61,31 +103,17 @@ export function useGlobalWebSocket() {
   const reconnectAttemptsRef = useRef(0);
   const isAuthenticatedRef = useRef(false);
   const enabledRef = useRef(true);
-  const toastHistoryRef = useRef(new Map<string, number>());
 
   // 用 per-field selector 订阅，避免无 selector 的整店订阅在任意 global state 变化时
   // 都触发本 hook 重跑（这些都是 zustand 稳定 action）。返回值处已用 selector，这里对齐。
   const updateTask = useGlobalStore((s) => s.updateTask);
   const loadNotifications = useGlobalStore((s) => s.loadNotifications);
+  const refreshUnread = useGlobalStore((s) => s.refreshUnread);
+  const addNotificationFromWebSocket = useGlobalStore(
+    (s) => s.addNotificationFromWebSocket
+  );
   const setWsConnected = useGlobalStore((s) => s.setWsConnected);
   const setWsReconnecting = useGlobalStore((s) => s.setWsReconnecting);
-
-  const shouldShowToast = useCallback((taskId: string, status: "completed" | "failed") => {
-    const key = `${taskId}:${status}`;
-    const now = Date.now();
-    const history = toastHistoryRef.current;
-    const lastShown = history.get(key);
-    if (lastShown && now - lastShown < 10000) {
-      return false;
-    }
-    history.set(key, now);
-    history.forEach((timestamp, storedKey) => {
-      if (now - timestamp > 120000) {
-        history.delete(storedKey);
-      }
-    });
-    return true;
-  }, []);
 
   // Stop HTTP polling
   const stopPolling = useCallback(() => {
@@ -126,121 +154,88 @@ export function useGlobalWebSocket() {
     pollingIntervalRef.current = setInterval(poll, POLLING_INTERVAL);
   }, [authUser, client, updateTask]);
 
+  const showNotificationToast = useCallback(
+    (data: WsNotificationData) => {
+      const params = data.params as Record<string, string | number>;
+      const title = translateStatic(`notif.${data.type}.title`, undefined);
+      const text = title === `notif.${data.type}.title` ? data.title ?? "" : title;
+      const message = interpolateTitle(text, params);
+      const action = data.action_url
+        ? {
+            label: translateStatic("notifications.viewDetails"),
+            onClick: () => router.push(data.action_url as string),
+          }
+        : undefined;
+      const opts = action ? { action } : undefined;
+      // 配色按 type 推导，与铃铛行（NotificationItem）共用同一 getNotificationVariant，
+      // 二者绝不失配（如 visual_failed 失败 → 两处都红，而非 toast 绿、行内红）。
+      switch (getNotificationVariant(data.type)) {
+        case "error":
+          notifyError(message, opts);
+          break;
+        case "warning":
+          notifyWarning(message, opts);
+          break;
+        case "info":
+          notifyInfo(message, opts);
+          break;
+        default:
+          notifySuccess(message, opts);
+      }
+    },
+    [router]
+  );
+
   // Handle incoming WebSocket messages
   const handleMessage = useCallback(
     (event: MessageEvent) => {
+      let response: WebSocketMessage;
       try {
-        const response: WebSocketMessage = JSON.parse(event.data);
+        response = JSON.parse(event.data);
+      } catch (err) {
+        console.warn("[ws] failed to parse message", err);
+        return;
+      }
 
-        // Handle authentication response
-        if (response.data?.type === "authenticated") {
-          isAuthenticatedRef.current = true;
-          if (authTimeoutRef.current) {
-            clearTimeout(authTimeoutRef.current);
-          }
-          setWsConnected(true);
-          setWsReconnecting(false);
-          reconnectAttemptsRef.current = 0;
-          stopPolling(); // Stop polling when WebSocket is connected
-          return;
+      // Auth handshake (legacy data.type === "authenticated")
+      if (response.data?.type === "authenticated") {
+        isAuthenticatedRef.current = true;
+        if (authTimeoutRef.current) {
+          clearTimeout(authTimeoutRef.current);
         }
+        setWsConnected(true);
+        setWsReconnecting(false);
+        reconnectAttemptsRef.current = 0;
+        stopPolling();
+        // 重连兜底：补离线期间漏掉的通知。
+        loadNotifications();
+        refreshUnread();
+        return;
+      }
 
-        // Handle task progress updates
-        if (response.data?.type === "progress" && response.data.task_id) {
-          updateTask(response.data.task_id, {
-            task_id: response.data.task_id,
-            status: response.data.status || "processing",
-            progress: response.data.progress || 0,
-            stage: response.data.stage,
-            updated_at: Date.now(),
-          });
-        }
-
-        // Handle task completion
-        if (response.data?.type === "completed" && response.data.task_id) {
-          updateTask(response.data.task_id, {
-            task_id: response.data.task_id,
-            status: "completed",
-            progress: 100,
-            updated_at: Date.now(),
-          });
-
-          const taskTitle = response.data.task_title || "任务";
-
-          // Reload notifications (notification was created by backend)
-          loadNotifications();
-
-          // Show toast notification
-          if (shouldShowToast(response.data.task_id, "completed")) {
-            toast.success(`《${taskTitle}》转写完成`, {
-              icon: createElement(CheckCircle2, { className: "w-4 h-4" }),
-              action: {
-                label: "查看详情",
-                onClick: () => {
-                  window.location.href = `/tasks/${response.data.task_id}`;
-                },
-              },
-            });
-          }
-        }
-
-        // Handle task error
-        if (response.data?.type === "error" && response.data.task_id) {
-          updateTask(response.data.task_id, {
-            task_id: response.data.task_id,
-            status: "failed",
-            error_message: response.message,
-            updated_at: Date.now(),
-          });
-
-          const taskTitle = response.data.task_title || "任务";
-
-          // Reload notifications (notification was created by backend)
-          loadNotifications();
-
-          // Show error toast
-          if (shouldShowToast(response.data.task_id, "failed")) {
-            toast.error(`《${taskTitle}》处理失败`, {
-              icon: createElement(XCircle, { className: "w-4 h-4" }),
-              description: response.message,
-              action: {
-                label: "查看详情",
-                onClick: () => {
-                  window.location.href = `/tasks/${response.data.task_id}`;
-                },
-              },
-            });
-          }
-        }
-
-        // Handle YouTube reauthorization required (with deduplication)
-        if (response.data?.type === "youtube_reauth_required") {
-          const now = Date.now();
-          const lastShown = toastHistoryRef.current.get("youtube_reauth");
-          if (!lastShown || now - lastShown > 60000) {
-            // Only show once per minute
-            toastHistoryRef.current.set("youtube_reauth", now);
-            toast.warning("YouTube 授权已过期", {
-              description: "请重新连接您的 YouTube 账号以继续同步",
-              action: {
-                label: "重新连接",
-                onClick: () => {
-                  window.location.href = "/subscriptions";
-                },
-              },
-              duration: 10000,
-            });
-          }
-        }
-      } catch {
+      try {
+        routeWebSocketMessage(
+          response,
+          buildWsRouterDeps({
+            addNotificationFromWebSocket,
+            updateTask,
+            loadNotifications,
+            refreshUnread,
+            showNotificationToast,
+          })
+        );
+      } catch (err) {
+        console.warn("[ws] failed to handle message", err);
       }
     },
     [
+      addNotificationFromWebSocket,
       updateTask,
       loadNotifications,
+      refreshUnread,
+      showNotificationToast,
       setWsConnected,
       setWsReconnecting,
-      shouldShowToast,
       stopPolling,
     ]
   );
@@ -412,6 +407,14 @@ export function useGlobalWebSocket() {
       disconnect();
     };
   }, [authUser, connect, disconnect]);
+
+  // 窗口重新可见时兜底重取列表 + 未读数（增量推送会漏掉离线期间的事件）。
+  useEffect(() => {
+    if (!authUser) return;
+    const handler = makeVisibilityRefetch(loadNotifications, refreshUnread);
+    document.addEventListener("visibilitychange", handler);
+    return () => document.removeEventListener("visibilitychange", handler);
+  }, [authUser, loadNotifications, refreshUnread]);
 
   return {
     wsConnected: useGlobalStore((state) => state.wsConnected),

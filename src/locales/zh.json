@@ -211,6 +211,28 @@
     "loadingMore": "加载中...",
     "loadFailed": "通知加载失败"
   },
+  "notif": {
+    "task_completed": {
+      "title": "任务已完成",
+      "body": "「{task_title}」处理完成，点击查看结果"
+    },
+    "task_failed": {
+      "title": "任务处理失败",
+      "body": "「{task_title}」处理失败，点击查看详情"
+    },
+    "quota_alert": {
+      "title": "用量告警",
+      "body": "{provider} 用量已达 {threshold}%，请关注"
+    },
+    "youtube_reauth_required": {
+      "title": "YouTube 需要重新授权",
+      "body": "YouTube 订阅同步授权已失效，请重新授权"
+    },
+    "visual_failed": {
+      "title": "配图生成失败",
+      "body": "「{task_title}」的配图生成失败，可稍后重试"
+    }
+  },
   "auth": {
     "login": "登录",
     "logout": "退出登录",

@@ -10,6 +10,7 @@
 import { create } from 'zustand';
 import type { TaskStatus, Notification } from '@/types/api';
 import { apiClient } from '@/lib/api-client';
+import { notifyError } from '@/lib/notify';
 
 // ============================================================================
 // Types
@@ -44,14 +45,15 @@ interface GlobalStore {
   unreadCount: number;
   notificationsLoaded: boolean;
   notificationsLoading: boolean;
+  notificationsError: string | null;
+  notificationsPage: number;
+  notificationsHasMore: boolean;
 
-  loadNotifications: () => Promise<void>;
-  refreshNotificationStats: () => Promise<void>;
+  loadNotifications: (opts?: { append?: boolean }) => Promise<void>;
+  refreshUnread: () => Promise<void>;
   addNotificationFromWebSocket: (notification: Notification) => void;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
-  removeNotification: (id: string) => Promise<void>;
-  clearNotifications: () => Promise<void>;
 
   // ===== WebSocket State =====
   wsConnected: boolean;
@@ -98,148 +100,137 @@ export const useGlobalStore = create<GlobalStore>((set, get) => ({
   unreadCount: 0,
   notificationsLoaded: false,
   notificationsLoading: false,
+  notificationsError: null,
+  notificationsPage: 0,
+  notificationsHasMore: true,
 
   /**
-   * Load notifications from backend API
-   * Called on app initialization and when new notifications are received
+   * Load notifications from backend API.
+   * Default: fresh page-1 load (replaces the feed).
+   * append:true: load the NEXT page and concatenate older items.
+   * hasMore is derived from total vs. items already loaded.
    */
-  loadNotifications: async () => {
-    const { notificationsLoading } = get();
-
-    // Prevent duplicate concurrent loading
+  loadNotifications: async (opts?: { append?: boolean }) => {
+    const { notificationsLoading, notificationsPage } = get();
     if (notificationsLoading) {
       return;
     }
 
-    set({ notificationsLoading: true });
+    const append = opts?.append ?? false;
+    const page = append ? notificationsPage + 1 : 1;
+
+    set({ notificationsLoading: true, notificationsError: null });
 
     try {
-      // Load first page of notifications (latest 50)
       const response = await apiClient.getNotifications({
-        page: 1,
-        page_size: 50,
+        page,
+        page_size: 20,
       });
 
-      // Load stats
-      const stats = await apiClient.getNotificationStats();
-
-      set({
-        notifications: response.items,
-        unreadCount: stats.unread,
-        notificationsLoaded: true,
-        notificationsLoading: false,
+      set((state) => {
+        const notifications = append
+          ? [...state.notifications, ...response.items]
+          : response.items;
+        const hasMore = notifications.length < response.total;
+        return {
+          notifications,
+          notificationsPage: page,
+          notificationsHasMore: hasMore,
+          notificationsLoaded: true,
+          notificationsLoading: false,
+        };
       });
-    } catch {
+    } catch (err) {
       set({
         notificationsLoading: false,
+        notificationsError:
+          err instanceof Error ? err.message : "Failed to load notifications",
       });
     }
   },
 
   /**
-   * Refresh notification stats (unread count)
+   * Refresh the server-authoritative unread count.
    */
-  refreshNotificationStats: async () => {
-    try {
-      const stats = await apiClient.getNotificationStats();
-      set({ unreadCount: stats.unread });
-    } catch {
-    }
+  refreshUnread: async () => {
+    const stats = await apiClient.getNotificationStats();
+    set({ unreadCount: stats.unread });
   },
 
   /**
-   * Add notification from WebSocket (task completion/failure)
-   * This is called when receiving real-time notifications
+   * Add a notification pushed over WebSocket: dedupe-prepend by id,
+   * bump unreadCount only when unread, cap the in-memory feed at 100.
    */
   addNotificationFromWebSocket: (notification: Notification) => {
     set((state) => {
-      // Check if notification already exists
       const exists = state.notifications.some((n) => n.id === notification.id);
       if (exists) {
         return state;
       }
 
-      // Add to beginning of list
       const notifications = [notification, ...state.notifications].slice(0, 100);
+      const unreadCount = notification.read_at
+        ? state.unreadCount
+        : state.unreadCount + 1;
 
-      // Update unread count if not read
-      const unreadCount = notification.read_at ? state.unreadCount : state.unreadCount + 1;
-
-      return {
-        notifications,
-        unreadCount,
-      };
+      return { notifications, unreadCount };
     });
   },
 
   /**
-   * Mark notification as read (calls backend API)
+   * Mark a single notification as read.
+   * Optimistic: flip read_at immediately; on failure roll back + notify.
+   * Unread count is taken from the server response ({unread}).
    */
   markAsRead: async (id: string) => {
-    try {
-      await apiClient.markNotificationRead(id);
+    const prev = get().notifications;
+    const target = prev.find((n) => n.id === id);
+    if (!target || target.read_at) {
+      return;
+    }
+    const prevUnread = get().unreadCount;
 
-      set((state) => {
-        const notifications = state.notifications.map((n) =>
-          n.id === id ? { ...n, read_at: new Date().toISOString() } : n
-        );
-        const unreadCount = Math.max(0, state.unreadCount - 1);
-        return { notifications, unreadCount };
-      });
+    set((state) => ({
+      notifications: state.notifications.map((n) =>
+        n.id === id ? { ...n, read_at: new Date().toISOString() } : n
+      ),
+    }));
+
+    try {
+      const { unread } = await apiClient.markNotificationRead(id);
+      set({ unreadCount: unread });
     } catch {
+      set({ notifications: prev, unreadCount: prevUnread });
+      notifyError("notif.mark_read_failed");
     }
   },
 
   /**
-   * Mark all notifications as read (calls backend API)
+   * Mark all notifications as read.
+   * Optimistic: flip every read_at + zero the badge; on failure roll back + notify.
+   * Unread count is taken from the server response ({affected, unread}).
    */
   markAllAsRead: async () => {
-    try {
-      await apiClient.markAllNotificationsRead();
+    const prev = get().notifications;
+    const prevUnread = get().unreadCount;
 
-      set((state) => {
-        const now = new Date().toISOString();
-        const notifications = state.notifications.map((n) => ({
+    set((state) => {
+      const now = new Date().toISOString();
+      return {
+        notifications: state.notifications.map((n) => ({
           ...n,
           read_at: n.read_at || now,
-        }));
-        return { notifications, unreadCount: 0 };
-      });
-    } catch {
-    }
-  },
+        })),
+        unreadCount: 0,
+      };
+    });
 
-  /**
-   * Remove (dismiss) notification (calls backend API)
-   */
-  removeNotification: async (id: string) => {
     try {
-      await apiClient.deleteNotification(id);
-
-      set((state) => {
-        const notification = state.notifications.find((n) => n.id === id);
-        const notifications = state.notifications.filter((n) => n.id !== id);
-
-        // Decrease unread count if notification was unread
-        const unreadCount = notification && !notification.read_at
-          ? Math.max(0, state.unreadCount - 1)
-          : state.unreadCount;
-
-        return { notifications, unreadCount };
-      });
+      const { unread } = await apiClient.markAllNotificationsRead();
+      set({ unreadCount: unread });
     } catch {
-    }
-  },
-
-  /**
-   * Clear all notifications (calls backend API)
-   */
-  clearNotifications: async () => {
-    try {
-      await apiClient.clearAllNotifications();
-
-      set({ notifications: [], unreadCount: 0 });
-    } catch {
+      set({ notifications: prev, unreadCount: prevUnread });
+      notifyError("notif.mark_all_read_failed");
     }
   },
 
