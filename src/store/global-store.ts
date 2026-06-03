@@ -234,7 +234,6 @@ export const useGlobalStore = create<GlobalStore>((set, get) => ({
     }
   },
 
-
   // ===== WebSocket State =====
   wsConnected: false,
   wsReconnecting: false,
