@@ -126,6 +126,12 @@ vi.mock("@/lib/use-api-client", () => ({
 
 // 渲染入口须在 mock 之后 import
 import TaskDetail from "./TaskDetail"
+// 预热：静态 import 真实 MarkdownContent（含 react-markdown 全家桶），让其模块树在测试开始前
+// 就被 vitest 加载/执行/缓存。否则本文件唯一【经 next/dynamic 动态 import】首次拉起该重模块的
+// 用例（test 3），会在 waitFor 计时窗口内现加载几十个 micromark/mdast 模块——慢 CI runner 上
+// 易 >1000ms 默认超时，DynamicStub 一直返回 null、占位符不渲染而被误判失败。此 import 仅预热，
+// 实际渲染仍走 TaskDetail 内部的 next/dynamic（命中同一模块缓存后瞬时解析）。
+import "@/components/task/MarkdownContent"
 
 function task(over: Partial<ApiTaskDetail> = {}): ApiTaskDetail {
   return {
@@ -239,10 +245,15 @@ describe("TaskDetail — progressive disclosure", () => {
 
     render(<TaskDetail />)
 
-    // 初始：占位符 pending（ImagePlaceholder 显示「等待生成...」）
-    await waitFor(() => {
-      expect(screen.getByText("等待生成...")).toBeInTheDocument()
-    })
+    // 初始：占位符 pending（ImagePlaceholder 显示「等待生成...」）。
+    // 超时放宽到 5s：loadTask 异步 + next/dynamic stub 的 effect/microtask 解析叠加，慢 CI runner
+    // 上偶超默认 1s（已配合上面的模块预热消除主要延迟，这里只作余量保险）。
+    await waitFor(
+      () => {
+        expect(screen.getByText("等待生成...")).toBeInTheDocument()
+      },
+      { timeout: 5000 }
+    )
 
     // 推送 image_ready → ready
     act(() => {
