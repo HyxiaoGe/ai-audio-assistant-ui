@@ -766,48 +766,31 @@ export interface UserPreferencesUpdateRequest {
 // ============================================================================
 
 /**
- * 通知分类
+ * 通知分类（粗分组，用于筛选/索引）
  */
-export type NotificationCategory = "task" | "system"
-
-/**
- * 通知操作
- */
-export type NotificationAction = "completed" | "failed" | "progress"
+export type NotificationCategory = "task" | "system" | "youtube"
 
 /**
  * 通知优先级
  */
-export type NotificationPriority = "urgent" | "high" | "normal" | "low"
+export type NotificationPriority = "normal" | "high"
 
 /**
  * 通知对象
- * 匹配后端 NotificationResponse schema
+ * 匹配后端 NotificationResponse schema（type + 语言无关 params 渲染）
  */
 export interface Notification {
   id: string
-  user_id: string
-  task_id: string | null
-
-  // Core fields
-  category: NotificationCategory
-  action: NotificationAction
-  title: string
-  message: string
+  type: string
+  category: string
+  priority: string
+  params: Record<string, unknown>
   action_url: string | null
-
-  // Status fields
-  read_at: string | null
-  dismissed_at: string | null
-
-  // Extension fields
-  extra_data: Record<string, unknown>
-  priority: NotificationPriority
-  expires_at: string | null
-
-  // Timestamps
+  // 过渡期后端默认语言(zh)兜底串；主渲染走 type+params
+  title?: string | null
+  message?: string | null
   created_at: string
-  updated_at: string
+  read_at: string | null
 }
 
 /**
@@ -836,7 +819,6 @@ export interface NotificationListResponse {
 export interface NotificationStatsResponse {
   total: number
   unread: number
-  dismissed: number
 }
 
 // ============================================================================
