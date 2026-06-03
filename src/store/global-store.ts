@@ -104,51 +104,56 @@ export const useGlobalStore = create<GlobalStore>((set, get) => ({
   notificationsHasMore: true,
 
   /**
-   * Load notifications from backend API
-   * Called on app initialization and when new notifications are received
+   * Load notifications from backend API.
+   * Default: fresh page-1 load (replaces the feed).
+   * append:true: load the NEXT page and concatenate older items.
+   * hasMore is derived from total vs. items already loaded.
    */
-  loadNotifications: async () => {
-    const { notificationsLoading } = get();
-
-    // Prevent duplicate concurrent loading
+  loadNotifications: async (opts?: { append?: boolean }) => {
+    const { notificationsLoading, notificationsPage } = get();
     if (notificationsLoading) {
       return;
     }
 
-    set({ notificationsLoading: true });
+    const append = opts?.append ?? false;
+    const page = append ? notificationsPage + 1 : 1;
+
+    set({ notificationsLoading: true, notificationsError: null });
 
     try {
-      // Load first page of notifications (latest 50)
       const response = await apiClient.getNotifications({
-        page: 1,
-        page_size: 50,
+        page,
+        page_size: 20,
       });
 
-      // Load stats
-      const stats = await apiClient.getNotificationStats();
-
-      set({
-        notifications: response.items,
-        unreadCount: stats.unread,
-        notificationsLoaded: true,
-        notificationsLoading: false,
+      set((state) => {
+        const notifications = append
+          ? [...state.notifications, ...response.items]
+          : response.items;
+        const hasMore = notifications.length < response.total;
+        return {
+          notifications,
+          notificationsPage: page,
+          notificationsHasMore: hasMore,
+          notificationsLoaded: true,
+          notificationsLoading: false,
+        };
       });
-    } catch {
+    } catch (err) {
       set({
         notificationsLoading: false,
+        notificationsError:
+          err instanceof Error ? err.message : "Failed to load notifications",
       });
     }
   },
 
   /**
-   * Refresh notification stats (unread count)
+   * Refresh the server-authoritative unread count.
    */
-  refreshNotificationStats: async () => {
-    try {
-      const stats = await apiClient.getNotificationStats();
-      set({ unreadCount: stats.unread });
-    } catch {
-    }
+  refreshUnread: async () => {
+    const stats = await apiClient.getNotificationStats();
+    set({ unreadCount: stats.unread });
   },
 
   /**
