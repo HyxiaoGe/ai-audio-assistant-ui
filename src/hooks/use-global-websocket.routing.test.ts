@@ -23,6 +23,12 @@ vi.mock("@/store/global-store", () => ({
   ),
 }))
 
+// 导入整个 hook 模块会顺带拉起 next/navigation；与仓内其他 hook/组件测试一致地打桩，
+// 避免模块加载期触达真实 next 运行时。
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}))
+
 import { buildWsRouterDeps } from "@/hooks/use-global-websocket"
 import { routeWebSocketMessage } from "@/lib/ws-message-router"
 

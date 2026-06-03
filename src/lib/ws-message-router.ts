@@ -44,6 +44,10 @@ export function routeWebSocketMessage(
   switch (envelope.kind) {
     case "notification": {
       const data = envelope.data as WsNotificationData
+      // 与 task_progress 对称的坏消息守卫：缺 payload/id 不抛、不动 store/toast。
+      if (!data || !data.id) {
+        return
+      }
       deps.addNotificationFromWebSocket(data)
       deps.showNotificationToast(data)
       return

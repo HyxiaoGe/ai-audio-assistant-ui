@@ -113,4 +113,13 @@ describe("routeWebSocketMessage — resilience", () => {
       routeWebSocketMessage({ traceId: "y" } as never, deps)
     ).not.toThrow()
   })
+
+  it("ignores a notification envelope missing payload/id without throwing or touching deps", () => {
+    const deps = makeDeps()
+    expect(() =>
+      routeWebSocketMessage({ kind: "notification", traceId: "z" }, deps)
+    ).not.toThrow()
+    expect(deps.addNotificationFromWebSocket).not.toHaveBeenCalled()
+    expect(deps.showNotificationToast).not.toHaveBeenCalled()
+  })
 })

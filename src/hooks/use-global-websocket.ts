@@ -17,7 +17,7 @@ import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth-store";
 import { getToken } from "@/lib/auth-token";
 import { scheduleSingleFlightTimer, closeIfCurrent } from "@/lib/ws-lifecycle";
-import { useGlobalStore } from "@/store/global-store";
+import { useGlobalStore, type TaskProgress } from "@/store/global-store";
 import { useAPIClient } from "@/lib/use-api-client";
 import {
   routeWebSocketMessage,
@@ -56,7 +56,9 @@ const POLLING_INTERVAL = 5000; // 5 seconds
 
 interface WsRouterStoreActions {
   addNotificationFromWebSocket: (data: WsNotificationData) => void;
-  updateTask: (taskId: string, data: Record<string, unknown>) => void;
+  // 与 store 的 updateTask 签名精确对齐，避免把 store 函数赋给 Record<string,unknown>
+  // 形参的逆变不兼容（strictFunctionTypes 下会报错）。
+  updateTask: (taskId: string, data: Partial<TaskProgress>) => void;
   loadNotifications: () => void;
   refreshUnread: () => void;
   showNotificationToast: (data: WsNotificationData) => void;
@@ -65,7 +67,10 @@ interface WsRouterStoreActions {
 export function buildWsRouterDeps(actions: WsRouterStoreActions): WsRouterDeps {
   return {
     addNotificationFromWebSocket: actions.addNotificationFromWebSocket,
-    updateTask: (taskId, data) => actions.updateTask(taskId, data),
+    // WsTaskProgressData 与 Partial<TaskProgress> 字段重叠但不互相可赋（status: string vs TaskStatus、
+    // task_id 必填 vs 可选），经 unknown 桥接；运行时同一对象，仅编译期断言。
+    updateTask: (taskId, data) =>
+      actions.updateTask(taskId, data as unknown as Partial<TaskProgress>),
     loadNotifications: actions.loadNotifications,
     refreshUnread: actions.refreshUnread,
     showNotificationToast: actions.showNotificationToast,

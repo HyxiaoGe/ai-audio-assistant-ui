@@ -1,4 +1,10 @@
 import { describe, expect, it, vi } from "vitest"
+
+// 导入整个 hook 模块会顺带拉起 next/navigation；与仓内其他 hook/组件测试一致地打桩。
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}))
+
 import { makeVisibilityRefetch } from "@/hooks/use-global-websocket"
 
 describe("makeVisibilityRefetch", () => {
