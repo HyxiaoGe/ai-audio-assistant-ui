@@ -5,6 +5,7 @@ const addNotificationFromWebSocket = vi.fn()
 const updateTask = vi.fn()
 const loadNotifications = vi.fn()
 const refreshUnread = vi.fn()
+const applyImageReady = vi.fn()
 
 vi.mock("@/store/global-store", () => ({
   useGlobalStore: Object.assign(
@@ -14,6 +15,7 @@ vi.mock("@/store/global-store", () => ({
         updateTask,
         loadNotifications,
         refreshUnread,
+        applyImageReady,
         setWsConnected: vi.fn(),
         setWsReconnecting: vi.fn(),
         wsConnected: false,
@@ -38,6 +40,7 @@ describe("use-global-websocket message routing wiring", () => {
     updateTask.mockClear()
     loadNotifications.mockClear()
     refreshUnread.mockClear()
+    applyImageReady.mockClear()
   })
 
   it("a notification envelope inserts to store and fires one toast, with NO full reload", () => {
@@ -48,6 +51,7 @@ describe("use-global-websocket message routing wiring", () => {
       loadNotifications,
       refreshUnread,
       showNotificationToast,
+      applyImageReady,
     })
 
     routeWebSocketMessage(
@@ -83,6 +87,7 @@ describe("use-global-websocket message routing wiring", () => {
       loadNotifications,
       refreshUnread,
       showNotificationToast,
+      applyImageReady,
     })
 
     routeWebSocketMessage(
@@ -101,5 +106,36 @@ describe("use-global-websocket message routing wiring", () => {
     })
     expect(addNotificationFromWebSocket).not.toHaveBeenCalled()
     expect(showNotificationToast).not.toHaveBeenCalled()
+  })
+
+  it("a FLAT image_ready envelope forwards to applyImageReady and touches nothing else", () => {
+    const showNotificationToast = vi.fn()
+    const deps = buildWsRouterDeps({
+      addNotificationFromWebSocket,
+      updateTask,
+      loadNotifications,
+      refreshUnread,
+      showNotificationToast,
+      applyImageReady,
+    })
+
+    // 后端 image_ready 是扁平信封：字段与 kind 同级、无 data 包裹（image_generator.py）。
+    // 先存变量再传：内联字面量直接作实参会触发 TS 超额属性检查（WsEnvelope 只声明 kind/data/traceId）。
+    const envelope = {
+      kind: "image_ready",
+      task_id: "t1",
+      summary_id: "s1",
+      summary_type: "overview",
+      placeholder: "{{IMAGE: a}}",
+      status: "ready",
+      url: "/api/v1/summaries/images/a.png",
+      model_id: "gemini",
+      traceId: "ir1",
+    }
+    routeWebSocketMessage(envelope, deps)
+
+    expect(applyImageReady).toHaveBeenCalledTimes(1)
+    expect(updateTask).not.toHaveBeenCalled()
+    expect(addNotificationFromWebSocket).not.toHaveBeenCalled()
   })
 })

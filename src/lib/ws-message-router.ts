@@ -2,6 +2,8 @@
 // 按统一信封的 kind 分流；notification 走增量插入 + 单条 toast（不再全量重取，
 // 这是「角标不更新/刷新才更新」竞态的根因）；task_progress 维持任务 map 更新。
 
+import type { WsImageReadyData } from "@/types/api"
+
 export interface WsNotificationData {
   id: string
   type: string
@@ -35,6 +37,7 @@ export interface WsRouterDeps {
   loadNotifications: () => void
   refreshUnread: () => void
   showNotificationToast: (data: WsNotificationData) => void
+  applyImageReady: (data: WsImageReadyData) => void
 }
 
 export function routeWebSocketMessage(
@@ -58,6 +61,18 @@ export function routeWebSocketMessage(
         return
       }
       deps.updateTask(data.task_id, data)
+      return
+    }
+    case "image_ready": {
+      // ⚠️ image_ready 是【扁平】信封：task_id/placeholder/status/url/... 与 kind 同级、无 data 包裹，
+      // 与后端 publish_image_ready_global（image_generator.py）逐字对齐——不同于 notification/task_progress
+      // 的嵌套 data。故这里从 envelope 顶层取字段，而非 envelope.data。
+      const data = envelope as unknown as WsImageReadyData
+      // 坏消息守卫：缺 task_id / placeholder 不抛、不动 store。
+      if (!data || !data.task_id || !data.placeholder) {
+        return
+      }
+      deps.applyImageReady(data)
       return
     }
     default:

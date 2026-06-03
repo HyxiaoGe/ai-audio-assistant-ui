@@ -24,6 +24,7 @@ import {
   type WsRouterDeps,
   type WsNotificationData,
 } from "@/lib/ws-message-router";
+import type { WsImageReadyData } from "@/types/api";
 import { notifySuccess, notifyError, notifyWarning, notifyInfo } from "@/lib/notify";
 import { getNotificationVariant } from "@/lib/notification-variant";
 import { translateStatic } from "@/lib/i18n-static";
@@ -63,6 +64,7 @@ interface WsRouterStoreActions {
   loadNotifications: () => void;
   refreshUnread: () => void;
   showNotificationToast: (data: WsNotificationData) => void;
+  applyImageReady: (data: WsImageReadyData) => void;
 }
 
 export function buildWsRouterDeps(actions: WsRouterStoreActions): WsRouterDeps {
@@ -75,6 +77,7 @@ export function buildWsRouterDeps(actions: WsRouterStoreActions): WsRouterDeps {
     loadNotifications: actions.loadNotifications,
     refreshUnread: actions.refreshUnread,
     showNotificationToast: actions.showNotificationToast,
+    applyImageReady: actions.applyImageReady,
   };
 }
 
@@ -112,6 +115,7 @@ export function useGlobalWebSocket() {
   const addNotificationFromWebSocket = useGlobalStore(
     (s) => s.addNotificationFromWebSocket
   );
+  const applyImageReady = useGlobalStore((s) => s.applyImageReady);
   const setWsConnected = useGlobalStore((s) => s.setWsConnected);
   const setWsReconnecting = useGlobalStore((s) => s.setWsReconnecting);
 
@@ -222,6 +226,7 @@ export function useGlobalWebSocket() {
             loadNotifications,
             refreshUnread,
             showNotificationToast,
+            applyImageReady,
           })
         );
       } catch (err) {
@@ -234,6 +239,7 @@ export function useGlobalWebSocket() {
       loadNotifications,
       refreshUnread,
       showNotificationToast,
+      applyImageReady,
       setWsConnected,
       setWsReconnecting,
       stopPolling,

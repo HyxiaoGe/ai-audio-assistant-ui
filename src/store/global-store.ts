@@ -8,7 +8,7 @@
  */
 
 import { create } from 'zustand';
-import type { TaskStatus, Notification } from '@/types/api';
+import type { TaskStatus, Notification, WsImageReadyData } from '@/types/api';
 import { apiClient } from '@/lib/api-client';
 import { notifyError } from '@/lib/notify';
 
@@ -39,6 +39,13 @@ interface GlobalStore {
   updateTask: (taskId: string, data: Partial<TaskProgress>) => void;
   removeTask: (taskId: string) => void;
   clearTasks: () => void;
+
+  // ===== Image-ready events (progressive disclosure) =====
+  // 按 task_id 聚合的 image_ready 事件队列；打开任务详情的组件订阅本任务队列、
+  // 逐条 patch 进本地 streamingImages Map 后调用 clearImageReadyEvents 清空。
+  imageReadyEvents: Record<string, WsImageReadyData[]>;
+  applyImageReady: (data: WsImageReadyData) => void;
+  clearImageReadyEvents: (taskId: string) => void;
 
   // ===== Notifications =====
   notifications: Notification[];
@@ -93,6 +100,27 @@ export const useGlobalStore = create<GlobalStore>((set, get) => ({
 
   clearTasks: () => {
     set({ tasks: {} });
+  },
+
+  // ===== Image-ready events =====
+  imageReadyEvents: {},
+
+  applyImageReady: (data: WsImageReadyData) => {
+    set((state) => ({
+      imageReadyEvents: {
+        ...state.imageReadyEvents,
+        [data.task_id]: [...(state.imageReadyEvents[data.task_id] || []), data],
+      },
+    }));
+  },
+
+  clearImageReadyEvents: (taskId: string) => {
+    set((state) => {
+      if (!state.imageReadyEvents[taskId]) return state;
+      const next = { ...state.imageReadyEvents };
+      delete next[taskId];
+      return { imageReadyEvents: next };
+    });
   },
 
   // ===== Notifications =====
