@@ -211,6 +211,28 @@
     "loadingMore": "Loading...",
     "loadFailed": "Failed to load notifications"
   },
+  "notif": {
+    "task_completed": {
+      "title": "Task completed",
+      "body": "\"{task_title}\" is ready. Tap to view the result."
+    },
+    "task_failed": {
+      "title": "Task failed: {task_title}",
+      "body": "\"{task_title}\" could not be processed. Tap for details."
+    },
+    "quota_alert": {
+      "title": "Usage alert",
+      "body": "{provider} usage reached {threshold}%. Please review."
+    },
+    "youtube_reauth_required": {
+      "title": "YouTube re-authorization needed",
+      "body": "Your YouTube sync authorization expired. Please re-authorize."
+    },
+    "visual_failed": {
+      "title": "Illustration failed",
+      "body": "Illustrations for \"{task_title}\" failed. You can retry later."
+    }
+  },
   "auth": {
     "login": "Login",
     "logout": "Sign out",
