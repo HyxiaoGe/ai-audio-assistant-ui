@@ -60,4 +60,45 @@ describe("MarkdownContent", () => {
     expect(caption?.textContent).toContain("diagram")
     expect(caption?.textContent).toContain("summary.imageGeneratedBy:")
   })
+
+  it("renders a READY ImagePlaceholder image when streamingImages carries a ready url", () => {
+    const images = new Map<string, StreamingImage>([
+      [
+        "{{IMAGE: 时间轴}}",
+        { placeholder: "{{IMAGE: 时间轴}}", description: "时间轴", url: "/api/v1/summaries/images/t.png", status: "ready" },
+      ],
+    ])
+    render(
+      <MarkdownContent content={"{{IMAGE: 时间轴}}"} streamingImages={images} mediaToken={"tok"} />
+    )
+    const img = screen.getByRole("img", { name: "时间轴" })
+    // ImagePlaceholder 的 ready 分支直出 imageUrl（已被 appendMediaToken 注入 token）
+    expect(img).toHaveAttribute("src", "/api/v1/summaries/images/t.png?token=tok")
+  })
+
+  it("renders the FAILED fallback when streamingImages marks the placeholder failed", () => {
+    const images = new Map<string, StreamingImage>([
+      [
+        "{{IMAGE: 流程图}}",
+        { placeholder: "{{IMAGE: 流程图}}", description: "流程图", url: null, status: "failed" },
+      ],
+    ])
+    render(
+      <MarkdownContent content={"{{IMAGE: 流程图}}"} streamingImages={images} mediaToken={null} />
+    )
+    expect(screen.getByText("[图片：流程图]")).toBeInTheDocument()
+    expect(screen.queryByRole("img")).not.toBeInTheDocument()
+  })
+
+  it("still renders legacy inline ![](url) images directly via the img override (old data)", () => {
+    render(
+      <MarkdownContent
+        content={"![老图](/api/v1/summaries/images/legacy.png)"}
+        streamingImages={noImages}
+        mediaToken={"tok"}
+      />
+    )
+    const img = screen.getByRole("img", { name: "老图" })
+    expect(img).toHaveAttribute("src", "/api/v1/summaries/images/legacy.png?token=tok")
+  })
 })

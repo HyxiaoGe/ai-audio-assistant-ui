@@ -46,11 +46,19 @@ import type {
   VisualType,
   StreamingImage,
   SSEImageReadyEvent,
+  TaskStatus,
 } from '@/types/api';
 import {
   extractPlaceholderDescription,
   findImagePlaceholders,
 } from '@/lib/image-placeholder';
+import {
+  buildStreamingImagesFromSummary,
+  applyImageReadyToMap,
+  mergeStreamingImages,
+  hasUnresolvedImages,
+  markUnresolvedImagesFailed,
+} from '@/lib/summary-images';
 import { useI18n } from '@/lib/i18n-context';
 import { useDateFormatter } from '@/lib/use-date-formatter';
 
@@ -214,8 +222,16 @@ export default function TaskDetail({
   const compareExpectedRef = useRef<number>(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 右栏摘要局部错误：摘要文字失败时 task 仍 completed，仅右栏报错、不连带藏转写左栏。
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  // 转写尚不可见的早期阶段才走全屏进度页；进入 polishing/summarizing 后转写已落库可取，
+  // 改为挂载主布局、左栏直出转写、右栏显示「摘要生成中」（渐进式展示）。
+  const TRANSCRIPT_VISIBLE_STAGES: TaskStatus[] = ['polishing', 'summarizing'];
+  const transcriptStageReached = task?.status
+    ? TRANSCRIPT_VISIBLE_STAGES.includes(task.status)
+    : false;
   const isProcessingTask = task?.status
-    ? !['completed', 'failed'].includes(task.status)
+    ? !['completed', 'failed'].includes(task.status) && !transcriptStageReached
     : false;
 
   const availableSpeakers = useMemo<Speaker[]>(() => ([
@@ -291,74 +307,13 @@ export default function TaskDetail({
     if (!id || !authUser) return;
     setLoading(true);
     setError(null);
+    setSummaryError(null);
     setTranscriptLoading(true);
     setTranscript([]);
     try {
       const taskData = await client.getTask(id);
       setTask(taskData);
       setProgress(taskData.progress ?? 0);
-
-      const [transcriptResult, summaryResult] = await Promise.all([
-        client.getTranscript(id).catch((err) => err),
-        client.getSummary(id).catch((err) => err),
-      ]);
-
-      if (transcriptResult instanceof ApiError) {
-        if (transcriptResult.code === 40401) {
-          setTranscript([]);
-        } else {
-          notifyError(transcriptResult.message);
-          setTranscript([]);
-        }
-      } else if (transcriptResult) {
-        const unknownSpeakerLabel = t("transcript.unknownSpeaker");
-        const speakerPalette = availableSpeakers.filter((spk) => spk.name !== unknownSpeakerLabel);
-        const speakerMap = new Map<string, Speaker>();
-        let paletteIndex = 0;
-        transcriptResult.items.forEach((segment: ApiTranscriptSegment) => {
-          const speakerId = segment.speaker_id;
-          if (!speakerId) return;
-          if (!speakerMap.has(speakerId)) {
-            const speakerInfo = speakerPalette[paletteIndex % speakerPalette.length];
-            if (speakerInfo) {
-              speakerMap.set(speakerId, speakerInfo);
-            }
-            paletteIndex += 1;
-          }
-        });
-        const mappedTranscript = transcriptResult.items.map((segment: ApiTranscriptSegment) => {
-          const speakerInfo = segment.speaker_id ? speakerMap.get(segment.speaker_id) : null;
-          return {
-            id: segment.id,
-            speaker: speakerInfo?.name || unknownSpeakerLabel,
-            startTime: formatTimestamp(segment.start_time),
-            endTime: formatTimestamp(segment.end_time),
-            startSeconds: segment.start_time,
-            endSeconds: segment.end_time,
-            content: segment.content,
-            words: segment.words ?? null,
-            avatarColor: speakerInfo?.color || 'var(--app-text-subtle)',
-            isPolished: segment.is_edited ?? false,
-            originalContent: segment.original_content ?? null,
-          };
-        });
-        setTranscript(mappedTranscript);
-      }
-
-      if (summaryResult instanceof ApiError) {
-        if (summaryResult.code === 40401) {
-          setKeyPoints([]);
-          setActionItems([]);
-          setSummaryOverviewMarkdown('');
-        } else {
-          notifyError(summaryResult.message);
-          setKeyPoints([]);
-          setActionItems([]);
-          setSummaryOverviewMarkdown('');
-        }
-      } else if (summaryResult) {
-        buildSummaryState(summaryResult.items);
-      }
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
@@ -371,10 +326,78 @@ export default function TaskDetail({
         setError(message);
         notifyError(message);
       }
-    } finally {
       setTranscriptLoading(false);
       setLoading(false);
+      return;
     }
+
+    // 转写与摘要解耦：各自独立成败，互不连带（不再 Promise.all 同拉同 set）。
+    const [transcriptResult, summaryResult] = await Promise.all([
+      client.getTranscript(id).catch((err) => err),
+      client.getSummary(id).catch((err) => err),
+    ]);
+
+    if (transcriptResult instanceof ApiError) {
+      // 转写尚未就绪（40401）时静默置空；其它错误提示但不藏页面。
+      if (transcriptResult.code !== 40401) {
+        notifyError(transcriptResult.message);
+      }
+      setTranscript([]);
+    } else if (transcriptResult) {
+      const unknownSpeakerLabel = t("transcript.unknownSpeaker");
+      const speakerPalette = availableSpeakers.filter((spk) => spk.name !== unknownSpeakerLabel);
+      const speakerMap = new Map<string, Speaker>();
+      let paletteIndex = 0;
+      transcriptResult.items.forEach((segment: ApiTranscriptSegment) => {
+        const speakerId = segment.speaker_id;
+        if (!speakerId) return;
+        if (!speakerMap.has(speakerId)) {
+          const speakerInfo = speakerPalette[paletteIndex % speakerPalette.length];
+          if (speakerInfo) {
+            speakerMap.set(speakerId, speakerInfo);
+          }
+          paletteIndex += 1;
+        }
+      });
+      const mappedTranscript = transcriptResult.items.map((segment: ApiTranscriptSegment) => {
+        const speakerInfo = segment.speaker_id ? speakerMap.get(segment.speaker_id) : null;
+        return {
+          id: segment.id,
+          speaker: speakerInfo?.name || unknownSpeakerLabel,
+          startTime: formatTimestamp(segment.start_time),
+          endTime: formatTimestamp(segment.end_time),
+          startSeconds: segment.start_time,
+          endSeconds: segment.end_time,
+          content: segment.content,
+          words: segment.words ?? null,
+          avatarColor: speakerInfo?.color || 'var(--app-text-subtle)',
+          isPolished: segment.is_edited ?? false,
+          originalContent: segment.original_content ?? null,
+        };
+      });
+      setTranscript(mappedTranscript);
+    }
+    setTranscriptLoading(false);
+
+    if (summaryResult instanceof ApiError) {
+      // 摘要未就绪（40401）= 还没生成，静默置空；其它 = 右栏局部报错（不藏转写、不整页失败）。
+      if (summaryResult.code === 40401) {
+        setKeyPoints([]);
+        setActionItems([]);
+        setSummaryOverviewMarkdown('');
+      } else {
+        setSummaryError(summaryResult.message);
+      }
+    } else if (summaryResult) {
+      buildSummaryState(summaryResult.items);
+      // 渐进式展示：用持久图集 summary.images 初始化/刷新占位符 Map（替代旧的「仅 regenerate 临时填充」）。
+      // 用 merge 而非整体替换：completed 重载重拉 summary.images 时，DB 快照可能滞后于已到达的
+      // image_ready WS（本地某占位符已 patch 成 ready），直接替换会把已显示的图退回 pending 且不重放。
+      const dbImages = buildStreamingImagesFromSummary(summaryResult.items);
+      setStreamingImages((prev) => mergeStreamingImages(prev, dbImages));
+    }
+
+    setLoading(false);
   }, [buildSummaryState, client, id, authUser, t, availableSpeakers]);
 
   useEffect(() => {
@@ -455,6 +478,8 @@ export default function TaskDetail({
       // Reset streaming images state (only overview supports images)
       if (summaryType === 'overview') {
         setStreamingImages(new Map());
+        // 重新生成 overview 即清掉上一次的右栏摘要错误，避免重试成功后旧错误仍遮住新内容。
+        setSummaryError(null);
         if (imagesTimeoutRef.current) {
           window.clearTimeout(imagesTimeoutRef.current);
           imagesTimeoutRef.current = null;
@@ -879,6 +904,40 @@ export default function TaskDetail({
 
   // Subscribe to global task state from WebSocket
   const globalTaskState = useGlobalStore((state) => state.tasks[id || '']);
+
+  // 渐进式展示：订阅全局 store 里本任务的 image_ready 事件队列，逐条 patch 进 streamingImages，
+  // 再清空已消费的事件（事件量极小，图 max 3 张）。
+  const imageReadyQueue = useGlobalStore((state) => state.imageReadyEvents[id || '']);
+  const clearImageReadyEvents = useGlobalStore((state) => state.clearImageReadyEvents);
+
+  useEffect(() => {
+    if (!id) return;
+    if (!imageReadyQueue || imageReadyQueue.length === 0) return;
+    setStreamingImages((prev) => {
+      let next = prev;
+      for (const evt of imageReadyQueue) {
+        next = applyImageReadyToMap(next, evt);
+      }
+      return next;
+    });
+    clearImageReadyEvents(id);
+  }, [id, imageReadyQueue, clearImageReadyEvents]);
+
+  // 渐进式展示·全局-WS 路径的 pending 超时兜底：页面加载后图片靠上面的全局 WS image_ready 逐张补；
+  // 若 worker 崩溃 / 图数超过后端 max_images，某些占位符将永远收不到 image_ready 而无限转圈——
+  // 这违背本功能「用户不用一直等」的初衷。故只要还有 pending/generating 图就武装一个超时；任意一张图
+  // 落地（图集变化=有进展）都会重置该窗口（即「连续 SUMMARY_IMAGE_TIMEOUT_MS 无进展」才判失败），
+  // 到点把仍未就绪的占位符标为 failed。与 SSE/重新生成路径同一常量、同一失败语义，行为一致。
+  useEffect(() => {
+    // 无未就绪图：不武装；上一把（若有）已由上一次 effect 的 cleanup 清掉。
+    if (!hasUnresolvedImages(streamingImages)) return;
+    // 用闭包持有句柄并在 cleanup 里清——React 在每次重跑前及卸载时都会执行 cleanup，
+    // 故「图集变化重置窗口」与「卸载清定时器」都自洽（避免挂载时快照 ref 造成的清理失效）。
+    const handle = window.setTimeout(() => {
+      setStreamingImages((prev) => markUnresolvedImagesFailed(prev));
+    }, SUMMARY_IMAGE_TIMEOUT_MS);
+    return () => window.clearTimeout(handle);
+  }, [streamingImages]);
 
   // Sync global state to local state
   useEffect(() => {
@@ -2043,7 +2102,18 @@ export default function TaskDetail({
                           </button>
                         </div>
                       </div>
-                      {summaryStreaming.overview && summaryStreamContent.overview ? (
+                      {transcriptStageReached && !summaryOverviewMarkdown && !summaryStreaming.overview ? (
+                        <p className="text-base leading-7" style={{ color: 'var(--app-text-subtle)' }}>
+                          {t("task.summaryGenerating")}
+                        </p>
+                      ) : summaryError && !summaryOverviewMarkdown ? (
+                        // 仅在「尚无已落地的摘要正文」时展示右栏错误。已成功展示过 overview 后，
+                        // 一次瞬时重载错误（如 completed 重载时 getSummary 抖动）不应把已展示内容连带抹掉，
+                        // 与转写「失败不连带已展示内容」同一语义。
+                        <p className="text-base leading-7" style={{ color: 'var(--app-danger)' }}>
+                          {summaryError}
+                        </p>
+                      ) : summaryStreaming.overview && summaryStreamContent.overview ? (
                         <MarkdownContent content={summaryStreamContent.overview} imageModel={imageModelUsed} streamingImages={streamingImages} mediaToken={mediaToken} />
                       ) : compareMode && compareSummaryType === "overview" ? (
                         renderCompareView()
