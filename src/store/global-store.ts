@@ -44,14 +44,15 @@ interface GlobalStore {
   unreadCount: number;
   notificationsLoaded: boolean;
   notificationsLoading: boolean;
+  notificationsError: string | null;
+  notificationsPage: number;
+  notificationsHasMore: boolean;
 
-  loadNotifications: () => Promise<void>;
-  refreshNotificationStats: () => Promise<void>;
+  loadNotifications: (opts?: { append?: boolean }) => Promise<void>;
+  refreshUnread: () => Promise<void>;
   addNotificationFromWebSocket: (notification: Notification) => void;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
-  removeNotification: (id: string) => Promise<void>;
-  clearNotifications: () => Promise<void>;
 
   // ===== WebSocket State =====
   wsConnected: boolean;
@@ -98,6 +99,9 @@ export const useGlobalStore = create<GlobalStore>((set, get) => ({
   unreadCount: 0,
   notificationsLoaded: false,
   notificationsLoading: false,
+  notificationsError: null,
+  notificationsPage: 0,
+  notificationsHasMore: true,
 
   /**
    * Load notifications from backend API
@@ -148,27 +152,22 @@ export const useGlobalStore = create<GlobalStore>((set, get) => ({
   },
 
   /**
-   * Add notification from WebSocket (task completion/failure)
-   * This is called when receiving real-time notifications
+   * Add a notification pushed over WebSocket: dedupe-prepend by id,
+   * bump unreadCount only when unread, cap the in-memory feed at 100.
    */
   addNotificationFromWebSocket: (notification: Notification) => {
     set((state) => {
-      // Check if notification already exists
       const exists = state.notifications.some((n) => n.id === notification.id);
       if (exists) {
         return state;
       }
 
-      // Add to beginning of list
       const notifications = [notification, ...state.notifications].slice(0, 100);
+      const unreadCount = notification.read_at
+        ? state.unreadCount
+        : state.unreadCount + 1;
 
-      // Update unread count if not read
-      const unreadCount = notification.read_at ? state.unreadCount : state.unreadCount + 1;
-
-      return {
-        notifications,
-        unreadCount,
-      };
+      return { notifications, unreadCount };
     });
   },
 
@@ -209,39 +208,6 @@ export const useGlobalStore = create<GlobalStore>((set, get) => ({
     }
   },
 
-  /**
-   * Remove (dismiss) notification (calls backend API)
-   */
-  removeNotification: async (id: string) => {
-    try {
-      await apiClient.deleteNotification(id);
-
-      set((state) => {
-        const notification = state.notifications.find((n) => n.id === id);
-        const notifications = state.notifications.filter((n) => n.id !== id);
-
-        // Decrease unread count if notification was unread
-        const unreadCount = notification && !notification.read_at
-          ? Math.max(0, state.unreadCount - 1)
-          : state.unreadCount;
-
-        return { notifications, unreadCount };
-      });
-    } catch {
-    }
-  },
-
-  /**
-   * Clear all notifications (calls backend API)
-   */
-  clearNotifications: async () => {
-    try {
-      await apiClient.clearAllNotifications();
-
-      set({ notifications: [], unreadCount: 0 });
-    } catch {
-    }
-  },
 
   // ===== WebSocket State =====
   wsConnected: false,
