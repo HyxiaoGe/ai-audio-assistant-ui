@@ -456,6 +456,9 @@ export interface SummaryItem {
   image_url?: string | null  // 修复：后端返回的是 image_url 不是 image_key
   image_format?: "png" | "svg" | null
   image_model_used?: string | null
+
+  // 渐进式展示：overview 配图持久化图集（非 overview/无图时为 null 或 []）。
+  images?: SummaryImage[] | null
 }
 
 /**
@@ -1091,6 +1094,22 @@ export interface SSEImageReadyEvent {
 }
 
 /**
+ * 全局 WS（user:{uid}:updates）image_ready 事件的 data 形状（渐进式展示：图就地补）。
+ * 与旧 SSE SSEImageReadyEvent 区别：① 走全局 WS 而非 summary SSE；
+ * ② status 为 "ready"|"failed"（SSE 是 "success"|"failed"）；③ 带 task_id/summary_id/summary_type。
+ * 字段命名必须与后端 image_ready payload 完全一致。
+ */
+export interface WsImageReadyData {
+  task_id: string
+  summary_id: string
+  summary_type: "overview"
+  placeholder: string
+  status: "ready" | "failed"
+  url: string | null
+  model_id: string | null
+}
+
+/**
  * SSE images.completed 事件数据
  * 所有图片生成完成时发送
  */
@@ -1098,6 +1117,20 @@ export interface SSEImagesCompletedEvent {
   total: number
   success_count: number
   failed_count: number
+}
+
+/**
+ * 后端 summaries.images JSONB 列的单项结构（渐进式展示：overview 配图持久化）。
+ * placeholder 字符串本身即 content 里的 {{IMAGE:..}} 锚点 + 前端 Map 的 key（无额外 id）。
+ * 字段命名必须与后端 SummaryItem.images 完全一致。
+ */
+export interface SummaryImage {
+  placeholder: string
+  status: "pending" | "ready" | "failed"
+  url: string | null
+  alt: string
+  model_id: string | null
+  error: string | null
 }
 
 /**
