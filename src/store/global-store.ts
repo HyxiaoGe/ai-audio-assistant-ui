@@ -10,6 +10,7 @@
 import { create } from 'zustand';
 import type { TaskStatus, Notification } from '@/types/api';
 import { apiClient } from '@/lib/api-client';
+import { notifyError } from '@/lib/notify';
 
 // ============================================================================
 // Types
@@ -177,39 +178,59 @@ export const useGlobalStore = create<GlobalStore>((set, get) => ({
   },
 
   /**
-   * Mark notification as read (calls backend API)
+   * Mark a single notification as read.
+   * Optimistic: flip read_at immediately; on failure roll back + notify.
+   * Unread count is taken from the server response ({unread}).
    */
   markAsRead: async (id: string) => {
-    try {
-      await apiClient.markNotificationRead(id);
+    const prev = get().notifications;
+    const target = prev.find((n) => n.id === id);
+    if (!target || target.read_at) {
+      return;
+    }
+    const prevUnread = get().unreadCount;
 
-      set((state) => {
-        const notifications = state.notifications.map((n) =>
-          n.id === id ? { ...n, read_at: new Date().toISOString() } : n
-        );
-        const unreadCount = Math.max(0, state.unreadCount - 1);
-        return { notifications, unreadCount };
-      });
+    set((state) => ({
+      notifications: state.notifications.map((n) =>
+        n.id === id ? { ...n, read_at: new Date().toISOString() } : n
+      ),
+    }));
+
+    try {
+      const { unread } = await apiClient.markNotificationRead(id);
+      set({ unreadCount: unread });
     } catch {
+      set({ notifications: prev, unreadCount: prevUnread });
+      notifyError("notif.mark_read_failed");
     }
   },
 
   /**
-   * Mark all notifications as read (calls backend API)
+   * Mark all notifications as read.
+   * Optimistic: flip every read_at + zero the badge; on failure roll back + notify.
+   * Unread count is taken from the server response ({affected, unread}).
    */
   markAllAsRead: async () => {
-    try {
-      await apiClient.markAllNotificationsRead();
+    const prev = get().notifications;
+    const prevUnread = get().unreadCount;
 
-      set((state) => {
-        const now = new Date().toISOString();
-        const notifications = state.notifications.map((n) => ({
+    set((state) => {
+      const now = new Date().toISOString();
+      return {
+        notifications: state.notifications.map((n) => ({
           ...n,
           read_at: n.read_at || now,
-        }));
-        return { notifications, unreadCount: 0 };
-      });
+        })),
+        unreadCount: 0,
+      };
+    });
+
+    try {
+      const { unread } = await apiClient.markAllNotificationsRead();
+      set({ unreadCount: unread });
     } catch {
+      set({ notifications: prev, unreadCount: prevUnread });
+      notifyError("notif.mark_all_read_failed");
     }
   },
 

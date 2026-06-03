@@ -3,6 +3,14 @@ import { apiClient } from "@/lib/api-client"
 import type { Notification } from "@/types/api"
 import { useGlobalStore } from "./global-store"
 
+const notifyMock = vi.hoisted(() => ({ notifyError: vi.fn() }))
+vi.mock("@/lib/notify", () => ({
+  notifyError: notifyMock.notifyError,
+  notifySuccess: vi.fn(),
+  notifyInfo: vi.fn(),
+  notifyWarning: vi.fn(),
+}))
+
 function notif(over: Partial<Notification> = {}): Notification {
   return {
     id: "n1",
@@ -158,5 +166,89 @@ describe("global-store refreshUnread", () => {
     await useGlobalStore.getState().refreshUnread()
 
     expect(useGlobalStore.getState().unreadCount).toBe(4)
+  })
+})
+
+describe("global-store markAsRead", () => {
+  beforeEach(() => {
+    resetNotifications()
+    vi.restoreAllMocks()
+    notifyMock.notifyError.mockClear()
+  })
+
+  it("optimistically sets read_at and applies server unread count", async () => {
+    useGlobalStore.setState({
+      notifications: [notif({ id: "a" }), notif({ id: "b" })],
+      unreadCount: 2,
+    })
+    vi.spyOn(apiClient, "markNotificationRead").mockResolvedValue({
+      unread: 1,
+    })
+
+    await useGlobalStore.getState().markAsRead("a")
+
+    const s = useGlobalStore.getState()
+    expect(s.notifications.find((n) => n.id === "a")?.read_at).not.toBeNull()
+    expect(s.notifications.find((n) => n.id === "b")?.read_at).toBeNull()
+    expect(s.unreadCount).toBe(1)
+    expect(notifyMock.notifyError).not.toHaveBeenCalled()
+  })
+
+  it("rolls back read_at and unreadCount and notifies on failure", async () => {
+    useGlobalStore.setState({
+      notifications: [notif({ id: "a" })],
+      unreadCount: 1,
+    })
+    vi.spyOn(apiClient, "markNotificationRead").mockRejectedValue(
+      new Error("nope")
+    )
+
+    await useGlobalStore.getState().markAsRead("a")
+
+    const s = useGlobalStore.getState()
+    expect(s.notifications.find((n) => n.id === "a")?.read_at).toBeNull()
+    expect(s.unreadCount).toBe(1)
+    expect(notifyMock.notifyError).toHaveBeenCalled()
+  })
+})
+
+describe("global-store markAllAsRead", () => {
+  beforeEach(() => {
+    resetNotifications()
+    vi.restoreAllMocks()
+    notifyMock.notifyError.mockClear()
+  })
+
+  it("optimistically marks all read and applies server unread", async () => {
+    useGlobalStore.setState({
+      notifications: [notif({ id: "a" }), notif({ id: "b" })],
+      unreadCount: 2,
+    })
+    vi.spyOn(apiClient, "markAllNotificationsRead").mockResolvedValue({
+      affected: 2,
+      unread: 0,
+    })
+
+    await useGlobalStore.getState().markAllAsRead()
+
+    const s = useGlobalStore.getState()
+    expect(s.notifications.every((n) => n.read_at !== null)).toBe(true)
+    expect(s.unreadCount).toBe(0)
+    expect(notifyMock.notifyError).not.toHaveBeenCalled()
+  })
+
+  it("rolls back the whole list and notifies on failure", async () => {
+    const before = [notif({ id: "a" }), notif({ id: "b" })]
+    useGlobalStore.setState({ notifications: before, unreadCount: 2 })
+    vi.spyOn(apiClient, "markAllNotificationsRead").mockRejectedValue(
+      new Error("nope")
+    )
+
+    await useGlobalStore.getState().markAllAsRead()
+
+    const s = useGlobalStore.getState()
+    expect(s.notifications.every((n) => n.read_at === null)).toBe(true)
+    expect(s.unreadCount).toBe(2)
+    expect(notifyMock.notifyError).toHaveBeenCalled()
   })
 })
