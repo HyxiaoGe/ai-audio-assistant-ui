@@ -93,3 +93,24 @@ describe("routeWebSocketMessage — task_progress", () => {
     expect(deps.updateTask).not.toHaveBeenCalled()
   })
 })
+
+describe("routeWebSocketMessage — resilience", () => {
+  it("does nothing for an unknown kind", () => {
+    const deps = makeDeps()
+    routeWebSocketMessage(
+      { kind: "totally_unknown", data: {}, traceId: "x" },
+      deps
+    )
+    expect(deps.addNotificationFromWebSocket).not.toHaveBeenCalled()
+    expect(deps.updateTask).not.toHaveBeenCalled()
+    expect(deps.showNotificationToast).not.toHaveBeenCalled()
+    expect(deps.loadNotifications).not.toHaveBeenCalled()
+  })
+
+  it("does not throw on an envelope with no kind", () => {
+    const deps = makeDeps()
+    expect(() =>
+      routeWebSocketMessage({ traceId: "y" } as never, deps)
+    ).not.toThrow()
+  })
+})
