@@ -62,3 +62,34 @@ describe("routeWebSocketMessage — notification", () => {
     expect(deps.updateTask).not.toHaveBeenCalled()
   })
 })
+
+describe("routeWebSocketMessage — task_progress", () => {
+  it("updates the task map and does NOT touch notifications", () => {
+    const deps = makeDeps()
+    const data = {
+      task_id: "t9",
+      status: "processing",
+      stage: "transcribing",
+      progress: 42,
+      task_title: "Lecture",
+    }
+
+    routeWebSocketMessage({ kind: "task_progress", data, traceId: "tr9" }, deps)
+
+    expect(deps.updateTask).toHaveBeenCalledTimes(1)
+    expect(deps.updateTask).toHaveBeenCalledWith("t9", data)
+    expect(deps.addNotificationFromWebSocket).not.toHaveBeenCalled()
+    expect(deps.showNotificationToast).not.toHaveBeenCalled()
+  })
+
+  it("ignores a task_progress envelope missing task_id without throwing", () => {
+    const deps = makeDeps()
+    expect(() =>
+      routeWebSocketMessage(
+        { kind: "task_progress", data: { progress: 10 }, traceId: "tr10" },
+        deps
+      )
+    ).not.toThrow()
+    expect(deps.updateTask).not.toHaveBeenCalled()
+  })
+})
