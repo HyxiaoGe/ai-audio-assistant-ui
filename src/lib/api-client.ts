@@ -698,9 +698,11 @@ export class APIClient {
   }
 
   /**
-   * 标记单条通知为已读
+   * 标记单条通知为已读（幂等）；返回服务端权威未读数
    */
-  async markNotificationRead(notificationId: string): Promise<void> {
+  async markNotificationRead(
+    notificationId: string
+  ): Promise<{ unread: number }> {
     return request(
       `/notifications/${notificationId}/read`,
       { method: "PATCH" },
@@ -709,28 +711,13 @@ export class APIClient {
   }
 
   /**
-   * 标记所有通知为已读
+   * 标记所有通知为已读；返回受影响条数与未读数
    */
-  async markAllNotificationsRead(): Promise<void> {
+  async markAllNotificationsRead(): Promise<{
+    affected: number
+    unread: number
+  }> {
     return request("/notifications/read-all", { method: "PATCH" }, this.token)
-  }
-
-  /**
-   * 删除（dismiss）单条通知
-   */
-  async deleteNotification(notificationId: string): Promise<void> {
-    return request(
-      `/notifications/${notificationId}`,
-      { method: "DELETE" },
-      this.token
-    )
-  }
-
-  /**
-   * 清空所有通知
-   */
-  async clearAllNotifications(): Promise<void> {
-    return request("/notifications/clear", { method: "DELETE" }, this.token)
   }
 
   // ==========================================================================
