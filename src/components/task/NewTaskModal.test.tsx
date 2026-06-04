@@ -14,13 +14,28 @@ vi.mock("@/lib/use-api-client", () => ({
   useAPIClient: () => mockClient,
 }))
 
+// 提升为 hoisted,使上传 tab 提交时透传给 uploadFile 的 options 可被断言
+const uploadMock = vi.hoisted(() => ({ uploadFile: vi.fn() }))
 vi.mock("@/hooks/use-file-upload", () => ({
   useFileUpload: () => ({
     state: { progress: 0 },
-    uploadFile: vi.fn(),
+    uploadFile: uploadMock.uploadFile,
     reset: vi.fn(),
     isUploading: false,
   }),
+}))
+
+// 隔离上传 UI:暴露一个按钮,点击即用一个假 File 触发 onFileSelect,使 selectedFile 就绪可提交。
+vi.mock("./UploadZone", () => ({
+  default: (props: { onFileSelect: (file: File) => void }) => (
+    <button
+      type="button"
+      data-testid="pick-file"
+      onClick={() => props.onFileSelect(new File(["x"], "a.mp3", { type: "audio/mpeg" }))}
+    >
+      pick
+    </button>
+  ),
 }))
 
 vi.mock("next/navigation", () => ({
@@ -39,6 +54,43 @@ vi.mock("@/lib/i18n-context", () => ({
       vars?.platform ? `${key}:${vars.platform}` : key,
   }),
 }))
+
+describe("NewTaskModal auto-detect summary style", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockClient.getLLMModels.mockResolvedValue({ models: [] })
+    mockClient.getSummaryStyles.mockResolvedValue({
+      styles: [
+        { id: "auto", name: "Auto-detect", description: "Auto", focus: "AI picks the best style", icon: "sparkles" },
+        { id: "meeting", name: "Meeting", description: "Meeting", focus: "Decisions", icon: "users" },
+        { id: "tutorial", name: "Tutorial", description: "Tutorial", focus: "Steps", icon: "play-circle" },
+      ],
+    })
+    mockClient.getUserPreferences.mockResolvedValue({ task_defaults: {} })
+  })
+
+  it("defaults the summary style select to the backend auto item", async () => {
+    render(<NewTaskModal isOpen onClose={vi.fn()} />)
+    await screen.findByRole("dialog")
+
+    const select = (await screen.findByLabelText(/newTask\.summaryStyle/)) as HTMLSelectElement
+    await waitFor(() => expect(select.value).toBe("auto"))
+    expect(screen.getByDisplayValue("Auto-detect")).toBeInTheDocument()
+  })
+
+  it("submits summary_style 'auto' from the upload tab when the user does not change the style", async () => {
+    render(<NewTaskModal isOpen onClose={vi.fn()} />)
+    await screen.findByRole("dialog")
+    await screen.findByDisplayValue("Auto-detect")
+
+    fireEvent.click(screen.getByTestId("pick-file"))
+    fireEvent.click(screen.getByRole("button", { name: /newTask\.startProcessing/ }))
+
+    await waitFor(() => expect(uploadMock.uploadFile).toHaveBeenCalled())
+    const passedOptions = uploadMock.uploadFile.mock.calls[0][1]
+    expect(passedOptions.summary_style).toBe("auto")
+  })
+})
 
 describe("NewTaskModal YouTube style recommendation", () => {
   beforeEach(() => {

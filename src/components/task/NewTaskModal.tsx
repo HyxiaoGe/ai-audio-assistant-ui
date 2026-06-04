@@ -99,7 +99,7 @@ export default function NewTaskModal({
     summaryModelId: null as string | null,
     language: 'auto',
     speakerDiarization: false,
-    summaryStyle: 'general'
+    summaryStyle: 'auto'
   });
   const [llmModels, setLlmModels] = useState<LLMModel[]>([]);
   const [summaryStyles, setSummaryStyles] = useState<SummaryStyleItem[]>([]);
@@ -334,7 +334,7 @@ export default function NewTaskModal({
     const options: TaskOptions = {
       language: advancedOptions.language as TaskOptions["language"],
       enable_speaker_diarization: advancedOptions.speakerDiarization,
-      summary_style: advancedOptions.summaryStyle || "general",
+      summary_style: advancedOptions.summaryStyle || "auto",
       provider: selectedModel?.provider ?? null,
       model_id: selectedModel?.model_id ?? null,
     };
@@ -624,7 +624,7 @@ export default function NewTaskModal({
                             </option>
                           ))
                         ) : (
-                          <option value="general">{t("newTask.summaryGeneral")}</option>
+                          <option value="auto">{t("newTask.summaryAuto")}</option>
                         )}
                       </select>
                       {summaryStyles.length > 0 && (
