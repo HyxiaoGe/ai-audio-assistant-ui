@@ -352,6 +352,7 @@ export interface TaskDetail {
   error_message?: string
   error_code?: number
   youtube_info?: YouTubeVideoInfo  // YouTube 视频元数据（仅 YouTube 来源任务）
+  detected_summary_style?: string | null  // 后台自动识别得到的摘要风格 key（用户显式选风格时为 null）
 }
 
 export type TaskRetryResponse =
