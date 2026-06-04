@@ -272,8 +272,6 @@ export interface TaskOptions {
   summary_style?: SummaryStyle
   provider?: string | null
   model_id?: string | null
-  enable_visual_summary?: boolean
-  visual_types?: VisualType[]
 }
 
 export interface CreateTaskRequest {
@@ -425,15 +423,12 @@ export interface TranscriptResponse {
 // ============================================================================
 
 /**
- * 摘要类型（v1.3 新增可视化类型）
+ * 摘要类型
  */
 export type SummaryType =
   | "overview"
   | "key_points"
   | "action_items"
-  | "visual_mindmap"      // 新增：思维导图
-  | "visual_timeline"     // 新增：时间轴
-  | "visual_flowchart"    // 新增：流程图
 
 /**
  * 摘要项（v1.3 新增可视化字段）
@@ -452,7 +447,6 @@ export interface SummaryItem {
 
   // v1.3 新增可视化字段
   visual_format?: "mermaid" | "json" | null
-  visual_content?: string | null
   image_url?: string | null  // 修复：后端返回的是 image_url 不是 image_key
   image_format?: "png" | "svg" | null
   image_model_used?: string | null
@@ -491,48 +485,6 @@ export interface SummaryRegenerateResponse {
 export interface MediaTicketResponse {
   token: string
   expires_in: number
-}
-
-// ============================================================================
-// 可视化摘要相关（v1.3 新增）
-// ============================================================================
-
-/**
- * 可视化摘要类型（仅可视化部分）
- */
-export type VisualType = "mindmap" | "timeline" | "flowchart"
-
-/**
- * 内容风格
- */
-export type ContentStyle = "meeting" | "lecture" | "podcast" | "video" | "general"
-
-/**
- * 可视化摘要生成请求
- */
-export interface VisualSummaryRequest {
-  visual_type: VisualType
-  content_style?: ContentStyle | null
-  provider?: string | null
-  model_id?: string | null
-  generate_image?: boolean  // 是否生成 PNG/SVG 图片，默认 true
-  image_format?: "png" | "svg"  // 图片格式，默认 png
-  regenerate?: boolean  // 是否强制重新生成，默认 false（已存在则返回现有）
-}
-
-/**
- * 可视化摘要响应（单个）
- */
-export interface VisualSummaryResponse {
-  id: string
-  task_id: string
-  visual_type: VisualType
-  format: "mermaid" | "json"
-  content: string  // Mermaid 语法代码
-  image_url?: string | null  // 生成的图片 URL（如果启用了后端渲染）
-  model_used?: string | null
-  token_count?: number | null
-  created_at: string
 }
 
 // ============================================================================
