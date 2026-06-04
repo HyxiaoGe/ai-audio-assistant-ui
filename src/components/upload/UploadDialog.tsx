@@ -46,7 +46,7 @@ export function UploadDialog({
   const [options, setOptions] = useState<TaskOptions>({
     language: "auto",
     enable_speaker_diarization: false,
-    summary_style: "general",
+    summary_style: "auto",
     provider: null,
     model_id: null,
   })
@@ -225,7 +225,7 @@ export function UploadDialog({
             <div className="space-y-2">
               <Label htmlFor="summary-style">{t("uploadDialog.summaryStyle")}</Label>
               <Select
-                value={options.summary_style || "general"}
+                value={options.summary_style || "auto"}
                 onValueChange={(value: string) =>
                   setOptions((prev) => ({ ...prev, summary_style: value }))
                 }
@@ -242,7 +242,7 @@ export function UploadDialog({
                       </SelectItem>
                     ))
                   ) : (
-                    <SelectItem value="general">{t("newTask.summaryGeneral")}</SelectItem>
+                    <SelectItem value="auto">{t("newTask.summaryAuto")}</SelectItem>
                   )}
                 </SelectContent>
               </Select>
