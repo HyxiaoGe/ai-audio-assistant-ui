@@ -119,6 +119,7 @@ const apiMock = vi.hoisted(() => ({
   getTranscript: vi.fn(),
   getSummary: vi.fn(),
   getLLMModels: vi.fn(),
+  getSummaryStyles: vi.fn(),
 }))
 vi.mock("@/lib/use-api-client", () => ({
   useAPIClient: () => apiMock,
@@ -200,7 +201,9 @@ beforeEach(() => {
   apiMock.getTranscript.mockReset()
   apiMock.getSummary.mockReset()
   apiMock.getLLMModels.mockReset()
+  apiMock.getSummaryStyles.mockReset()
   apiMock.getLLMModels.mockResolvedValue({ models: [] })
+  apiMock.getSummaryStyles.mockResolvedValue({ styles: [] })
   apiMock.getTranscript.mockResolvedValue(transcript)
   useGlobalStore.setState({ tasks: {}, imageReadyEvents: {} })
 })
@@ -272,5 +275,56 @@ describe("TaskDetail — progressive disclosure", () => {
       const img = screen.getByRole("img", { name: "时间轴" })
       expect(img).toHaveAttribute("src", "/api/v1/summaries/images/t.png?token=tok")
     })
+  })
+})
+
+describe("TaskDetail — detected summary style", () => {
+  it("renders the detected-style line when detected_summary_style matches a loaded style", async () => {
+    apiMock.getTask.mockResolvedValue(
+      task({ status: "completed", detected_summary_style: "meeting" })
+    )
+    apiMock.getSummary.mockResolvedValue(summaryResp())
+    apiMock.getSummaryStyles.mockResolvedValue({
+      styles: [
+        {
+          id: "meeting",
+          name: "会议纪要",
+          description: "d",
+          focus: "f",
+          icon: undefined,
+          recommended_visual_types: [],
+        },
+      ],
+    })
+
+    render(<TaskDetail />)
+
+    await waitFor(() => {
+      expect(screen.getByText("task.detectedStyle")).toBeInTheDocument()
+    })
+  })
+
+  it("does not render the detected-style line when detected_summary_style is absent", async () => {
+    apiMock.getTask.mockResolvedValue(task({ status: "completed" }))
+    apiMock.getSummary.mockResolvedValue(summaryResp())
+    apiMock.getSummaryStyles.mockResolvedValue({
+      styles: [
+        {
+          id: "meeting",
+          name: "会议纪要",
+          description: "d",
+          focus: "f",
+          icon: undefined,
+          recommended_visual_types: [],
+        },
+      ],
+    })
+
+    render(<TaskDetail />)
+
+    await waitFor(() => {
+      expect(screen.getByText("task.summaryOverview")).toBeInTheDocument()
+    })
+    expect(screen.queryByText("task.detectedStyle")).toBeNull()
   })
 })

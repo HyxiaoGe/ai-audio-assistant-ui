@@ -45,6 +45,7 @@ import type {
   LLMModel,
   StreamingImage,
   SSEImageReadyEvent,
+  SummaryStyleItem,
   TaskStatus,
 } from '@/types/api';
 import {
@@ -181,6 +182,7 @@ export default function TaskDetail({
   const summaryScrollRef = useRef<HTMLDivElement | null>(null);
   const summaryAutoScrollRef = useRef(true);
   const [llmModels, setLlmModels] = useState<LLMModel[]>([]);
+  const [summaryStyles, setSummaryStyles] = useState<SummaryStyleItem[]>([]);
   const [summaryModelSelection, setSummaryModelSelection] = useState<Record<SummaryRegenerateType, string | null>>({
     overview: null,
     key_points: null,
@@ -749,6 +751,27 @@ export default function TaskDetail({
       }
     };
     loadModels();
+    return () => {
+      active = false;
+    };
+  }, [client, locale, authUser]);
+
+  useEffect(() => {
+    if (!authUser) return;
+    let active = true;
+    const loadSummaryStyles = async () => {
+      try {
+        const result = await client.getSummaryStyles();
+        if (active) {
+          setSummaryStyles(result.styles || []);
+        }
+      } catch {
+        if (active) {
+          setSummaryStyles([]);
+        }
+      }
+    };
+    loadSummaryStyles();
     return () => {
       active = false;
     };
@@ -1816,6 +1839,11 @@ export default function TaskDetail({
     );
   }
 
+  const detectedStyleName =
+    task?.detected_summary_style
+      ? (summaryStyles.find((s) => s.id === task.detected_summary_style)?.name ?? null)
+      : null;
+
   return (
     <div className="h-screen flex flex-col" style={{ background: 'var(--app-bg)' }}>
       {/* Header */}
@@ -1955,6 +1983,11 @@ export default function TaskDetail({
                               {t("task.compareModels")}
                             </button>
                           </div>
+                          {detectedStyleName && (
+                            <p className="text-xs mt-1" style={{ color: 'var(--app-text-subtle)' }}>
+                              {t("task.detectedStyle", { style: detectedStyleName })}
+                            </p>
+                          )}
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                           <SummaryModelSelect

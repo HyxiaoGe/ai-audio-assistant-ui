@@ -380,6 +380,7 @@
     "cleanupPartialFailed": "Cleanup completed, but {count} task(s) failed to delete",
     "cleanupFailed": "Cleanup failed, please try again later",
     "summaryOverview": "Overview",
+    "detectedStyle": "AI detected: {style}",
     "summaryEmpty": "No summary yet",
     "summaryGenerating": "Generating content...",
     "summaryEmptyAfter": "No content available. Try regenerating.",

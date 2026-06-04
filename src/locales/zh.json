@@ -380,6 +380,7 @@
     "cleanupPartialFailed": "清理完成，但 {count} 个任务清理失败",
     "cleanupFailed": "清理失败，请稍后再试",
     "summaryOverview": "内容概述",
+    "detectedStyle": "AI 识别为：{style}",
     "summaryEmpty": "暂无摘要内容",
     "summaryGenerating": "正在生成内容...",
     "summaryEmptyAfter": "内容为空，可尝试重新生成",
