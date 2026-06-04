@@ -709,6 +709,7 @@
     "summaryLecture": "讲座笔记",
     "summaryPodcast": "播客摘要",
     "summaryGeneral": "通用",
+    "summaryAuto": "自动识别",
     "summaryStyleRecommending": "AI 正在推荐摘要风格...",
     "summaryStyleRecommended": "AI 推荐 · 置信度 {confidence}%",
     "startProcessing": "开始处理",

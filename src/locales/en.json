@@ -709,6 +709,7 @@
     "summaryLecture": "Lecture notes",
     "summaryPodcast": "Podcast summary",
     "summaryGeneral": "General",
+    "summaryAuto": "Auto-detect",
     "summaryStyleRecommending": "AI is recommending a summary style...",
     "summaryStyleRecommended": "AI recommended · {confidence}% confidence",
     "startProcessing": "Start processing",
