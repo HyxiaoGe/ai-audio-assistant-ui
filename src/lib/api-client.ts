@@ -44,9 +44,6 @@ import {
   UserProfile,
   UserPreferences,
   UserPreferencesUpdateRequest,
-  VisualSummaryRequest,
-  VisualSummaryResponse,
-  VisualType,
   YouTubeAuthResponse,
   YouTubeChannelSyncStatus,
   YouTubeBatchAutoTranscribeRequest,
@@ -718,100 +715,6 @@ export class APIClient {
     unread: number
   }> {
     return request("/notifications/read-all", { method: "PATCH" }, this.token)
-  }
-
-  // ==========================================================================
-  // 可视化摘要相关 (v1.3)
-  // ==========================================================================
-
-  /**
-   * 生成可视化摘要（异步任务）
-   */
-  async generateVisualSummary(
-    taskId: string,
-    data: VisualSummaryRequest
-  ): Promise<{ task_id: string; status: string }> {
-    return request(
-      `/summaries/${taskId}/visual`,
-      { method: "POST", body: JSON.stringify(data) },
-      this.token
-    )
-  }
-
-  /**
-   * 获取已生成的可视化摘要
-   */
-  async getVisualSummary(
-    taskId: string,
-    visualType: VisualType
-  ): Promise<VisualSummaryResponse> {
-    return request(
-      `/summaries/${taskId}/visual/${visualType}`,
-      { method: "GET" },
-      this.token
-    )
-  }
-
-  /**
-   * 轮询可视化摘要生成状态
-   * 由于后端没有 SSE 端点，使用轮询方式检查生成是否完成
-   * @param taskId 任务 ID
-   * @param visualType 可视化类型
-   * @param options 轮询配置
-   * @returns Promise<VisualSummaryResponse> 成功获取到可视化摘要
-   * @throws ApiError 超时或获取失败
-   */
-  async pollVisualSummary(
-    taskId: string,
-    visualType: VisualType,
-    options: {
-      maxAttempts?: number // 最大尝试次数，默认 30
-      interval?: number // 轮询间隔（毫秒），默认 2000ms
-      onProgress?: (attempt: number, maxAttempts: number) => void // 进度回调
-    } = {}
-  ): Promise<VisualSummaryResponse> {
-    const { maxAttempts = 30, interval = 2000, onProgress } = options
-
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        onProgress?.(attempt, maxAttempts)
-
-        // getVisualSummary 成功时直接返回 VisualSummaryResponse
-        // 失败时会抛出 ApiError
-        const result = await this.getVisualSummary(taskId, visualType)
-        return result
-      } catch (error) {
-        // 最后一次尝试，抛出错误
-        if (attempt >= maxAttempts) {
-          if (error instanceof ApiError) {
-            throw error
-          }
-          throw new ApiError(
-            50001,
-            "可视化摘要生成超时，请稍后手动刷新查看",
-            ""
-          )
-        }
-
-        // 如果是 404（未生成完成）或 403（摘要不存在），继续轮询
-        if (
-          error instanceof ApiError &&
-          (error.code === 40402 || error.code === 40401 || error.code === 40403)
-        ) {
-          await new Promise((resolve) => setTimeout(resolve, interval))
-          continue
-        }
-
-        // 其他错误直接抛出
-        throw error
-      }
-    }
-
-    throw new ApiError(
-      50001,
-      "可视化摘要生成超时，请稍后手动刷新查看",
-      ""
-    )
   }
 
   // ==========================================================================
