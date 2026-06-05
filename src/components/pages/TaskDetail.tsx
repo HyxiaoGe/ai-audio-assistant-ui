@@ -239,6 +239,42 @@ export default function TaskDetail({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // 把后端转写 items 映射为展示分段（含 speaker 调色板按出现顺序分配）。
+  // loadTask 与「进入可见阶段补拉转写」复用同一映射，避免重复。
+  const mapApiTranscript = useCallback((items: ApiTranscriptSegment[]): DisplayTranscriptSegment[] => {
+    const unknownSpeakerLabel = t("transcript.unknownSpeaker");
+    const speakerPalette = availableSpeakers.filter((spk) => spk.name !== unknownSpeakerLabel);
+    const speakerMap = new Map<string, Speaker>();
+    let paletteIndex = 0;
+    items.forEach((segment) => {
+      const speakerId = segment.speaker_id;
+      if (!speakerId) return;
+      if (!speakerMap.has(speakerId)) {
+        const speakerInfo = speakerPalette[paletteIndex % speakerPalette.length];
+        if (speakerInfo) {
+          speakerMap.set(speakerId, speakerInfo);
+        }
+        paletteIndex += 1;
+      }
+    });
+    return items.map((segment) => {
+      const speakerInfo = segment.speaker_id ? speakerMap.get(segment.speaker_id) : null;
+      return {
+        id: segment.id,
+        speaker: speakerInfo?.name || unknownSpeakerLabel,
+        startTime: formatTimestamp(segment.start_time),
+        endTime: formatTimestamp(segment.end_time),
+        startSeconds: segment.start_time,
+        endSeconds: segment.end_time,
+        content: segment.content,
+        words: segment.words ?? null,
+        avatarColor: speakerInfo?.color || 'var(--app-text-subtle)',
+        isPolished: segment.is_edited ?? false,
+        originalContent: segment.original_content ?? null,
+      };
+    });
+  }, [availableSpeakers, t]);
+
   // 行动项缺省占位文案（已本地化）；解析逻辑见 @/lib/summary-parse。
   const actionItemLabels = useMemo(
     () => ({
@@ -332,38 +368,7 @@ export default function TaskDetail({
       }
       setTranscript([]);
     } else if (transcriptResult) {
-      const unknownSpeakerLabel = t("transcript.unknownSpeaker");
-      const speakerPalette = availableSpeakers.filter((spk) => spk.name !== unknownSpeakerLabel);
-      const speakerMap = new Map<string, Speaker>();
-      let paletteIndex = 0;
-      transcriptResult.items.forEach((segment: ApiTranscriptSegment) => {
-        const speakerId = segment.speaker_id;
-        if (!speakerId) return;
-        if (!speakerMap.has(speakerId)) {
-          const speakerInfo = speakerPalette[paletteIndex % speakerPalette.length];
-          if (speakerInfo) {
-            speakerMap.set(speakerId, speakerInfo);
-          }
-          paletteIndex += 1;
-        }
-      });
-      const mappedTranscript = transcriptResult.items.map((segment: ApiTranscriptSegment) => {
-        const speakerInfo = segment.speaker_id ? speakerMap.get(segment.speaker_id) : null;
-        return {
-          id: segment.id,
-          speaker: speakerInfo?.name || unknownSpeakerLabel,
-          startTime: formatTimestamp(segment.start_time),
-          endTime: formatTimestamp(segment.end_time),
-          startSeconds: segment.start_time,
-          endSeconds: segment.end_time,
-          content: segment.content,
-          words: segment.words ?? null,
-          avatarColor: speakerInfo?.color || 'var(--app-text-subtle)',
-          isPolished: segment.is_edited ?? false,
-          originalContent: segment.original_content ?? null,
-        };
-      });
-      setTranscript(mappedTranscript);
+      setTranscript(mapApiTranscript(transcriptResult.items));
     }
     setTranscriptLoading(false);
 
@@ -386,7 +391,29 @@ export default function TaskDetail({
     }
 
     setLoading(false);
-  }, [buildSummaryState, client, id, authUser, t, availableSpeakers]);
+  }, [buildSummaryState, client, id, authUser, t, mapApiTranscript]);
+
+  // 方案B「提早整块」：转写在进入 polishing/summarizing 时其实已全量落库（ASR 批量、转写写完才进润色），
+  // 但 loadTask 只在 mount/completed 触发，live 观看的任务在这一阶段不会自动取到已就绪的转写，
+  // 只能停在「转写生成中」直到 completed。这里在「转写可见阶段」补拉一次转写（仅转写、不动摘要），
+  // 让完整转写在润色/摘要还在跑时就先显示出来，无需等到 completed；completed 时 loadTask 会再拉到最终润色版。
+  useEffect(() => {
+    if (!id || !transcriptStageReached) return;
+    // 已有转写 / 正在加载 / 这一次明确出错 时都不补拉：避免覆盖、避免与 loadTask 抢、出错保持「生成中」。
+    if (transcript.length > 0 || transcriptLoading || transcriptError) return;
+    let cancelled = false;
+    void (async () => {
+      const result = await client.getTranscript(id).catch((err) => err);
+      // 处理中阶段取不到（尚未就绪/瞬态）属正常，不报错——保持「转写生成中」，completed 时 loadTask 兜底。
+      if (cancelled || result instanceof ApiError) return;
+      if (result?.items?.length) {
+        setTranscript(mapApiTranscript(result.items));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, transcriptStageReached, transcript.length, transcriptLoading, transcriptError, client, mapApiTranscript]);
 
   useEffect(() => {
     const summaryStreams = summaryStreamRef.current;
