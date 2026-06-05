@@ -54,6 +54,7 @@ interface AuthState {
   completeLogin: () => Promise<{ ok: boolean; redirectPath: string; error?: string }>
   getAccessToken: () => Promise<string | null>
   revalidateToken: () => Promise<string | null>
+  checkLiveness: () => Promise<void>
   logout: () => Promise<void>
 }
 
@@ -101,7 +102,18 @@ export function normalizeUser(raw: Record<string, unknown>): AuthUser {
   }
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+/**
+ * userinfo 失败是否为「服务端明确拒绝」(401 未授权 / 403 禁止)——即别处已登出 / 令牌被吊销,
+ * 应登出。SDK 抛出形如 "auth-client-web: userinfo failed (401)" 的 Error;仅当能确凿识别出
+ * 401/403 时返回 true。任何含糊(网络中断 / 5xx / 解析异常)一律返回 false → 保持登录,把误登出
+ * 风险压到零(漏判由下一次正常 API 请求的 401 或 token 过期兜底)。
+ */
+function isAuthRejection(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err)
+  return /\b40[13]\b/.test(msg)
+}
+
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   status: "loading",
 
@@ -198,11 +210,13 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   revalidateToken: async () => {
     configureAuth()
-    // 跨应用单点登出探测：getAccessToken 在 token 未过期时直接返回本地缓存，察觉不到「别处已登出」
-    // ——别处登出后这张 access token 签名仍有效、只是被服务端吊销标记拦截。这里强制走一次 SDK
-    // refresh()（必然访问服务端）：别处登出已吊销 refresh token → refresh 定论失败返回 null（SDK
-    // 已清空自身会话）→ 同步把 audio 翻转为未登录；会话仍在则只是轮转 token，瞬时网络故障则 throw
-    // ——后者绝不能登出（与 getAccessToken 同一套语义）。
+    // 强制服务端往返(轮换)的取 token 路径。现仅供 api-client 的 401 重试使用:某个受保护请求
+    // 被服务端拒为 401(本地 access token 已被别处轮换 / 吊销 / 时钟偏移),必须 sdkRefresh() 拿到
+    // 服务端当前有效的(轮换后)新票再重试——不能信 getAccessToken 的本地缓存(会拿回刚被拒的同一
+    // 张票、重试必再 401)。注意:focus/可见性的存活校验【不再】走这里(那会每切标签轮换一次 refresh
+    // token、在慢隧道下引发失同步被动登出),改用只读的 checkLiveness。
+    // 语义:refresh 定论失败返回 null(SDK 已清会话)→ 同步翻未登录;会话仍在则返回轮换后新票;
+    // 瞬时网络故障 throw → 绝不登出(与 getAccessToken 同一套)。
     try {
       const token = await sdkRefresh()
       if (token === null) {
@@ -211,6 +225,36 @@ export const useAuthStore = create<AuthState>((set) => ({
       return token
     } catch {
       return null
+    }
+  },
+
+  checkLiveness: async () => {
+    configureAuth()
+    // 已登出 / 加载中无需探测(无 token 可验,且避免与首屏静默探测竞态)
+    if (get().status !== "authenticated") return
+    // 只读单点登出探测——【绝不轮换 refresh token】。由 focus/可见性恢复与低频定时器触发:
+    // 取本地 access token(sdkGetAccessToken 仅临期才刷),再打一次 auth-service 的 denylist 受
+    // 保护端点 userinfo。别处登出后这张 access token 签名仍有效、但被服务端吊销标记拒为 401 →
+    // 据此登出。瞬时网络 / 5xx / 解析失败一律保持登录(宁可漏判一轮也绝不因抖动误登出——漏判由
+    // 下一次正常 API 请求的 401 或 token 过期兜住)。覆盖「纯播放 / 纯 SSE 页长时间不发受保护请求」
+    // 的 SLO 盲区:scoped media 短票不查 denylist,否则别处登出最坏要等到 token 过期才被感知。
+    let token: string | null
+    try {
+      token = await sdkGetAccessToken()
+    } catch {
+      return // 瞬时故障:保持现状,不登出
+    }
+    if (token === null) {
+      set({ user: null, status: "unauthenticated" }) // 定论失败(刷新被拒 / 无票)
+      return
+    }
+    try {
+      await sdkFetchUserInfo(token)
+    } catch (err) {
+      if (isAuthRejection(err)) {
+        set({ user: null, status: "unauthenticated" })
+      }
+      // 否则瞬时:保持登录
     }
   },
 
