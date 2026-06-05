@@ -179,3 +179,51 @@ describe("TranscriptList empty/error states", () => {
     expect(screen.getByText("task.transcriptLoadFailed")).not.toBeNull()
   })
 })
+
+describe("TranscriptList processing (生成中) state", () => {
+  // 回归核心：任务仍在处理中（polishing/summarizing，转写尚未产出，后端返回 empty-success）
+  // 不能显示「暂无内容」或「加载失败」，而应显示「转写生成中」，且不给重试按钮。
+  it("shows 转写生成中 (no retry) when the task is still processing and transcript is empty", () => {
+    const onRetry = vi.fn()
+    renderList({ transcript: [], transcriptInProgress: true, transcriptError: false, onRetry })
+
+    expect(screen.getByText("task.transcriptGenerating")).not.toBeNull()
+    // 处理中绝不冤枉成「暂无内容」「加载失败」「任务处理失败」
+    expect(screen.queryByText("task.transcriptEmpty")).toBeNull()
+    expect(screen.queryByText("task.transcriptLoadFailed")).toBeNull()
+    expect(screen.queryByText("errors.processFailedDesc")).toBeNull()
+    // 生成中无可重试之物，不出现重试按钮
+    expect(screen.queryByText("common.retry")).toBeNull()
+  })
+
+  it("prioritizes 生成中 over the load-failed state while still processing (no false failure)", () => {
+    // 即使这一次拉取瞬态出错(transcriptError=true)，只要任务还没完成，也只显示「生成中」而非「加载失败」。
+    renderList({ transcript: [], transcriptInProgress: true, transcriptError: true, onRetry: vi.fn() })
+
+    expect(screen.getByText("task.transcriptGenerating")).not.toBeNull()
+    expect(screen.queryByText("task.transcriptLoadFailed")).toBeNull()
+    expect(screen.queryByText("common.retry")).toBeNull()
+  })
+
+  it("once completed (not in progress), still surfaces load-failed/empty states as before", () => {
+    // transcriptInProgress=false 时退回 PR#64 行为：出错→加载失败可重试；空→暂无内容。
+    const { rerender } = renderList({ transcript: [], transcriptInProgress: false, transcriptError: true, onRetry: vi.fn() })
+    expect(screen.getByText("task.transcriptLoadFailed")).not.toBeNull()
+    expect(screen.queryByText("task.transcriptGenerating")).toBeNull()
+
+    rerender(
+      <TranscriptList
+        transcript={[]}
+        transcriptLoading={false}
+        isActiveAudio={true}
+        onTimeClick={vi.fn()}
+        onEditSegment={vi.fn()}
+        transcriptInProgress={false}
+        transcriptError={false}
+        onRetry={vi.fn()}
+      />
+    )
+    expect(screen.getByText("task.transcriptEmpty")).not.toBeNull()
+    expect(screen.queryByText("task.transcriptGenerating")).toBeNull()
+  })
+})
