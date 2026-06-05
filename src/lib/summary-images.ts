@@ -78,6 +78,25 @@ export function mergeStreamingImages(
   return next
 }
 
+/**
+ * 两份图集内容是否等价（占位符集合一致，且各项 status+url 都相同）。
+ * 对账轮询(completed 后定时重拉 DB 图集)用：mergeStreamingImages 总是返回新 Map 引用，
+ * 若 DB 无进展也照样 setState，会被「图集变化=有进展」的超时兜底误判为进展而无限重置 90s 窗口。
+ * 故轮询合并后用本函数比较，内容未变就保留原引用(返回 prev)、不触发重渲染、不重置超时窗口。
+ */
+export function streamingImagesEqual(
+  a: Map<string, StreamingImage>,
+  b: Map<string, StreamingImage>
+): boolean {
+  if (a === b) return true
+  if (a.size !== b.size) return false
+  for (const [key, av] of a) {
+    const bv = b.get(key)
+    if (!bv || bv.status !== av.status || bv.url !== av.url) return false
+  }
+  return true
+}
+
 /** 任意一张图仍是 pending/generating（未就绪）。超时兜底据此判断是否还要继续等。 */
 export function hasUnresolvedImages(map: Map<string, StreamingImage>): boolean {
   for (const img of map.values()) {
