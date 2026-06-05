@@ -216,6 +216,13 @@ export default function TaskDetail({
   const isProcessingTask = task?.status
     ? !['completed', 'failed'].includes(task.status) && !transcriptStageReached
     : false;
+  // 转写面板挂载后（polishing/summarizing 或 completed），任务若仍未完成即「转写生成中」。
+  // 此阶段转写可能尚未产出，后端对处理中任务返回 empty-success(items=[]) 而非 40401，
+  // 若不识别就会落到「暂无内容/加载失败」空态。据 task.status 派生此标记交给 TranscriptList
+  // 优先显示「转写生成中」，避免在任务尚未完成时把空态冤枉成失败。
+  const transcriptInProgress = task?.status
+    ? !['completed', 'failed'].includes(task.status)
+    : false;
 
   const availableSpeakers = useMemo<Speaker[]>(() => ([
     { name: t("transcript.speakerA"), color: 'var(--app-primary)' },
@@ -1942,6 +1949,7 @@ export default function TaskDetail({
                 onTimeClick={handleTimeClick}
                 onEditSegment={handleEditTranscript}
                 transcriptError={transcriptError}
+                transcriptInProgress={transcriptInProgress}
                 onRetry={loadTask}
               />
             </div>

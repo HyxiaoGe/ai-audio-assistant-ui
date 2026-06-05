@@ -28,8 +28,29 @@ interface TranscriptListProps {
   // 转写「这一次」拉取是否出错（超时/网络/网关等瞬态，非 40401）。用于把空态拆成
   // 「加载出错可重试」与「确实暂无内容」两种，避免一律误显示成「任务处理失败」。
   transcriptError?: boolean;
+  // 任务是否仍在处理中（未 completed/failed）。处理中阶段（polishing/summarizing）转写可能尚未产出，
+  // 后端对处理中任务返回的是 empty-success(items=[]) 而非 40401，若不识别就会被冤枉成「暂无内容/加载失败」。
+  // 该标记优先级高于 transcriptError：处理中一律显示「转写生成中」，绝不在任务尚未完成时报失败。
+  transcriptInProgress?: boolean;
   // 重试回调：局部重拉（loadTask），而非整页 window.location.reload。缺省退回整页刷新以兼容旧调用方。
   onRetry?: () => void;
+}
+
+/** 居中 spinner + 文案占位：转写「加载中」与「生成中」复用同一视觉，仅文案不同（均无失败语义、无重试）。 */
+function TranscriptSpinner({ label }: { label: string }) {
+  return (
+    <div className="flex items-center justify-center py-16">
+      <div className="glass-panel rounded-lg px-6 py-4 flex items-center gap-3">
+        <div
+          className="size-4 border-2 border-[var(--app-primary)] border-t-transparent rounded-full animate-spin"
+          style={{ borderColor: "var(--app-primary) transparent var(--app-primary) var(--app-primary)" }}
+        />
+        <span className="text-sm" style={{ color: "var(--app-text-muted)" }}>
+          {label}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -47,6 +68,7 @@ export function TranscriptList({
   onTimeClick,
   onEditSegment,
   transcriptError = false,
+  transcriptInProgress = false,
   onRetry,
 }: TranscriptListProps) {
   const { t } = useI18n();
@@ -184,17 +206,7 @@ export function TranscriptList({
   return (
     <div className="flex-1 overflow-y-auto" ref={transcriptScrollRef}>
       {transcriptLoading ? (
-        <div className="flex items-center justify-center py-16">
-          <div className="glass-panel rounded-lg px-6 py-4 flex items-center gap-3">
-            <div
-              className="size-4 border-2 border-[var(--app-primary)] border-t-transparent rounded-full animate-spin"
-              style={{ borderColor: "var(--app-primary) transparent var(--app-primary) var(--app-primary)" }}
-            />
-            <span className="text-sm" style={{ color: "var(--app-text-muted)" }}>
-              {t("transcript.loading")}
-            </span>
-          </div>
-        </div>
+        <TranscriptSpinner label={t("transcript.loading")} />
       ) : transcript.length > 0 ? (
         transcript.map((segment) => (
           <div key={segment.id} data-segment-id={segment.id}>
@@ -220,6 +232,11 @@ export function TranscriptList({
             />
           </div>
         ))
+      ) : transcriptInProgress ? (
+        // 任务仍在处理中（polishing/summarizing）：转写尚未产出/落库，后端返回 empty-success。
+        // 一律显示「转写生成中」spinner（无重试、无失败语义），优先级高于 transcriptError——
+        // 任务未完成前绝不把空态冤枉成「加载失败/暂无内容」。完成后该标记翻 false，再区分失败/暂无。
+        <TranscriptSpinner label={t("task.transcriptGenerating")} />
       ) : transcriptError ? (
         // 转写这一次没拉到（超时/网络/网关瞬态）→ 明确「加载失败、可重试」，而非冤枉成「任务处理失败」。
         <ErrorState
