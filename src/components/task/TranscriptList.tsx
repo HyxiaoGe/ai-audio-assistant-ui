@@ -25,6 +25,11 @@ interface TranscriptListProps {
   isActiveAudio: boolean;
   onTimeClick: (time: string) => void;
   onEditSegment: (segmentId: string, newContent: string) => void;
+  // 转写「这一次」拉取是否出错（超时/网络/网关等瞬态，非 40401）。用于把空态拆成
+  // 「加载出错可重试」与「确实暂无内容」两种，避免一律误显示成「任务处理失败」。
+  transcriptError?: boolean;
+  // 重试回调：局部重拉（loadTask），而非整页 window.location.reload。缺省退回整页刷新以兼容旧调用方。
+  onRetry?: () => void;
 }
 
 /**
@@ -41,8 +46,11 @@ export function TranscriptList({
   isActiveAudio,
   onTimeClick,
   onEditSegment,
+  transcriptError = false,
+  onRetry,
 }: TranscriptListProps) {
   const { t } = useI18n();
+  const handleRetry = onRetry ?? (() => window.location.reload());
   const currentTime = useAudioStore((state) => state.currentTime);
 
   // 高亮直接在 render 期由 currentTime 派生（useMemo），而非 effect+setState。
@@ -212,13 +220,23 @@ export function TranscriptList({
             />
           </div>
         ))
-      ) : (
+      ) : transcriptError ? (
+        // 转写这一次没拉到（超时/网络/网关瞬态）→ 明确「加载失败、可重试」，而非冤枉成「任务处理失败」。
         <ErrorState
-          type="processing"
+          type="network"
+          title={t("task.transcriptLoadFailed")}
+          description={t("errors.networkFailedDesc")}
+          onRetry={handleRetry}
+          retryLabel={t("common.retry")}
+        />
+      ) : (
+        // 拉取成功但确实没有转写（任务已完成但无内容，极少见）→ 中性提示，不报「失败」。
+        <ErrorState
+          type="general"
           title={t("task.transcriptEmpty")}
-          description={t("errors.processFailedDesc")}
-          onRetry={() => window.location.reload()}
-          retryLabel={t("task.retryProcessing")}
+          description={t("task.transcriptEmptyDesc")}
+          onRetry={handleRetry}
+          retryLabel={t("common.retry")}
         />
       )}
     </div>

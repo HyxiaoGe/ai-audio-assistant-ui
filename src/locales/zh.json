@@ -307,6 +307,8 @@
     "exportMarkdown": "导出为 Markdown",
     "transcriptTitle": "转写内容",
     "transcriptEmpty": "暂无转写内容",
+    "transcriptEmptyDesc": "该任务暂无转写内容",
+    "transcriptLoadFailed": "转写加载失败",
     "retryProcessing": "重新处理",
     "deleteConfirmTitle": "删除此任务？",
     "deleteConfirmDesc": "确认删除后，任务将从列表中移除，后台会进行数据清理。",
