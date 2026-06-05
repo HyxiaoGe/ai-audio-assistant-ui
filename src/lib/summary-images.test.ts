@@ -5,6 +5,7 @@ import {
   mergeStreamingImages,
   hasUnresolvedImages,
   markUnresolvedImagesFailed,
+  streamingImagesEqual,
 } from "./summary-images"
 import type { SummaryImage, SummaryItem, StreamingImage } from "@/types/api"
 
@@ -286,5 +287,43 @@ describe("markUnresolvedImagesFailed", () => {
     const next = markUnresolvedImagesFailed(prev)
     expect(next).not.toBe(prev)
     expect(prev.get("a")?.status).toBe("pending")
+  })
+})
+
+describe("streamingImagesEqual", () => {
+  const mk = (status: StreamingImage["status"], url: string | null = null): StreamingImage => ({
+    placeholder: "a",
+    description: "a",
+    url,
+    status,
+  })
+
+  it("is true for the same reference", () => {
+    const m = new Map<string, StreamingImage>([["a", mk("pending")]])
+    expect(streamingImagesEqual(m, m)).toBe(true)
+  })
+
+  it("is true when placeholder set + each status/url match (no progress)", () => {
+    const a = new Map<string, StreamingImage>([["a", mk("pending")], ["b", mk("ready", "/b.png")]])
+    const b = new Map<string, StreamingImage>([["a", mk("pending")], ["b", mk("ready", "/b.png")]])
+    expect(streamingImagesEqual(a, b)).toBe(true)
+  })
+
+  it("is false when a status advances (pending → ready)", () => {
+    const a = new Map<string, StreamingImage>([["a", mk("pending")]])
+    const b = new Map<string, StreamingImage>([["a", mk("ready", "/a.png")]])
+    expect(streamingImagesEqual(a, b)).toBe(false)
+  })
+
+  it("is false when url differs at the same status", () => {
+    const a = new Map<string, StreamingImage>([["a", mk("ready", "/a.png")]])
+    const b = new Map<string, StreamingImage>([["a", mk("ready", "/other.png")]])
+    expect(streamingImagesEqual(a, b)).toBe(false)
+  })
+
+  it("is false when the placeholder set differs", () => {
+    const a = new Map<string, StreamingImage>([["a", mk("pending")]])
+    const b = new Map<string, StreamingImage>([["a", mk("pending")], ["b", mk("pending")]])
+    expect(streamingImagesEqual(a, b)).toBe(false)
   })
 })

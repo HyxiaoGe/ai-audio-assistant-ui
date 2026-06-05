@@ -58,6 +58,7 @@ import {
   mergeStreamingImages,
   hasUnresolvedImages,
   markUnresolvedImagesFailed,
+  streamingImagesEqual,
 } from '@/lib/summary-images';
 import { useI18n } from '@/lib/i18n-context';
 import { useDateFormatter } from '@/lib/use-date-formatter';
@@ -66,6 +67,7 @@ import { useDateFormatter } from '@/lib/use-date-formatter';
 const SUMMARY_POLL_INTERVAL_MS = 2000; // 轮询 getSummary 检测版本号变化的间隔
 const SUMMARY_CONNECTION_TIMEOUT_MS = 3000; // 等 SSE connected 事件，超时则回退轮询
 const SUMMARY_IMAGE_TIMEOUT_MS = 90000; // summary 完成后等 images.completed 的上限（60s/张 + 30s 缓冲）
+const SUMMARY_IMAGE_RECONCILE_INTERVAL_MS = 4000; // completed 后图集对账重拉间隔（补 WS image_ready 漏收）
 const SUMMARY_OVERALL_TIMEOUT_MS = 120000; // 整个摘要 / 对比流程的兜底总超时
 
 // MarkdownContent 内含 react-markdown + remark-gfm + rehype-sanitize(约百 KB 级)。
@@ -323,13 +325,19 @@ export default function TaskDetail({
     );
   }, [actionItemLabels]);
 
-  const loadTask = useCallback(async () => {
+  // opts.silentTranscript：静默刷新转写——保留已显示的转写、不亮 loading spinner，待数据回来原位替换。
+  // 仅 completed 同步重拉用（此时转写已显示，只需把原始版换成润色版，不应整列清空+闪 spinner）；
+  // mount/retry 仍走默认(false)：清空+亮 loading，保留首屏 spinner 语义。
+  const loadTask = useCallback(async (opts?: { silentTranscript?: boolean }) => {
     if (!id || !authUser) return;
+    const silentTranscript = opts?.silentTranscript ?? false;
     setLoading(true);
     setError(null);
     setSummaryError(null);
-    setTranscriptLoading(true);
-    setTranscript([]);
+    if (!silentTranscript) {
+      setTranscriptLoading(true);
+      setTranscript([]);
+    }
     setTranscriptError(false);
     try {
       const taskData = await client.getTask(id);
@@ -347,7 +355,7 @@ export default function TaskDetail({
         setError(message);
         notifyError(message);
       }
-      setTranscriptLoading(false);
+      if (!silentTranscript) setTranscriptLoading(false);
       setLoading(false);
       return;
     }
@@ -359,18 +367,24 @@ export default function TaskDetail({
     ]);
 
     if (transcriptResult instanceof ApiError) {
-      // 40401 = 转写尚未就绪（任务还在处理早期），静默置空、不算错误。
-      // 其它（含 50000 超时/网络/网关瞬态）= 这一次没拉到，标记 transcriptError 让面板显示
-      // 「加载失败可重试」，而不是把已完成任务一律冤枉成「任务处理失败」。
-      if (transcriptResult.code !== 40401) {
-        notifyError(transcriptResult.message);
-        setTranscriptError(true);
+      // silent 模式（completed 同步重拉）下这一次没拉到：静默保持已显示的旧转写，
+      // 不清空、不报「加载失败」——否则会把已显示转写的已完成任务从列表跳成 PR#64 要避免的误报。
+      if (!silentTranscript) {
+        // 40401 = 转写尚未就绪（任务还在处理早期），静默置空、不算错误。
+        // 其它（含 50000 超时/网络/网关瞬态）= 这一次没拉到，标记 transcriptError 让面板显示
+        // 「加载失败可重试」，而不是把已完成任务一律冤枉成「任务处理失败」。
+        if (transcriptResult.code !== 40401) {
+          notifyError(transcriptResult.message);
+          setTranscriptError(true);
+        }
+        setTranscript([]);
       }
-      setTranscript([]);
     } else if (transcriptResult) {
+      // 成功：无论是否 silent 都原位替换（行 key=segment.id，润色为就地改同一行、id 不变，
+      // React 仅重渲染内容变化的行、不整列重挂，故 silent 下不闪烁）。
       setTranscript(mapApiTranscript(transcriptResult.items));
     }
-    setTranscriptLoading(false);
+    if (!silentTranscript) setTranscriptLoading(false);
 
     if (summaryResult instanceof ApiError) {
       // 摘要未就绪（40401）= 还没生成，静默置空；其它 = 右栏局部报错（不藏转写、不整页失败）。
@@ -901,6 +915,39 @@ export default function TaskDetail({
     return () => window.clearTimeout(handle);
   }, [streamingImages]);
 
+  // 渐进式展示·配图对账兜底：配图是任务 completed【之后】才异步逐张生成的（见后端 YouTube 管线），
+  // 而把占位符换成真图的唯一实时机制是一次性 WS image_ready（Redis pub/sub，无持久化/无重放）。
+  // 该窗口内若 WS 漏收（慢隧道断线重连 / 页面切后台 / 事件早于客户端重订阅），事件永久丢失，
+  // 占位符停在 pending 直到上面的 90s 兜底翻成 failed——但此时 DB 里 summary.images 其实早已 ready。
+  // 故 completed 且仍有未就绪图时，定时重拉 getSummary 与 DB 对账：mergeStreamingImages 幂等
+  // （本地已到终态胜过陈旧 DB pending，DB 终态始终采用），全部就绪或被 90s 兜底判失败后 hasUnresolvedImages
+  // 转 false 即自动停。仅读写 streamingImages，与转写状态(三态/生成中/提早整块)完全正交，不互相影响。
+  useEffect(() => {
+    if (!id) return;
+    if (task?.status !== 'completed') return;
+    if (!hasUnresolvedImages(streamingImages)) return;
+    let cancelled = false;
+    const handle = window.setInterval(() => {
+      void (async () => {
+        const result = await client.getSummary(id).catch(() => null);
+        if (cancelled || !result) return;
+        const dbImages = buildStreamingImagesFromSummary(result.items);
+        // DB 暂无图集（异常/版本切换竞态）：不要用空集合覆盖已显示的占位符（反复轮询会放大此风险）。
+        if (dbImages.size === 0) return;
+        // 内容无变化时保留原引用：避免 mergeStreamingImages 的新 Map 引用被 90s 兜底误判为「有进展」
+        // 而无限重置其窗口（那样真卡住的图永远不会被判失败）。仅 DB 真有进展才更新+重置兜底窗口。
+        setStreamingImages((prev) => {
+          const merged = mergeStreamingImages(prev, dbImages);
+          return streamingImagesEqual(prev, merged) ? prev : merged;
+        });
+      })();
+    }, SUMMARY_IMAGE_RECONCILE_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(handle);
+    };
+  }, [id, task?.status, streamingImages, client]);
+
   // Sync global state to local state
   useEffect(() => {
     if (globalTaskState) {
@@ -916,9 +963,10 @@ export default function TaskDetail({
           : prev
       );
 
-      // Reload task data when completed to get transcript and summary
+      // Reload task data when completed to get transcript and summary.
+      // 静默刷新转写：completed 时转写已显示，只需把原始版换成润色版，不要清空+闪 spinner（见 loadTask 注释）。
       if (globalTaskState.status === 'completed' && task?.status !== 'completed') {
-        loadTask();
+        loadTask({ silentTranscript: true });
       }
     }
   }, [globalTaskState, loadTask, task?.status]);
@@ -1977,7 +2025,7 @@ export default function TaskDetail({
                 onEditSegment={handleEditTranscript}
                 transcriptError={transcriptError}
                 transcriptInProgress={transcriptInProgress}
-                onRetry={loadTask}
+                onRetry={() => loadTask()}
               />
             </div>
 

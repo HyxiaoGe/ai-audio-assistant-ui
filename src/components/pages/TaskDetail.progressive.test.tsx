@@ -296,6 +296,102 @@ describe("TaskDetail — progressive disclosure", () => {
     // 证明确实发生了「补拉」：getTranscript 被调用不止一次（首拉空 + 可见阶段补拉）
     expect(apiMock.getTranscript.mock.calls.length).toBeGreaterThanOrEqual(2)
   })
+
+  it("completed 同步重拉时静默替换转写——不清空、不闪 loading spinner", async () => {
+    // 回归：任务变 completed 时（摘要落库）会重拉以换上润色版转写，但应『静默替换』：
+    // 保留已显示的转写、不闪 spinner，仅在数据回来后原位替换。旧行为会先 setTranscript([])+loading=true
+    // 把整列闪成 spinner（用户报告的「转写又重新加载一遍」）。
+    apiMock.getTask
+      .mockResolvedValueOnce(task({ status: "summarizing" }))
+      .mockResolvedValue(task({ status: "completed", progress: 100 }))
+    const { ApiError } = await import("@/types/api")
+    apiMock.getSummary
+      .mockRejectedValueOnce(new ApiError(40401, "not found", "tr")) // summarizing：摘要未就绪
+      .mockResolvedValue(summaryResp()) // completed 重拉：摘要已就绪
+
+    // 转写：mount 拿到已显示的转写；completed 同步重拉时这一拉【受控挂起】，以便在「重拉进行中」断言静默。
+    let resolveReload: ((v: TranscriptResponse) => void) | undefined
+    const polished = {
+      ...transcript,
+      items: [{ ...transcript.items[0], content: "这是润色后的转写" }],
+    } as unknown as TranscriptResponse
+    apiMock.getTranscript.mockReset()
+    apiMock.getTranscript
+      .mockResolvedValueOnce(transcript)
+      .mockReturnValueOnce(new Promise<TranscriptResponse>((res) => { resolveReload = res }))
+
+    render(<TaskDetail />)
+    await waitFor(() => {
+      expect(screen.getByText("这是一段转写文本")).toBeInTheDocument()
+    })
+
+    // 驱动任务 completed → 触发 completed 同步重拉
+    act(() => {
+      useGlobalStore.setState({
+        tasks: { "task-1": { task_id: "task-1", status: "completed", progress: 100, updated_at: 1 } },
+      })
+    })
+
+    // 等重拉真正发起（getTranscript 第二次被调用），此刻这一拉仍挂起
+    await waitFor(() => {
+      expect(apiMock.getTranscript.mock.calls.length).toBeGreaterThanOrEqual(2)
+    })
+    // 关键断言：重拉进行中，已显示的转写不被清空、不闪 loading spinner（transcript.loading 文案不出现）
+    expect(screen.getByText("这是一段转写文本")).toBeInTheDocument()
+    expect(screen.queryByText("transcript.loading")).toBeNull()
+
+    // 放出润色版转写 → 原位替换为润色版
+    act(() => {
+      resolveReload?.(polished)
+    })
+    await waitFor(() => {
+      expect(screen.getByText("这是润色后的转写")).toBeInTheDocument()
+    })
+  })
+
+  it("completed 后配图对账兜底：WS 漏收时靠轮询从 DB 拉到 ready 并显示", async () => {
+    // 回归：配图在 completed 之后才异步生成，前端只在 completed 拉过一次摘要（那时图还 pending）。
+    // 若 WS image_ready 漏收，旧逻辑会停在占位直到 90s 兜底翻 failed；新增的对账轮询应每隔数秒重拉
+    // getSummary，从 DB 读到 ready 后把占位换成真图——本用例【不】推送任何 image_ready 事件。
+    apiMock.getTask.mockResolvedValue(task({ status: "completed" }))
+    const readyResp = summaryResp({
+      images: [
+        {
+          placeholder: "{{IMAGE: 时间轴}}",
+          status: "ready",
+          url: "/api/v1/summaries/images/t.png",
+          alt: "时间轴",
+          model_id: null,
+          error: null,
+        },
+      ],
+    })
+    // 首拉(loadTask)：图仍 pending；此后对账轮询重拉：DB 已 ready
+    apiMock.getSummary.mockResolvedValueOnce(summaryResp()).mockResolvedValue(readyResp)
+
+    render(<TaskDetail />)
+
+    // 初始 pending 占位
+    await waitFor(
+      () => {
+        expect(screen.getByText("等待生成...")).toBeInTheDocument()
+      },
+      { timeout: 5000 }
+    )
+
+    // 不推送 image_ready，仅靠对账轮询（每 4s）从 DB 拉到 ready
+    await waitFor(
+      () => {
+        const img = screen.getByRole("img", { name: "时间轴" })
+        expect(img).toHaveAttribute("src", "/api/v1/summaries/images/t.png?token=tok")
+      },
+      { timeout: 8000 }
+    )
+    // 至少发生过一次对账重拉（首拉 + 轮询）
+    expect(apiMock.getSummary.mock.calls.length).toBeGreaterThanOrEqual(2)
+    // 显式抬高本用例超时：对账轮询真实定时器(4s 间隔)+ 两个内层 waitFor(5s+8s 上界)之和会超过
+    // vitest 默认 testTimeout=5000ms（未在 config/CLI 覆盖），慢 CI runner 上极易间歇超时红。
+  }, 20000)
 })
 
 describe("TaskDetail — detected summary style", () => {
