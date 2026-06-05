@@ -276,6 +276,26 @@ describe("TaskDetail — progressive disclosure", () => {
       expect(img).toHaveAttribute("src", "/api/v1/summaries/images/t.png?token=tok")
     })
   })
+
+  it("re-fetches the transcript at the polishing/summarizing stage when the first fetch came back empty (plan B 提早整块)", async () => {
+    // 模拟 live 观看：进入可见阶段时 loadTask 首拉转写尚未就绪（empty-success），
+    // 「进入可见阶段补拉」effect 应再拉一次，把已落库的完整转写提早显示出来，而非停在「转写生成中」。
+    apiMock.getTask.mockResolvedValue(task({ status: "polishing", progress: 72 }))
+    const { ApiError } = await import("@/types/api")
+    apiMock.getSummary.mockRejectedValue(new ApiError(40401, "not found", "tr"))
+    const empty = { ...transcript, total: 0, items: [] } as unknown as TranscriptResponse
+    apiMock.getTranscript.mockReset()
+    apiMock.getTranscript.mockResolvedValueOnce(empty).mockResolvedValue(transcript)
+
+    render(<TaskDetail />)
+
+    // 补拉成功后完整转写出现（而不是一直停在「转写生成中」占位）
+    await waitFor(() => {
+      expect(screen.getByText("这是一段转写文本")).toBeInTheDocument()
+    })
+    // 证明确实发生了「补拉」：getTranscript 被调用不止一次（首拉空 + 可见阶段补拉）
+    expect(apiMock.getTranscript.mock.calls.length).toBeGreaterThanOrEqual(2)
+  })
 })
 
 describe("TaskDetail — detected summary style", () => {
