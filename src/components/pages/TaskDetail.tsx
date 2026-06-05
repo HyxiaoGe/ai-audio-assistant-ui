@@ -134,6 +134,9 @@ export default function TaskDetail({
   const [task, setTask] = useState<ApiTaskDetail | null>(null);
   const [transcript, setTranscript] = useState<DisplayTranscriptSegment[]>([]);
   const [transcriptLoading, setTranscriptLoading] = useState(true);
+  // 转写「这一次」拉取是否出错（瞬态：超时/网络/网关，非 40401「尚未就绪」）。
+  // 用于让面板区分「加载失败可重试」与「确实暂无内容」，不再一律显示「任务处理失败」。
+  const [transcriptError, setTranscriptError] = useState(false);
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const [keyPoints, setKeyPoints] = useState<KeyPoint[]>([]);
   const [summaryOverviewMarkdown, setSummaryOverviewMarkdown] = useState<string>('');
@@ -284,6 +287,7 @@ export default function TaskDetail({
     setSummaryError(null);
     setTranscriptLoading(true);
     setTranscript([]);
+    setTranscriptError(false);
     try {
       const taskData = await client.getTask(id);
       setTask(taskData);
@@ -312,9 +316,12 @@ export default function TaskDetail({
     ]);
 
     if (transcriptResult instanceof ApiError) {
-      // 转写尚未就绪（40401）时静默置空；其它错误提示但不藏页面。
+      // 40401 = 转写尚未就绪（任务还在处理早期），静默置空、不算错误。
+      // 其它（含 50000 超时/网络/网关瞬态）= 这一次没拉到，标记 transcriptError 让面板显示
+      // 「加载失败可重试」，而不是把已完成任务一律冤枉成「任务处理失败」。
       if (transcriptResult.code !== 40401) {
         notifyError(transcriptResult.message);
+        setTranscriptError(true);
       }
       setTranscript([]);
     } else if (transcriptResult) {
@@ -1934,6 +1941,8 @@ export default function TaskDetail({
                 isActiveAudio={isActiveAudio}
                 onTimeClick={handleTimeClick}
                 onEditSegment={handleEditTranscript}
+                transcriptError={transcriptError}
+                onRetry={loadTask}
               />
             </div>
 

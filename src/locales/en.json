@@ -307,6 +307,8 @@
     "exportMarkdown": "Export as Markdown",
     "transcriptTitle": "Transcript",
     "transcriptEmpty": "No transcript yet",
+    "transcriptEmptyDesc": "This task has no transcript content",
+    "transcriptLoadFailed": "Failed to load transcript",
     "retryProcessing": "Retry processing",
     "deleteConfirmTitle": "Delete this task?",
     "deleteConfirmDesc": "After deletion, the task will be removed from your list and cleanup will run in the background.",

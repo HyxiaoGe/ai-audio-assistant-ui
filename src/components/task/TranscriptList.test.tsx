@@ -144,3 +144,38 @@ describe("TranscriptList", () => {
     expect(onEditSegment).toHaveBeenCalledWith("a", "edited text")
   })
 })
+
+describe("TranscriptList empty/error states", () => {
+  // 回归核心：空转写不再一律显示写死的「任务处理失败」(errors.processFailedDesc)，
+  // 而是区分「加载出错可重试」与「确实暂无内容」两种中性/可重试态。
+  it("shows a retryable load-failed state (not the hardcoded 任务处理失败) when the fetch errored", () => {
+    const onRetry = vi.fn()
+    renderList({ transcript: [], transcriptError: true, onRetry })
+
+    expect(screen.getByText("task.transcriptLoadFailed")).not.toBeNull()
+    expect(screen.getByText("errors.networkFailedDesc")).not.toBeNull()
+    // 关键回归断言：绝不再显示「任务处理失败，请重试」
+    expect(screen.queryByText("errors.processFailedDesc")).toBeNull()
+
+    fireEvent.click(screen.getByText("common.retry"))
+    expect(onRetry).toHaveBeenCalledTimes(1)
+  })
+
+  it("shows a neutral empty state (not 任务处理失败) when fetch succeeded but returned no transcript", () => {
+    const onRetry = vi.fn()
+    renderList({ transcript: [], transcriptError: false, onRetry })
+
+    expect(screen.getByText("task.transcriptEmpty")).not.toBeNull()
+    expect(screen.getByText("task.transcriptEmptyDesc")).not.toBeNull()
+    expect(screen.queryByText("errors.processFailedDesc")).toBeNull()
+
+    fireEvent.click(screen.getByText("common.retry"))
+    expect(onRetry).toHaveBeenCalledTimes(1)
+  })
+
+  it("falls back to a full reload when no onRetry is provided (backward compat)", () => {
+    renderList({ transcript: [], transcriptError: true, onRetry: undefined })
+    // 仅断言渲染出可重试态、不抛错；onRetry 缺省时退回 window.location.reload。
+    expect(screen.getByText("task.transcriptLoadFailed")).not.toBeNull()
+  })
+})
