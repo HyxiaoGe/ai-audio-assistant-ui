@@ -6,11 +6,17 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 concurrency:
   group: ai-audio-ui-build-deploy-${{ github.ref }}
   cancel-in-progress: true
+
+# 镜像源:阿里云 ACR 个人版(深圳),替代原 ghcr.io。
+# 动机:Windows 构建机与 dev 部署机同处国内,镜像却经 ghcr(海外 Fastly)跨境往返一圈,
+# 大镜像在 GFW 链路上 pull 反复被 reset(部署反复栽在 Login/Pull GHCR)。改走境内 ACR 去掉跨境跳。
+env:
+  REGISTRY: crpi-77w10wlykpqilmmb.cn-shenzhen.personal.cr.aliyuncs.com
+  IMAGE_NAME: crpi-77w10wlykpqilmmb.cn-shenzhen.personal.cr.aliyuncs.com/seanfield/ai-audio-assistant-ui
 
 jobs:
   build:
@@ -22,7 +28,6 @@ jobs:
       runner_name: ${{ steps.pipeline_start.outputs.runner_name }}
     env:
       ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
-      IMAGE_NAME: ghcr.io/hyxiaoge/ai-audio-assistant-ui
       NPM_CONFIG_AUDIT: "false"
       NPM_CONFIG_FUND: "false"
       NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
@@ -82,10 +87,14 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Login to GHCR
-        run: echo %GITHUB_TOKEN% | docker login ghcr.io -u %GITHUB_ACTOR% --password-stdin
+      - name: Login to ACR
+        # cmd 的 `echo %VAR% | docker login --password-stdin` 在 Windows docker 上把口令传歪 → ACR 判 401
+        # (dev bash 同一凭据三元组可成功登录,已排除凭据错)。改 -p 直传参数,绕开 echo/stdin 管道。
+        # runner 为私有自托管机、secret 在 GitHub 日志中被掩码,-p 在此场景安全。
+        run: docker login %REGISTRY% -u %ACR_USERNAME% -p %ACR_PASSWORD%
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
+          ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
 
       - name: Build Docker image
         run: |
@@ -112,19 +121,20 @@ jobs:
       - name: Record deploy start time
         run: echo "DEPLOY_START=$(date +%s)" >> "$GITHUB_ENV"
 
-      - name: Login to GHCR
-        run: echo "${GITHUB_TOKEN}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+      - name: Login to ACR
+        run: echo "${ACR_PASSWORD}" | docker login "${REGISTRY}" -u "${ACR_USERNAME}" --password-stdin
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
+          ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
 
       - name: Pull and restart ai-audio-assistant-ui
         run: |
           cd ~/project/ai-audio-assistant-ui
-          docker pull ghcr.io/hyxiaoge/ai-audio-assistant-ui:${{ github.sha }}
+          docker pull ${{ env.IMAGE_NAME }}:${{ github.sha }}
           cat > docker-compose.ai-audio-ui-ghcr.yml <<'EOF'
           services:
             ai-audio-assistant-ui:
-              image: ghcr.io/hyxiaoge/ai-audio-assistant-ui:${{ github.sha }}
+              image: ${{ env.IMAGE_NAME }}:${{ github.sha }}
               container_name: ai-audio-assistant-ui
               restart: always
               ports:
@@ -150,8 +160,8 @@ jobs:
       - name: Cleanup old images
         if: always()
         run: |
-          current="ghcr.io/hyxiaoge/ai-audio-assistant-ui:${{ github.sha }}"
-          docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}' ghcr.io/hyxiaoge/ai-audio-assistant-ui \
+          current="${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}' ${{ env.IMAGE_NAME }} \
             | awk -v current="$current" '$1 != current {print $2}' \
             | sort -u \
             | xargs -r docker rmi || true
@@ -165,7 +175,7 @@ jobs:
             dev \
             "${{ job.status }}" \
             "${{ needs.build.outputs.started_at }}" \
-            "ghcr.io/hyxiaoge/ai-audio-assistant-ui:${{ github.sha }}" \
+            "${{ env.IMAGE_NAME }}:${{ github.sha }}" \
             "${{ github.sha }}" \
             "${{ needs.build.outputs.runner_name }}" \
             ai-audio-assistant-ui \
