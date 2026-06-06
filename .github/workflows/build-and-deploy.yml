@@ -170,3 +170,23 @@ jobs:
             "${{ needs.build.outputs.runner_name }}" \
             ai-audio-assistant-ui \
             "${{ env.DEPLOY_START }}"
+
+      - name: 通知飞书(部署结果)
+        if: always()
+        continue-on-error: true
+        env:
+          FEISHU_INFRA_WEBHOOK: ${{ secrets.FEISHU_INFRA_WEBHOOK }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          if [ -z "$FEISHU_INFRA_WEBHOOK" ]; then
+            echo "FEISHU_INFRA_WEBHOOK 未配置,跳过飞书通知"
+            exit 0
+          fi
+          if [ "$JOB_STATUS" = "success" ]; then EMOJI="✅"; else EMOJI="❌"; fi
+          export TEXT="${EMOJI} 部署 ${{ github.repository }} @ ${{ github.ref_name }} (${GITHUB_SHA:0:7}) = ${JOB_STATUS}
+          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          [UptimeKuma keyword]"
+          PAYLOAD="$(python3 -c 'import json,os; print(json.dumps({"msg_type":"text","content":{"text":os.environ["TEXT"]}}))')"
+          curl -s -X POST "$FEISHU_INFRA_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d "$PAYLOAD"
