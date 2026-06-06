@@ -9,14 +9,26 @@
 const IMAGE_PLACEHOLDER_REGEX = /\{\{IMAGE:\s*([^}]+)\}\}/g
 
 /**
- * Extract the description from an image placeholder string.
+ * Extract the human-readable description (title) from an image placeholder string.
+ *
+ * 兼容两种格式：
+ *  - 旧格式 `{{IMAGE: 描述}}`            → 返回「描述」
+ *  - 新版管道格式 `{{IMAGE: type | title | keywords}}`（7-style 重构后）→ 返回「title」段，
+ *    而非整串 `type | title | keywords`（否则图注/alt 会显示成丑陋的管道串）。
  *
  * @param placeholder - The full placeholder string, e.g., "{{IMAGE: 供应链时间轴}}"
- * @returns The extracted description, e.g., "供应链时间轴"
+ * @returns The extracted title/description, e.g., "供应链时间轴"
  */
 export function extractPlaceholderDescription(placeholder: string): string {
   const match = placeholder.match(/\{\{IMAGE:\s*([^}]+)\}\}/)
-  return match ? match[1].trim() : placeholder
+  if (!match) return placeholder
+  const inner = match[1].trim()
+  // 新版管道格式恰为 `type | title | keywords` 三段（关键词内部只用逗号，不含管道）。
+  const parts = inner.split("|")
+  if (parts.length >= 3) {
+    return parts[1].trim()
+  }
+  return inner
 }
 
 /**

@@ -90,6 +90,20 @@ describe("MarkdownContent", () => {
     expect(screen.queryByRole("img")).not.toBeInTheDocument()
   })
 
+  it("unwraps a whole-document ```markdown fence so {{IMAGE}} placeholders still render (LLM-wrapped data)", () => {
+    const F = "`".repeat(3)
+    const ph = "{{IMAGE: timeline | 雷军早期创业 | 三色公司倒闭, 盘古惨败}}"
+    const wrapped = `${F}markdown\n## 标题\n\n正文段落\n\n${ph}\n${F}`
+    const images = new Map<string, StreamingImage>([
+      [ph, { placeholder: ph, description: "雷军早期创业", url: "/api/v1/summaries/images/t.webp", status: "ready" }],
+    ])
+    render(<MarkdownContent content={wrapped} streamingImages={images} mediaToken={"tok"} />)
+    // 围栏被剥掉后：标题进 heading、占位符进 ImagePlaceholder 的 ready 图，而非整段塞进一个代码块。
+    expect(screen.getByRole("heading", { name: "标题" })).toBeInTheDocument()
+    const img = screen.getByRole("img", { name: "雷军早期创业" })
+    expect(img).toHaveAttribute("src", "/api/v1/summaries/images/t.webp?token=tok")
+  })
+
   it("still renders legacy inline ![](url) images directly via the img override (old data)", () => {
     render(
       <MarkdownContent

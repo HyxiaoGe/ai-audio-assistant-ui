@@ -12,6 +12,7 @@ import {
   extractPlaceholderDescription,
 } from "@/lib/image-placeholder";
 import { appendMediaToken } from "@/lib/media-url";
+import { unwrapMarkdownFence } from "@/lib/markdown-fence";
 import { useI18n } from "@/lib/i18n-context";
 
 // 插件数组无依赖：提到模块级常量，避免每次渲染都新建数组而让 ReactMarkdown 拿到新引用。
@@ -42,6 +43,10 @@ export function MarkdownContent({
   mediaToken,
 }: MarkdownContentProps) {
   const { t } = useI18n();
+
+  // 偶发：LLM 把整段正文包进 ```markdown ... ``` 围栏、后端原样落库，会让 react-markdown
+  // 整段当代码块渲染、{{IMAGE:..}} 占位符进不了段落渲染器（图片不显示）。渲染前剥掉这层整段包裹。
+  const normalizedContent = useMemo(() => unwrapMarkdownFence(content), [content]);
 
   // components 每次渲染都重建会让 ReactMarkdown 拿到新引用而无谓重渲染。它闭包
   // imageModel / streamingImages / mediaToken / t，用 useMemo 按这些依赖缓存。
@@ -141,7 +146,7 @@ export function MarkdownContent({
         rehypePlugins={REHYPE_PLUGINS}
         components={components}
       >
-        {content}
+        {normalizedContent}
       </ReactMarkdown>
     </div>
   );
