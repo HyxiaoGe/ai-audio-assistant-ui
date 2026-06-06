@@ -21,6 +21,20 @@ describe('image-placeholder utilities', () => {
       expect(extractPlaceholderDescription('{{IMAGE: Supply Chain Timeline}}')).toBe('Supply Chain Timeline');
     });
 
+    it('extracts only the title segment from the new pipe format', () => {
+      expect(
+        extractPlaceholderDescription(
+          '{{IMAGE: timeline | 雷军早期创业 | 三色公司倒闭, 盘古惨败, 站柜台顿悟}}'
+        )
+      ).toBe('雷军早期创业');
+    });
+
+    it('trims around pipe segments', () => {
+      expect(
+        extractPlaceholderDescription('{{IMAGE: concept |  小米铁人三项  | a, b, c}}')
+      ).toBe('小米铁人三项');
+    });
+
     it('returns original string if no match', () => {
       expect(extractPlaceholderDescription('not a placeholder')).toBe('not a placeholder');
     });
