@@ -91,6 +91,37 @@ describe('ImagePlaceholder', () => {
       expect(skeleton).toHaveClass('pointer-events-none');
     });
 
+    it('renders image at full column width with no height cap', () => {
+      // 回归守卫：配图必须铺满正文列宽，不得再被 max-h-96 高度帽限成窄居中。
+      render(
+        <ImagePlaceholder
+          description="满宽图"
+          status="ready"
+          imageUrl="https://example.com/image.png"
+        />
+      );
+
+      const img = screen.getByRole('img');
+      expect(img).toHaveClass('w-full');
+      expect(img).toHaveClass('h-full');
+      expect(img).toHaveClass('object-contain');
+      // 旧的 max-h-96(384px 高度帽)是图变窄居中的根因，必须移除。
+      expect(img).not.toHaveClass('max-h-96');
+      expect(img).not.toHaveClass('h-auto');
+    });
+
+    it('reserves a 16:9 frame around the image (no load-time height jump)', () => {
+      const { container } = render(
+        <ImagePlaceholder
+          description="十六比九"
+          status="ready"
+          imageUrl="https://example.com/image.png"
+        />
+      );
+
+      expect(container.querySelector('.aspect-video')).not.toBeNull();
+    });
+
     it('falls back to failed state when image load fails', () => {
       render(
         <ImagePlaceholder
