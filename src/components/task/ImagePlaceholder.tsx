@@ -45,7 +45,7 @@ function ImageLoader({
   return (
     <figure className={`my-6 ${className}`}>
       <div
-        className="rounded-lg overflow-hidden relative"
+        className="rounded-lg overflow-hidden relative aspect-video"
         style={{
           backgroundColor: "var(--app-surface-muted)",
         }}
@@ -83,10 +83,9 @@ function ImageLoader({
         <img
           src={imageUrl}
           alt={description}
-          className={`w-full h-auto object-contain max-h-96 transition-opacity duration-500 ${
+          className={`w-full h-full object-contain transition-opacity duration-500 ${
             imageLoaded ? "opacity-100" : "opacity-0"
           }`}
-          style={{ minHeight: imageLoaded ? "auto" : "200px" }}
           onLoad={() => setImageLoaded(true)}
           onError={() => setImageError(true)}
         />
@@ -157,7 +156,7 @@ export function ImagePlaceholder({
     >
       {/* Skeleton area with shimmer animation */}
       <div
-        className="relative flex flex-col items-center justify-center animate-pulse"
+        className="relative flex flex-col items-center justify-center animate-pulse aspect-video"
         style={{
           minHeight: "200px",
           backgroundColor: "var(--app-surface-alt)",
