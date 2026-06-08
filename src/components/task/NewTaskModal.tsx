@@ -686,7 +686,7 @@ export default function NewTaskModal({
             }}
           >
             {isCreating && activeTab === 'link'
-              ? t("newTask.validatingVideo")
+              ? t("newTask.creatingTask")
               : t("newTask.startProcessing")}
           </Button>
         </div>
