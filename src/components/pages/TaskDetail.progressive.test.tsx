@@ -90,8 +90,12 @@ vi.mock("@/lib/media-url", () => ({
 
 // ---- audio store：最小桩（稳定引用，含 TranscriptList 订阅的 currentTime）----
 vi.mock("@/store/audio-store", () => ({
-  useAudioStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector(mocks.audioState),
+  useAudioStore: Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) => selector(mocks.audioState),
+    { getState: () => mocks.audioState }
+  ),
+  setEnsureCurrentMedia: vi.fn(),
+  ensureCurrentMediaActive: vi.fn(),
 }))
 
 // ---- 顶层布局桩：不在被测范围，且会引入 ws/通知等依赖 ----

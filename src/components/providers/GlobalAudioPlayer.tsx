@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef } from "react"
-import { useAudioStore } from "@/store/audio-store"
+import { ensureCurrentMediaActive, useAudioStore } from "@/store/audio-store"
 import { canonicalizeAudioSrc } from "@/lib/audio-progress"
 
 const CACHE_TTL = 7 * 24 * 60 * 60 * 1000
@@ -145,24 +145,32 @@ export default function GlobalAudioPlayer() {
       if (event.metaKey || event.ctrlKey || event.altKey) return
       if (isInteractiveTarget(event.target)) return
 
-      const { src, toggle, seek, currentTime, duration } = getAudioState()
-      if (!src) return
-
       const key = event.key
-      if (key === " " || event.code === "Space") {
+      const isPlayPause = key === " " || event.code === "Space"
+      const isSeek = key === "ArrowLeft" || key === "ArrowRight"
+      if (!isPlayPause && !isSeek) return
+
+      if (isPlayPause) {
+        // 空格作用于用户正在看的任务：详情页登记了上下文时先确保 store 指向本页任务（必要时切源，
+        // store 为空也能直接起播本页任务），再 toggle，避免误操作顶部播放条里别的任务。
+        ensureCurrentMediaActive()
+        const { src, toggle } = getAudioState()
+        if (!src) return
         event.preventDefault()
         toggle()
         return
       }
 
-      if (key === "ArrowLeft" || key === "ArrowRight") {
-        event.preventDefault()
-        const step = 5
-        const delta = key === "ArrowLeft" ? -step : step
-        const max = duration > 0 && isFinite(duration) ? duration : Number.POSITIVE_INFINITY
-        const next = Math.max(0, Math.min(max, currentTime + delta))
-        seek(next)
-      }
+      // 方向键 seek 只作用于当前正在播放/载入的音频（顶部播放条），不切换任务——
+      // 否则在详情页按方向键会意外打断正在听的另一任务。
+      const { src, seek, currentTime, duration } = getAudioState()
+      if (!src) return
+      event.preventDefault()
+      const step = 5
+      const delta = key === "ArrowLeft" ? -step : step
+      const max = duration > 0 && isFinite(duration) ? duration : Number.POSITIVE_INFINITY
+      const next = Math.max(0, Math.min(max, currentTime + delta))
+      seek(next)
     }
 
     window.addEventListener("keydown", handleKeyDown)

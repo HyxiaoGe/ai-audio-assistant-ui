@@ -18,6 +18,20 @@ let intendToPlay = false
 // 媒体重新就绪或再次失败（loadedmetadata|error）后释放。
 let recovering = false
 
+// 「正在查看的任务」上下文：全局键盘快捷键（空格切播放、方向键 seek）默认作用于 store 当前载入
+// 的音频（即顶部播放条）。但用户停留在某个任务详情页时，期望快捷键作用于正在看的任务，而非播放条
+// 里别的任务。详情页挂载时登记 ensureCurrent；快捷键触发前先调用它，若 store 当前源不是本页任务
+// 则切源到本页任务（随后 toggle 即播本页任务）。详情页卸载后回落为 null，快捷键恢复全局播放条行为。
+let ensureCurrentMedia: (() => void) | null = null
+
+export function setEnsureCurrentMedia(fn: (() => void) | null): void {
+  ensureCurrentMedia = fn
+}
+
+export function ensureCurrentMediaActive(): void {
+  ensureCurrentMedia?.()
+}
+
 interface AudioStore {
   audioEl: HTMLAudioElement | null
   src: string | null

@@ -31,7 +31,7 @@ import RetryCleanupToast from '@/components/task/RetryCleanupToast';
 import { SummaryModelSelect } from '@/components/task/SummaryModelSelect';
 import { useAPIClient } from '@/lib/use-api-client';
 import { useGlobalStore } from '@/store/global-store';
-import { useAudioStore } from '@/store/audio-store';
+import { setEnsureCurrentMedia, useAudioStore } from '@/store/audio-store';
 import { resolveStreamToken } from '@/lib/stream-ticket';
 import { useMediaToken } from '@/lib/media-url';
 import { ApiError } from '@/types/api';
@@ -1102,6 +1102,21 @@ export default function TaskDetail({
     }
     seek(time);
   }, [task?.audio_url, task?.id, task?.title, currentSrc, setSource, seek]);
+
+  // 全局键盘快捷键（空格切播放、方向键 seek）默认作用于顶部播放条载入的音频。停留在本任务详情页
+  // 时登记此回调，让快捷键改作用于本任务：store 当前源不是本任务音频则先切源（随后 toggle 即播本
+  // 任务），修复「顶部播放条载着别的任务时，在本任务页按空格却播了别的任务」。卸载时清空、回落全局。
+  const ensureCurrentMedia = useCallback(() => {
+    if (!task?.audio_url) return;
+    if (useAudioStore.getState().src !== task.audio_url) {
+      setSource(task.audio_url, task.id, task.title);
+    }
+  }, [task?.audio_url, task?.id, task?.title, setSource]);
+
+  useEffect(() => {
+    setEnsureCurrentMedia(ensureCurrentMedia);
+    return () => setEnsureCurrentMedia(null);
+  }, [ensureCurrentMedia]);
 
   useEffect(() => {
     if (!task?.audio_url) return;
