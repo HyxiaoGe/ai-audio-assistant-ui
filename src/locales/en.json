@@ -718,6 +718,7 @@
     "summaryStyleRecommended": "AI recommended · {confidence}% confidence",
     "startProcessing": "Start processing",
     "creatingTask": "Creating task...",
+    "comingSoon": "Coming soon",
     "validatingVideo": "Validating video...",
     "createFailed": "Failed to create task"
   },

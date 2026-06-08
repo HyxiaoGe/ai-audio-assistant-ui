@@ -120,8 +120,9 @@ export default function NewTaskModal({
   ];
 
   const platformTabs = [
-    { id: 'youtube', label: 'YouTube' },
-    { id: 'bilibili', label: 'Bilibili' }
+    { id: 'youtube', label: 'YouTube', disabled: false },
+    // Bilibili 入口尚未开放（后端 source_type 仍写死 youtube），禁选并标注「敬请期待」。
+    { id: 'bilibili', label: 'Bilibili', disabled: true }
   ];
 
   const platformInfo = {
@@ -156,12 +157,8 @@ export default function NewTaskModal({
     if (isOpen && initialVideoUrl) {
       setActiveTab('link');
       setVideoUrl(initialVideoUrl);
-      // Auto-detect platform from URL
-      if (initialVideoUrl.includes('bilibili.com') || initialVideoUrl.includes('b23.tv')) {
-        setSelectedPlatform('bilibili');
-      } else {
-        setSelectedPlatform('youtube');
-      }
+      // Bilibili 入口暂未开放，平台统一回到 youtube（避免把已禁用的 tab 置为激活态）。
+      setSelectedPlatform('youtube');
     }
   }, [isOpen, initialVideoUrl]);
 
@@ -474,20 +471,33 @@ export default function NewTaskModal({
                   >
                     {platformTabs.map((tab) => {
                       const isActive = tab.id === selectedPlatform;
+                      const isDisabled = tab.disabled;
                       return (
                         <button
                           key={tab.id}
-                          onClick={() => setSelectedPlatform(tab.id as Platform)}
+                          onClick={() => {
+                            if (!isDisabled) setSelectedPlatform(tab.id as Platform);
+                          }}
+                          disabled={isDisabled}
+                          title={isDisabled ? t("newTask.comingSoon") : undefined}
+                          aria-disabled={isDisabled}
                           className="px-6 py-2 rounded-md text-sm transition-all"
                           style={{
                             background: isActive ? 'var(--app-glass-bg-strong)' : 'transparent',
                             color: isActive ? 'var(--app-text)' : 'var(--app-text-muted)',
                             fontWeight: isActive ? 500 : 400,
                             boxShadow: isActive ? 'var(--app-glass-shadow)' : 'none',
-                            border: isActive ? '1px solid var(--app-glass-border)' : '1px solid transparent'
+                            border: isActive ? '1px solid var(--app-glass-border)' : '1px solid transparent',
+                            opacity: isDisabled ? 0.45 : 1,
+                            cursor: isDisabled ? 'not-allowed' : 'pointer'
                           }}
                         >
                           {tab.label}
+                          {isDisabled && (
+                            <span className="ml-1.5 text-xs" style={{ opacity: 0.8 }}>
+                              · {t("newTask.comingSoon")}
+                            </span>
+                          )}
                         </button>
                       );
                     })}

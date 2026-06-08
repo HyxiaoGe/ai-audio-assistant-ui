@@ -718,6 +718,7 @@
     "summaryStyleRecommended": "AI 推荐 · 置信度 {confidence}%",
     "startProcessing": "开始处理",
     "creatingTask": "创建任务...",
+    "comingSoon": "敬请期待",
     "validatingVideo": "正在验证视频...",
     "createFailed": "创建任务失败"
   },
