@@ -717,6 +717,7 @@
     "summaryStyleRecommending": "AI is recommending a summary style...",
     "summaryStyleRecommended": "AI recommended · {confidence}% confidence",
     "startProcessing": "Start processing",
+    "creatingTask": "Creating task...",
     "validatingVideo": "Validating video...",
     "createFailed": "Failed to create task"
   },

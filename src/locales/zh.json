@@ -717,6 +717,7 @@
     "summaryStyleRecommending": "AI 正在推荐摘要风格...",
     "summaryStyleRecommended": "AI 推荐 · 置信度 {confidence}%",
     "startProcessing": "开始处理",
+    "creatingTask": "创建任务...",
     "validatingVideo": "正在验证视频...",
     "createFailed": "创建任务失败"
   },
