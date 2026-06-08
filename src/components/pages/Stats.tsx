@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import Header from "@/components/layout/Header";
 import Sidebar from "@/components/layout/Sidebar";
@@ -120,6 +120,16 @@ export default function Stats({
   const client = useAPIClient();
   const { t, locale } = useI18n();
 
+  // 始终保存最新的 onOpenLogin / t，但不让它们成为下方统计拉取 effect 的依赖。
+  // 否则父组件重渲染（开关登录弹窗、切主题）会重建 onOpenLogin 身份、切语言会重建 t，
+  // 导致 fetchStats 身份变化、effect 重跑，并发重复拉取两个统计接口，造成无谓请求。
+  const onOpenLoginRef = useRef(onOpenLogin);
+  const tRef = useRef(t);
+  useEffect(() => {
+    onOpenLoginRef.current = onOpenLogin;
+    tRef.current = t;
+  });
+
   const [timeRange, setTimeRange] = useState<TimeRangeOption>("month");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
@@ -177,16 +187,16 @@ export default function Stats({
         if (err instanceof ApiError) {
           setError(err.message);
           if (err.code >= 40100 && err.code < 40200) {
-            onOpenLogin();
+            onOpenLoginRef.current();
           }
         } else {
-          setError(err instanceof Error ? err.message : t("stats.loadFailed"));
+          setError(err instanceof Error ? err.message : tRef.current("stats.loadFailed"));
         }
       } finally {
         setLoading(false);
       }
     },
-    [client, onOpenLogin, t]
+    [client]
   );
 
   useEffect(() => {

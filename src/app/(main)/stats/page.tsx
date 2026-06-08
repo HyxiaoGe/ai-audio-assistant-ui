@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useAuthStore } from "@/store/auth-store";
 import { useTheme } from "next-themes";
 import Stats from "@/components/pages/Stats";
@@ -15,10 +15,14 @@ export default function StatsPage() {
   const { resolvedTheme } = useTheme();
   const [loginOpen, setLoginOpen] = useState(false);
 
-
-  const toggleTheme = () => {
-    setTheme(resolvedTheme === "dark" ? "light" : "dark");
-  };
+  // 用 useCallback 稳定 handler 身份，避免重渲染（如开关登录弹窗、切主题）把新函数
+  // 传给 Stats，连带触发其统计拉取 effect 重跑等无谓请求。
+  const openLoginModal = useCallback(() => setLoginOpen(true), []);
+  const closeLoginModal = useCallback(() => setLoginOpen(false), []);
+  const toggleTheme = useCallback(
+    () => setTheme(resolvedTheme === "dark" ? "light" : "dark"),
+    [resolvedTheme, setTheme],
+  );
 
   if (status === "loading") {
     return <FullPageLoader />;
@@ -28,12 +32,12 @@ export default function StatsPage() {
     <>
       <Stats
         isAuthenticated={!!authUser}
-        onOpenLogin={() => setLoginOpen(true)}
+        onOpenLogin={openLoginModal}
         onToggleTheme={toggleTheme}
       />
       <LoginModal
         isOpen={loginOpen}
-        onClose={() => setLoginOpen(false)}
+        onClose={closeLoginModal}
         callbackUrl="/stats"
       />
     </>

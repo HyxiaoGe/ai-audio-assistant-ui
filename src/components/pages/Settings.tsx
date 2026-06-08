@@ -121,6 +121,12 @@ export default function Settings({
   const numberFormatter = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const { t } = useI18n();
   const client = useAPIClient();
+  // 保存最新的 t，但不让它成为下方 ASR 额度拉取 effect 的依赖；
+  // 否则切换界面语言会重建 t、触发 getAsrFreeQuota 重复拉取。
+  const tRef = useRef(t);
+  useEffect(() => {
+    tRef.current = t;
+  });
   // ASR 免费额度（普通用户）
   const [asrFreeQuota, setAsrFreeQuota] = useState<AsrUserFreeQuotaResponse | null>(null);
   const [asrUsageLoading, setAsrUsageLoading] = useState(false);
@@ -154,7 +160,7 @@ export default function Settings({
         }
       } catch {
         if (!active) return;
-        setAsrUsageError(t("settings.asrUsageLoadFailed"));
+        setAsrUsageError(tRef.current("settings.asrUsageLoadFailed"));
       } finally {
         if (active) {
           setAsrUsageLoading(false);
@@ -165,7 +171,7 @@ export default function Settings({
     return () => {
       active = false;
     };
-  }, [client, isAdmin, t]);
+  }, [client, isAdmin]);
 
   useEffect(() => {
     let active = true;
@@ -244,6 +250,14 @@ export default function Settings({
     timeZone,
   ]);
 
+  // 保存最新的 applyPreferences，但不让它成为下方 getUserPreferences effect 的依赖。
+  // applyPreferences 依赖 timeZone / setTimeZone，切主题/语言/时区都会重建其身份，
+  // 否则会触发该 effect 重跑、重复拉取 getUserPreferences。
+  const applyPreferencesRef = useRef(applyPreferences);
+  useEffect(() => {
+    applyPreferencesRef.current = applyPreferences;
+  });
+
   const updatePreferences = useCallback(async (payload: UserPreferencesUpdateRequest) => {
     if (!isAuthenticated) return;
     try {
@@ -261,7 +275,7 @@ export default function Settings({
       try {
         const result = await client.getUserPreferences();
         if (!active) return;
-        applyPreferences(result);
+        applyPreferencesRef.current(result);
       } catch {
         // ignore preference load failures
       }
@@ -270,7 +284,7 @@ export default function Settings({
     return () => {
       active = false;
     };
-  }, [applyPreferences, client, isAuthenticated]);
+  }, [client, isAuthenticated]);
 
   const openConfirm = (action: "clearTasks" | "deleteAccount" | "resetSettings") => {
     setConfirmAction(action);

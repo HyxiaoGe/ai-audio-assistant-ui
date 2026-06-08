@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
@@ -40,7 +40,17 @@ export default function Dashboard({
   // Get real-time task updates from WebSocket
   const globalTasks = useGlobalStore((state) => state.tasks);
 
-  // Load tasks from API
+  // 始终保存最新的 onOpenLogin / t，但不让它们成为下方拉取 effect 的依赖。
+  // 否则父组件每次重渲染（如开关弹窗）都会重建 onOpenLogin 的函数身份，
+  // 触发该 effect 重跑、反复 getTasks，造成无谓请求。
+  const onOpenLoginRef = useRef(onOpenLogin);
+  const tRef = useRef(t);
+  useEffect(() => {
+    onOpenLoginRef.current = onOpenLogin;
+    tRef.current = t;
+  });
+
+  // Load tasks from API（仅在 client / 登录态变化时拉取，不随弹窗开关 refetch）
   useEffect(() => {
     if (!isAuthenticated) {
       setTasks([]);
@@ -63,10 +73,10 @@ export default function Dashboard({
           if (err instanceof ApiError) {
             setError(err.message);
             if (err.code >= 40100 && err.code < 40200) {
-              onOpenLogin();
+              onOpenLoginRef.current();
             }
           } else {
-            setError(err instanceof Error ? err.message : t("errors.loadTaskFailed"));
+            setError(err instanceof Error ? err.message : tRef.current("errors.loadTaskFailed"));
           }
         }
       } finally {
@@ -80,7 +90,7 @@ export default function Dashboard({
     return () => {
       isMounted = false;
     };
-  }, [client, isAuthenticated, onOpenLogin, t]);
+  }, [client, isAuthenticated]);
 
   // Sync WebSocket task updates to local task list
   useEffect(() => {

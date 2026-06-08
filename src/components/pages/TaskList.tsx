@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import { Pagination } from '@/components/common/Pagination';
@@ -51,6 +51,16 @@ export default function TaskList({
   const [reloadKey, setReloadKey] = useState(0);
   const tasksPerPage = 10;
 
+  // 保存最新的 onOpenLogin / t，但不让它们进入下方拉取 effect 的依赖——
+  // 否则父组件每次重渲染（如开关弹窗）重建 onOpenLogin 身份，就会触发列表与
+  // 状态计数反复 getTasks（一次开关多打 5 个请求）。
+  const onOpenLoginRef = useRef(onOpenLogin);
+  const tRef = useRef(t);
+  useEffect(() => {
+    onOpenLoginRef.current = onOpenLogin;
+    tRef.current = t;
+  });
+
   useEffect(() => {
     if (!isAuthenticated) {
       setTasks([]);
@@ -81,10 +91,10 @@ export default function TaskList({
           if (err instanceof ApiError) {
             setError(err.message);
             if (err.code >= 40100 && err.code < 40200) {
-              onOpenLogin();
+              onOpenLoginRef.current();
             }
           } else {
-            setError(err instanceof Error ? err.message : t("errors.loadTaskFailed"));
+            setError(err instanceof Error ? err.message : tRef.current("errors.loadTaskFailed"));
           }
         }
       } finally {
@@ -98,7 +108,7 @@ export default function TaskList({
     return () => {
       isMounted = false;
     };
-  }, [client, currentPage, filterStatus, isAuthenticated, onOpenLogin, t, reloadKey]);
+  }, [client, currentPage, filterStatus, isAuthenticated, reloadKey]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -127,7 +137,7 @@ export default function TaskList({
         });
       } catch (err) {
         if (err instanceof ApiError && err.code >= 40100 && err.code < 40200) {
-          onOpenLogin();
+          onOpenLoginRef.current();
         }
       }
     };
@@ -136,7 +146,7 @@ export default function TaskList({
     return () => {
       isMounted = false;
     };
-  }, [client, isAuthenticated, onOpenLogin, reloadKey]);
+  }, [client, isAuthenticated, reloadKey]);
 
   const formatDurationLabel = (seconds?: number) => {
     if (!seconds || seconds <= 0) return '--';

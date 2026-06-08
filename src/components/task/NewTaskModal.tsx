@@ -213,6 +213,14 @@ export default function NewTaskModal({
     });
   }, [llmModels]);
 
+  // 保存最新的 applyPreferenceDefaults，但不让它成为下方 getUserPreferences effect 的依赖。
+  // 它依赖 llmModels，getLLMModels 解析后 llmModels 换新身份会重建它；否则打开弹窗时
+  // getUserPreferences 会被调两次（第二次纯属冗余）。llmModels 到货后由下方廉价 effect 重新套用默认值。
+  const applyPreferenceDefaultsRef = useRef(applyPreferenceDefaults);
+  useEffect(() => {
+    applyPreferenceDefaultsRef.current = applyPreferenceDefaults;
+  });
+
   useEffect(() => {
     if (!isOpen) {
       modalOpenRef.current = false;
@@ -237,7 +245,7 @@ export default function NewTaskModal({
         const preferences = await client.getUserPreferences();
         if (!active) return;
         preferencesRef.current = preferences;
-        applyPreferenceDefaults(preferences);
+        applyPreferenceDefaultsRef.current(preferences);
       } catch {
         // ignore preference load failures
       }
@@ -246,7 +254,7 @@ export default function NewTaskModal({
     return () => {
       active = false;
     };
-  }, [applyPreferenceDefaults, client, isOpen]);
+  }, [client, isOpen]);
 
   useEffect(() => {
     if (!isOpen || !preferencesRef.current) return;
