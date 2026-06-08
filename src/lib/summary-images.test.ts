@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
 import {
   buildStreamingImagesFromSummary,
+  buildPendingImagesFromContent,
+  buildStreamingImagesFromSummaryOrSeed,
   applyImageReadyToMap,
   mergeStreamingImages,
   hasUnresolvedImages,
@@ -79,6 +81,66 @@ describe("buildStreamingImagesFromSummary", () => {
     ])
     expect(map.has("{{IMAGE: new}}")).toBe(true)
     expect(map.has("{{IMAGE: old}}")).toBe(false)
+  })
+})
+
+describe("buildPendingImagesFromContent", () => {
+  it("returns an empty Map for empty/nullish content or content with no placeholder", () => {
+    expect(buildPendingImagesFromContent(null).size).toBe(0)
+    expect(buildPendingImagesFromContent(undefined).size).toBe(0)
+    expect(buildPendingImagesFromContent("").size).toBe(0)
+    expect(buildPendingImagesFromContent("没有占位符的正文").size).toBe(0)
+  })
+
+  it("seeds one pending entry per distinct placeholder, keyed by the placeholder string", () => {
+    const content = "段落一 {{IMAGE: a | 标题甲 | kw}} 段落二 {{IMAGE: b | 标题乙 | kw}}"
+    const map = buildPendingImagesFromContent(content)
+    expect(map.size).toBe(2)
+    expect(map.get("{{IMAGE: a | 标题甲 | kw}}")).toEqual<StreamingImage>({
+      placeholder: "{{IMAGE: a | 标题甲 | kw}}",
+      description: "标题甲",
+      url: null,
+      status: "pending",
+    })
+    expect(map.get("{{IMAGE: b | 标题乙 | kw}}")?.status).toBe("pending")
+  })
+
+  it("dedupes a placeholder that appears more than once", () => {
+    const map = buildPendingImagesFromContent("{{IMAGE: a}} 又来一次 {{IMAGE: a}}")
+    expect(map.size).toBe(1)
+    expect(map.get("{{IMAGE: a}}")?.description).toBe("a")
+  })
+})
+
+describe("buildStreamingImagesFromSummaryOrSeed", () => {
+  it("uses structured images[] when present and ignores the content seed", () => {
+    const map = buildStreamingImagesFromSummaryOrSeed([
+      summaryItem({
+        content: "正文 {{IMAGE: fromcontent}}",
+        images: [
+          img({ placeholder: "{{IMAGE: fromimages}}", status: "ready", url: "/api/v1/summaries/images/x.png" }),
+        ],
+      }),
+    ])
+    expect(map.has("{{IMAGE: fromimages}}")).toBe(true)
+    expect(map.has("{{IMAGE: fromcontent}}")).toBe(false)
+    expect(map.get("{{IMAGE: fromimages}}")?.status).toBe("ready")
+  })
+
+  it("falls back to seeding pending from active overview content when images[] is empty (completed-race insurance)", () => {
+    // images[] 偶发未落库时，从正文 {{IMAGE:..}} 兜底种 pending，让对账轮询能武装、补图、不必手刷。
+    const map = buildStreamingImagesFromSummaryOrSeed([summaryItem({ images: null })])
+    const seeded = map.get("{{IMAGE: infographic | 小米战略 | 关键文字}}")
+    expect(seeded?.status).toBe("pending")
+    expect(seeded?.description).toBe("小米战略")
+    expect(seeded?.url).toBeNull()
+  })
+
+  it("returns empty when there is neither images[] nor an active overview to seed from", () => {
+    const map = buildStreamingImagesFromSummaryOrSeed([
+      summaryItem({ summary_type: "key_points", is_active: true, content: "{{IMAGE: x}}", images: null }),
+    ])
+    expect(map.size).toBe(0)
   })
 })
 

@@ -104,6 +104,31 @@ describe("MarkdownContent", () => {
     expect(img).toHaveAttribute("src", "/api/v1/summaries/images/t.webp?token=tok")
   })
 
+  it("surfaces the image when streamingImages flips pending→ready, without a content change (the core bug)", () => {
+    // 回归守卫：图片到达只改 streamingImages（content 不变）。components 改用 ref 承载可变值后，
+    // ReactMarkdown(未 memo) 仍会在父组件重渲染时重跑 renderer 读到最新 ref，把图刷出来——
+    // 且 components 引用稳定，不再重挂载 <img>（旧 bug：每次更新重建 components→重挂载→onError→永久回退）。
+    const ph = "{{IMAGE: 时间轴}}"
+    const pending = new Map<string, StreamingImage>([
+      [ph, { placeholder: ph, description: "时间轴", url: null, status: "pending" }],
+    ])
+    const { rerender } = render(
+      <MarkdownContent content={ph} streamingImages={pending} mediaToken={"tok"} />
+    )
+    // 起初是占位骨架，没有 <img>。
+    expect(screen.queryByRole("img")).not.toBeInTheDocument()
+    expect(screen.getByText("等待生成...")).toBeInTheDocument()
+
+    const ready = new Map<string, StreamingImage>([
+      [ph, { placeholder: ph, description: "时间轴", url: "/api/v1/summaries/images/t.png", status: "ready" }],
+    ])
+    rerender(
+      <MarkdownContent content={ph} streamingImages={ready} mediaToken={"tok"} />
+    )
+    const img = screen.getByRole("img", { name: "时间轴" })
+    expect(img).toHaveAttribute("src", "/api/v1/summaries/images/t.png?token=tok")
+  })
+
   it("still renders legacy inline ![](url) images directly via the img override (old data)", () => {
     render(
       <MarkdownContent

@@ -54,6 +54,7 @@ import {
 } from '@/lib/image-placeholder';
 import {
   buildStreamingImagesFromSummary,
+  buildStreamingImagesFromSummaryOrSeed,
   applyImageReadyToMap,
   mergeStreamingImages,
   hasUnresolvedImages,
@@ -400,7 +401,9 @@ export default function TaskDetail({
       // 渐进式展示：用持久图集 summary.images 初始化/刷新占位符 Map（替代旧的「仅 regenerate 临时填充」）。
       // 用 merge 而非整体替换：completed 重载重拉 summary.images 时，DB 快照可能滞后于已到达的
       // image_ready WS（本地某占位符已 patch 成 ready），直接替换会把已显示的图退回 pending 且不重放。
-      const dbImages = buildStreamingImagesFromSummary(summaryResult.items);
+      // images[] 优先；completed 那刻它偶发还没落库时，从 overview 正文占位符兜底 seed 成 pending，
+      // 保证对账轮询能武装、把异步生成的图补出来（不必手刷）。
+      const dbImages = buildStreamingImagesFromSummaryOrSeed(summaryResult.items);
       setStreamingImages((prev) => mergeStreamingImages(prev, dbImages));
     }
 

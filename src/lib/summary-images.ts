@@ -1,5 +1,5 @@
 import type { StreamingImage, SummaryItem, WsImageReadyData } from "@/types/api"
-import { extractPlaceholderDescription } from "@/lib/image-placeholder"
+import { extractPlaceholderDescription, findImagePlaceholders } from "@/lib/image-placeholder"
 
 /**
  * 把一组摘要项里「active overview」的持久图集 images[] 转成 streamingImages Map。
@@ -28,6 +28,44 @@ export function buildStreamingImagesFromSummary(
     })
   }
   return map
+}
+
+/**
+ * 从 overview 正文里的 `{{IMAGE:..}}` 占位符兜底构建一份「全 pending」的图集 Map。
+ * 仅在结构化的 images[] 尚未落库时用作种子：让 completed 后的对账轮询能据此武装并把图补上。
+ */
+export function buildPendingImagesFromContent(
+  content: string | null | undefined
+): Map<string, StreamingImage> {
+  const map = new Map<string, StreamingImage>()
+  if (!content) return map
+  for (const placeholder of findImagePlaceholders(content)) {
+    if (map.has(placeholder)) continue
+    map.set(placeholder, {
+      placeholder,
+      description: extractPlaceholderDescription(placeholder),
+      url: null,
+      status: "pending",
+    })
+  }
+  return map
+}
+
+/**
+ * 优先用结构化 images[] 构建图集；若它尚未落库（completed 那刻 getSummary 偶发未取到 / 版本切换
+ * 竞态导致 images 为空），退而从 active overview 正文的 `{{IMAGE:..}}` 占位符 seed 成 pending。
+ * 这样即便 WS image_ready 全漏、首拉也没拿到 images[]，completed 后的 4s 对账轮询仍会武装、
+ * 把异步生成的图补出来，不必手动刷新页面。
+ */
+export function buildStreamingImagesFromSummaryOrSeed(
+  items: SummaryItem[]
+): Map<string, StreamingImage> {
+  const fromImages = buildStreamingImagesFromSummary(items)
+  if (fromImages.size > 0) return fromImages
+  const overview = items.find(
+    (item) => item.summary_type === "overview" && item.is_active
+  )
+  return buildPendingImagesFromContent(overview?.content)
 }
 
 /**

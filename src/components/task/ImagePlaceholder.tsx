@@ -1,31 +1,66 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Loader2, ImageIcon, AlertCircle, CheckCircle2 } from "lucide-react"
 import type { StreamingImage } from "@/types/api"
+import { appendMediaToken } from "@/lib/media-url"
+import { getMediaTicket } from "@/lib/media-ticket"
+
+// 媒体代理图鉴权 token 过期/缺失（或瞬时网络）会让 <img> 触发 error。重挂载抖动修掉后，
+// 这层重试主要兜底 token 过期：换新票据 + cache-bust 重试有限次，避免一次失败就永久停在
+// 「[图片：..]」回退、必须手刷。非代理 URL（外链/data:）没有这个问题，首次失败即回退。
+const MAX_IMAGE_RETRIES = 2
 
 interface ImagePlaceholderProps {
   description: string
   status: StreamingImage["status"]
   imageUrl?: string | null
+  /** 媒体短票：拼到代理图 URL 的 ?token=。缺省 null（外链图不需要）。 */
+  mediaToken?: string | null
   className?: string
 }
 
 /**
  * Inner component that handles image loading state.
- * Separated to allow resetting via key prop when URL changes.
+ * Separated to allow resetting via key prop when the (token-less) base URL changes.
  */
 function ImageLoader({
-  imageUrl,
+  baseUrl,
+  mediaToken,
   description,
   className,
 }: {
-  imageUrl: string
+  baseUrl: string
+  mediaToken: string | null
   description: string
   className: string
 }) {
+  const [token, setToken] = useState<string | null>(mediaToken)
+  const [attempt, setAttempt] = useState(0)
   const [imageError, setImageError] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
+
+  const imageUrl = useMemo(() => {
+    const withToken = appendMediaToken(baseUrl, token)
+    if (attempt === 0) return withToken
+    // 重试加一个无害的 cache-bust 参数：端点忽略未知 query，但能强制浏览器重新发起请求，
+    // 不命中上一次失败的连接/缓存状态（响应头是 immutable）。
+    return `${withToken}${withToken.includes("?") ? "&" : "?"}_r=${attempt}`
+  }, [baseUrl, token, attempt])
+
+  const handleError = () => {
+    // 仅对走鉴权的媒体代理 URL 做「换票 + 重试」；非代理 URL 没有 token 问题，直接回退。
+    const isProxy = appendMediaToken(baseUrl, "probe") !== baseUrl
+    if (!isProxy || attempt >= MAX_IMAGE_RETRIES) {
+      setImageError(true)
+      return
+    }
+    void getMediaTicket().then((fresh) => {
+      setToken(fresh ?? token)
+      setImageLoaded(false)
+      setAttempt((a) => a + 1)
+    })
+  }
 
   if (imageError) {
     return (
@@ -87,7 +122,7 @@ function ImageLoader({
             imageLoaded ? "opacity-100" : "opacity-0"
           }`}
           onLoad={() => setImageLoaded(true)}
-          onError={() => setImageError(true)}
+          onError={handleError}
         />
       </div>
       <figcaption
@@ -116,6 +151,7 @@ export function ImagePlaceholder({
   description,
   status,
   imageUrl,
+  mediaToken = null,
   className = "",
 }: ImagePlaceholderProps) {
   // Failed state - show fallback text
@@ -134,12 +170,14 @@ export function ImagePlaceholder({
     )
   }
 
-  // Ready state with valid image URL - use key to reset state when URL changes
+  // Ready state with valid image URL - key by the token-less base url so a token refresh
+  // (retry) doesn't remount and lose load state; only a genuinely new image resets.
   if (status === "ready" && imageUrl) {
     return (
       <ImageLoader
         key={imageUrl}
-        imageUrl={imageUrl}
+        baseUrl={imageUrl}
+        mediaToken={mediaToken}
         description={description}
         className={className}
       />
