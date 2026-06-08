@@ -429,6 +429,27 @@ export default function TaskDetail({
     };
   }, [id, transcriptStageReached, transcript.length, transcriptLoading, transcriptError, client, mapApiTranscript]);
 
+  // audio_url 与转写同理：audio_url 仅由 loadTask（mount/completed 触发）经 setTask 写入，
+  // 而 WS 推送只带 status/progress，不带 audio_url。YouTube 任务 mount 时（仍在下载、
+  // source_key 未生成）audio_url 为 null，整个 polishing/summarizing 阶段都不会刷新，
+  // 导致点播放因 handlePlayPause 的 !audio_url 早返回而毫无反应，要到 completed 重拉才能播。
+  // 进入「转写可见阶段」时音频必已落库，这里补拉一次 task 把 audio_url 就位，无需等 completed。
+  useEffect(() => {
+    if (!id || !transcriptStageReached) return;
+    if (task?.audio_url) return; // 已就位则不补拉
+    let cancelled = false;
+    void (async () => {
+      const refreshed = await client.getTask(id).catch(() => null);
+      if (cancelled || !refreshed?.audio_url) return;
+      const audioUrl = refreshed.audio_url;
+      // 仅补 audio_url，不整体覆盖（status 由上面的 sync effect 维持为 WS 最新值）。
+      setTask((prev) => (prev && !prev.audio_url ? { ...prev, audio_url: audioUrl } : prev));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, transcriptStageReached, task?.audio_url, client]);
+
   useEffect(() => {
     const summaryStreams = summaryStreamRef.current;
     const summaryPolls = summaryPollRef.current;
