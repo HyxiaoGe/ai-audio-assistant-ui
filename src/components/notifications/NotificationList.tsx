@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback } from "react";
 import { Bell, Loader2 } from "lucide-react";
 import { useGlobalStore } from "@/store/global-store";
 import { useI18n } from "@/lib/i18n-context";
@@ -30,10 +31,11 @@ export default function NotificationList({
   const items =
     variant === "panel" ? notifications.slice(0, PANEL_LIMIT) : notifications;
 
-  const handleMarkAsRead = (id: string) => {
+  // 稳定身份，使 memo 化的 NotificationItem 不随通知列表重渲染（新通知到达等）而整片重渲。
+  const handleMarkAsRead = useCallback((id: string) => {
     markAsRead(id);
     onItemActivate?.();
-  };
+  }, [markAsRead, onItemActivate]);
 
   if (loading && !loaded) {
     return (

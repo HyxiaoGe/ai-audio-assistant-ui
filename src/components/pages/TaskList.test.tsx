@@ -7,6 +7,7 @@ import TaskList from "./TaskList"
 // 拉取列表，使卡片脱离 failed 态。
 const mockClient = vi.hoisted(() => ({
   getTasks: vi.fn(),
+  getTaskStatusCounts: vi.fn(),
   retryTask: vi.fn(),
 }))
 
@@ -47,12 +48,12 @@ vi.mock("@/components/task/TaskCard", () => ({
     id: string
     title: string
     status: string
-    onRetry: () => void
+    onRetry: (id: string) => void
   }) => (
     <div data-testid={`task-${id}`}>
       <span>{title}</span>
       <span>{status}</span>
-      <button data-testid={`retry-${id}`} onClick={onRetry}>
+      <button data-testid={`retry-${id}`} onClick={() => onRetry(id)}>
         retry
       </button>
     </div>
@@ -75,6 +76,12 @@ describe("TaskList retry refetch", () => {
         },
       ],
       total: 1,
+    })
+    mockClient.getTaskStatusCounts.mockResolvedValue({
+      all: 1,
+      processing: 0,
+      completed: 0,
+      failed: 1,
     })
     // 非 duplicate_found 的成功返回 → 走 notifySuccess 成功路径。
     mockClient.retryTask.mockResolvedValue({})

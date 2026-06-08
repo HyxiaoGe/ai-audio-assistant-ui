@@ -1,11 +1,11 @@
 "use client";
 
-import { useSettings } from "@/lib/settings-context";
+import { useSettingsActions } from "@/lib/settings-context";
 import { useTheme } from "next-themes";
 import TaskDetail from "@/components/pages/TaskDetail";
 
 export default function TaskDetailPage() {
-  const { setTheme } = useSettings();
+  const { setTheme } = useSettingsActions();
   const { resolvedTheme } = useTheme();
 
 

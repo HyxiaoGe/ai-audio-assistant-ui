@@ -6,7 +6,7 @@ import { useTheme } from "next-themes";
 import Dashboard from "@/components/pages/Dashboard";
 import NewTaskModal from "@/components/task/NewTaskModal";
 import LoginModal from "@/components/auth/LoginModal";
-import { useSettings } from "@/lib/settings-context";
+import { useSettingsActions } from "@/lib/settings-context";
 import FullPageLoader from "@/components/common/FullPageLoader";
 
 export default function DashboardPage() {
@@ -14,7 +14,7 @@ export default function DashboardPage() {
   const status = useAuthStore((s) => s.status);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
-  const { setTheme } = useSettings();
+  const { setTheme } = useSettingsActions();
   const { resolvedTheme } = useTheme();
   // 用 useCallback 稳定这些 handler 的身份，避免每次重渲染（如开关弹窗）把新函数
   // 传给子组件，连带触发 Dashboard 拉取 effect 重跑等无谓副作用。

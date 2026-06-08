@@ -6,13 +6,13 @@ import { useTheme } from "next-themes";
 import { useRouter, useSearchParams } from "next/navigation";
 import Settings from "@/components/pages/Settings";
 import LoginModal from "@/components/auth/LoginModal";
-import { useSettings } from "@/lib/settings-context";
+import { useSettingsActions } from "@/lib/settings-context";
 import FullPageLoader from "@/components/common/FullPageLoader";
 
 function SettingsContent() {
   const authUser = useAuthStore((s) => s.user);
   const status = useAuthStore((s) => s.status);
-  const { setTheme } = useSettings();
+  const { setTheme } = useSettingsActions();
   const { resolvedTheme } = useTheme();
   const [loginOpen, setLoginOpen] = useState(false);
   const searchParams = useSearchParams();

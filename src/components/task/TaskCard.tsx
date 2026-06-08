@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { FileText, Video, Mic, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useI18n } from '@/lib/i18n-context';
@@ -9,18 +10,21 @@ interface TaskCardProps {
   timeAgo: string;
   status: 'completed' | 'processing' | 'failed';
   type?: 'video' | 'audio' | 'file';
-  onClick?: () => void;
-  onRetry?: () => void;
-  onDelete?: () => void;
+  // 回调携带 id，使父组件可传入稳定（useCallback）的处理器而非每行新建闭包——
+  // 这是让下方 React.memo 真正生效（卡片不随父组件重渲染而重渲、毛玻璃背板不重栅格化）的前提。
+  onClick?: (id: string) => void;
+  onRetry?: (id: string) => void;
+  onDelete?: (id: string) => void;
   isRetrying?: boolean;
   isDeleting?: boolean;
 }
 
-export default function TaskCard({ 
-  title, 
-  duration, 
-  timeAgo, 
-  status, 
+function TaskCard({
+  id,
+  title,
+  duration,
+  timeAgo,
+  status,
   type = 'file',
   onClick,
   onRetry,
@@ -62,11 +66,11 @@ export default function TaskCard({
     <div
       role="button"
       tabIndex={0}
-      onClick={onClick}
+      onClick={() => onClick?.(id)}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          onClick?.();
+          onClick?.(id);
         }
       }}
       className="glass-item w-full rounded-xl p-5 flex items-center justify-between group"
@@ -115,7 +119,7 @@ export default function TaskCard({
             type="button"
             onClick={(event) => {
               event.stopPropagation();
-              onDelete();
+              onDelete(id);
             }}
             disabled={isDeleting}
             aria-label={t("common.delete")}
@@ -130,7 +134,7 @@ export default function TaskCard({
             type="button"
             onClick={(event) => {
               event.stopPropagation();
-              onRetry();
+              onRetry(id);
             }}
             disabled={isRetrying}
             className="px-3 py-1.5 rounded text-xs transition-colors bg-[var(--app-danger)] hover:bg-[#b91c1c] active:bg-[#991b1b] dark:hover:bg-[#f87171] dark:active:bg-[#ef4444] disabled:opacity-60 disabled:cursor-not-allowed"
@@ -146,3 +150,5 @@ export default function TaskCard({
     </div>
   );
 }
+
+export default memo(TaskCard);

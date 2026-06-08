@@ -6,7 +6,7 @@ import { useTheme } from "next-themes";
 import TaskList from "@/components/pages/TaskList";
 import LoginModal from "@/components/auth/LoginModal";
 import NewTaskModal from "@/components/task/NewTaskModal";
-import { useSettings } from "@/lib/settings-context";
+import { useSettingsActions } from "@/lib/settings-context";
 import FullPageLoader from "@/components/common/FullPageLoader";
 
 export default function TaskListPage() {
@@ -14,7 +14,7 @@ export default function TaskListPage() {
   const status = useAuthStore((s) => s.status);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
-  const { setTheme } = useSettings();
+  const { setTheme } = useSettingsActions();
   const { resolvedTheme } = useTheme();
   // 用 useCallback 稳定 handler 身份，避免重渲染（如开关弹窗）把新函数传给
   // TaskList，连带触发其列表/状态计数拉取 effect 重跑等无谓请求。

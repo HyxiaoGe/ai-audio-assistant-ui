@@ -5,13 +5,13 @@ import { useAuthStore } from "@/store/auth-store";
 import { useTheme } from "next-themes";
 import Notifications from "@/components/pages/Notifications";
 import LoginModal from "@/components/auth/LoginModal";
-import { useSettings } from "@/lib/settings-context";
+import { useSettingsActions } from "@/lib/settings-context";
 import FullPageLoader from "@/components/common/FullPageLoader";
 
 export default function NotificationsPage() {
   const authUser = useAuthStore((s) => s.user);
   const status = useAuthStore((s) => s.status);
-  const { setTheme } = useSettings();
+  const { setTheme } = useSettingsActions();
   const { resolvedTheme } = useTheme();
   const [loginOpen, setLoginOpen] = useState(false);
 

@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo } from "react"
-import { useSettings } from "@/lib/settings-context"
+import { useSettingsState } from "@/lib/settings-context"
 import {
   formatDateWithSettings,
   formatDateTimeWithSettings,
@@ -9,7 +9,7 @@ import {
 } from "@/lib/utils"
 
 export function useDateFormatter() {
-  const { locale, timeZone, hourCycle } = useSettings()
+  const { locale, timeZone, hourCycle } = useSettingsState()
 
   const settings = useMemo(
     () => ({

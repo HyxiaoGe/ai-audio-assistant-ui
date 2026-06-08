@@ -24,7 +24,7 @@ interface SettingsState {
   hourCycle: HourCycle
 }
 
-interface SettingsContextValue extends SettingsState {
+interface SettingsActions {
   setLanguage: (language: Language) => void
   setTheme: (theme: Theme) => void
   setLocale: (locale: string) => void
@@ -32,7 +32,14 @@ interface SettingsContextValue extends SettingsState {
   setHourCycle: (hourCycle: HourCycle) => void
 }
 
-const SettingsContext = createContext<SettingsContextValue | null>(null)
+interface SettingsContextValue extends SettingsState, SettingsActions {}
+
+// 状态与动作拆成两个 context：动作对象身份恒定（只依赖稳定的 updateSettings），
+// 故只取动作的消费者（如 8 个页面只用 setTheme 给 Header 传主题切换回调）不会随
+// 任一设置字段变化而重渲染。切主题/语言/时区的视觉效果本就走 CSS 变量（next-themes
+// 切 <html> class），这些 React 重渲染纯属浪费——拆分后被彻底消除。
+const SettingsStateContext = createContext<SettingsState | null>(null)
+const SettingsActionsContext = createContext<SettingsActions | null>(null)
 
 function deriveLanguage(locale: string): Language {
   return locale.toLowerCase().startsWith("zh") ? "zh" : "en"
@@ -131,29 +138,47 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     })
   }, [settings.theme, setNextTheme])
 
-  const value = useMemo<SettingsContextValue>(
+  // 动作只依赖 updateSettings（稳定），故身份恒定、跨设置变化不变——这是拆分省去无谓重渲染的关键。
+  const actions = useMemo<SettingsActions>(
     () => ({
-      ...settings,
       setLanguage: (language) => updateSettings({ language }),
       setTheme: (theme) => updateSettings({ theme }),
       setLocale: (locale) => updateSettings({ locale }),
       setTimeZone: (timeZone) => updateSettings({ timeZone }),
       setHourCycle: (hourCycle) => updateSettings({ hourCycle }),
     }),
-    [settings, updateSettings]
+    [updateSettings]
   )
 
   return (
-    <SettingsContext.Provider value={value}>
-      {children}
-    </SettingsContext.Provider>
+    <SettingsStateContext.Provider value={settings}>
+      <SettingsActionsContext.Provider value={actions}>
+        {children}
+      </SettingsActionsContext.Provider>
+    </SettingsStateContext.Provider>
   )
 }
 
-export function useSettings(): SettingsContextValue {
-  const context = useContext(SettingsContext)
+export function useSettingsState(): SettingsState {
+  const context = useContext(SettingsStateContext)
   if (!context) {
-    throw new Error("useSettings must be used within SettingsProvider")
+    throw new Error("useSettingsState must be used within SettingsProvider")
   }
   return context
+}
+
+export function useSettingsActions(): SettingsActions {
+  const context = useContext(SettingsActionsContext)
+  if (!context) {
+    throw new Error("useSettingsActions must be used within SettingsProvider")
+  }
+  return context
+}
+
+// 兼容入口：同时需要状态与动作的消费者（如 Settings 页）。订阅了状态 context，
+// 故仍会随设置变化重渲染——这对需要读取设置值的组件是必要且正确的。
+export function useSettings(): SettingsContextValue {
+  const state = useSettingsState()
+  const actions = useSettingsActions()
+  return useMemo(() => ({ ...state, ...actions }), [state, actions])
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, XCircle, Info, AlertTriangle, ArrowUpRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import type { Notification } from '@/store/global-store';
@@ -43,7 +43,7 @@ const colorMap = {
   },
 };
 
-export default function NotificationItem({
+function NotificationItem({
   notification,
   onMarkAsRead,
   showActions = false,
@@ -51,6 +51,8 @@ export default function NotificationItem({
   const router = useRouter();
   const { t, locale } = useI18n();
   const [now, setNow] = useState(() => Date.now());
+  // 每次渲染都 new 一个 Intl.RelativeTimeFormat 是无谓分配（列表里更明显）；按 locale 记忆化。
+  const rtf = useMemo(() => new Intl.RelativeTimeFormat(locale, { numeric: "auto" }), [locale]);
 
   const notificationType = getNotificationVariant(notification.type);
   const Icon = iconMap[notificationType];
@@ -98,7 +100,6 @@ export default function NotificationItem({
     const absSeconds = Math.abs(diffSeconds);
     if (absSeconds < 10) return t('common.justNow');
 
-    const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
     if (absSeconds < 60) return rtf.format(diffSeconds, "second");
 
     const diffMinutes = Math.round(diffSeconds / 60);
@@ -204,3 +205,5 @@ export default function NotificationItem({
     </div>
   );
 }
+
+export default memo(NotificationItem);

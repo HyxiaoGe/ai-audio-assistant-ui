@@ -6,13 +6,13 @@ import { useTheme } from "next-themes";
 import { useSearchParams } from "next/navigation";
 import Subscriptions from "@/components/pages/Subscriptions";
 import LoginModal from "@/components/auth/LoginModal";
-import { useSettings } from "@/lib/settings-context";
+import { useSettingsActions } from "@/lib/settings-context";
 import FullPageLoader from "@/components/common/FullPageLoader";
 
 function SubscriptionsContent() {
   const authUser = useAuthStore((s) => s.user);
   const status = useAuthStore((s) => s.status);
-  const { setTheme } = useSettings();
+  const { setTheme } = useSettingsActions();
   const { resolvedTheme } = useTheme();
   const [loginOpen, setLoginOpen] = useState(false);
   const searchParams = useSearchParams();

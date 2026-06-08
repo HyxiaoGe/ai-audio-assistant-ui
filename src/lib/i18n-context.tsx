@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useContext, useMemo } from "react"
-import { useSettings } from "@/lib/settings-context"
+import { useSettingsState } from "@/lib/settings-context"
 import zh from "@/locales/zh.json"
 import en from "@/locales/en.json"
 
@@ -46,7 +46,7 @@ function interpolate(
 }
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const { locale } = useSettings()
+  const { locale } = useSettingsState()
   const messages = useMemo(() => resolveMessages(locale), [locale])
 
   const value = useMemo<I18nContextValue>(() => {

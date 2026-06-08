@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
@@ -142,9 +142,10 @@ export default function Dashboard({
     }
   };
 
-  const handleTaskClick = (taskId: string) => {
+  // 稳定身份，使 memo 化的 TaskCard 不随 Dashboard 重渲染而重渲（毛玻璃背板不重栅格化）。
+  const handleTaskClick = useCallback((taskId: string) => {
     router.push(`/tasks/${taskId}`);
-  };
+  }, [router]);
 
   // 获取最近任务（最多5个）
   const hasNoTasks = displayTasks.length === 0;
@@ -231,7 +232,7 @@ export default function Dashboard({
                     timeAgo={formatRelativeTime(task.created_at)}
                     status={displayStatus(task.status)}
                     type={task.source_type === 'youtube' ? 'video' : 'file'}
-                    onClick={() => handleTaskClick(task.id)}
+                    onClick={handleTaskClick}
                   />
                 ))
               )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import { Pagination } from '@/components/common/Pagination';
@@ -119,21 +119,17 @@ export default function TaskList({
     let isMounted = true;
     const loadCounts = async () => {
       try {
-        const [allRes, completedRes, failedRes, processingRes] =
-          await Promise.all([
-            client.getTasks({ page: 1, page_size: 1, status: 'all' }),
-            client.getTasks({ page: 1, page_size: 1, status: 'completed' }),
-            client.getTasks({ page: 1, page_size: 1, status: 'failed' }),
-            client.getTasks({ page: 1, page_size: 1, status: 'processing' })
-          ]);
+        // 一次请求拿全部状态计数（后端 GROUP BY），替代过去为四个 tab 各发一次
+        // page_size=1 的列表查询（列表页加载 5 连发 → 2）。
+        const counts = await client.getTaskStatusCounts();
 
         if (!isMounted) return;
 
         setStatusCounts({
-          all: allRes.total,
-          processing: processingRes.total,
-          completed: completedRes.total,
-          failed: failedRes.total
+          all: counts.all,
+          processing: counts.processing,
+          completed: counts.completed,
+          failed: counts.failed
         });
       } catch (err) {
         if (err instanceof ApiError && err.code >= 40100 && err.code < 40200) {
@@ -165,9 +161,10 @@ export default function TaskList({
     return 'processing';
   };
 
-  const handleTaskClick = (taskId: string) => {
+  // 稳定身份，使 memo 化的 TaskCard 不随列表重渲染（轮询/筛选/搜索）而整片重渲、毛玻璃背板不重栅格化。
+  const handleTaskClick = useCallback((taskId: string) => {
     router.push(`/tasks/${taskId}`);
-  };
+  }, [router]);
 
   const handleNewTask = () => {
     if (!isAuthenticated) {
@@ -179,7 +176,7 @@ export default function TaskList({
     }
   };
 
-  const handleRetryTask = async (taskId: string) => {
+  const handleRetryTask = useCallback(async (taskId: string) => {
     if (retryingTaskId) return;
 
     setRetryingTaskId(taskId);
@@ -217,7 +214,7 @@ export default function TaskList({
     } finally {
       setRetryingTaskId(null);
     }
-  };
+  }, [retryingTaskId, client, t, router]);
 
 
   // 搜索关键词筛选（当前页数据）
@@ -372,8 +369,8 @@ export default function TaskList({
                   timeAgo={formatRelativeTime(task.created_at)}
                   status={displayStatus(task.status)}
                   type={task.source_type === 'youtube' ? 'video' : 'file'}
-                  onClick={() => handleTaskClick(task.id)}
-                  onRetry={() => handleRetryTask(task.id)}
+                  onClick={handleTaskClick}
+                  onRetry={handleRetryTask}
                   isRetrying={retryingTaskId === task.id}
                 />
               ))

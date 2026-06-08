@@ -316,6 +316,17 @@ export interface TaskListResponse {
 }
 
 /**
+ * 任务状态计数（列表页筛选 tab 角标）
+ * 一次请求返回全部，替代为四个 tab 各发一次 page_size=1 查询。
+ */
+export interface TaskStatusCounts {
+  all: number
+  processing: number
+  completed: number
+  failed: number
+}
+
+/**
  * YouTube 视频信息
  * 当任务来源是 YouTube 时返回
  */

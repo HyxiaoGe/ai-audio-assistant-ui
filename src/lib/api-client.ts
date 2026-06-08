@@ -38,6 +38,7 @@ import {
   TaskDetail,
   TaskListRequest,
   TaskListResponse,
+  TaskStatusCounts,
   TaskRetryResponse,
   TranscriptRequest,
   TranscriptResponse,
@@ -423,6 +424,15 @@ export class APIClient {
     const endpoint = query ? `/tasks?${query}` : "/tasks"
 
     return request(endpoint, { method: "GET" }, this.token)
+  }
+
+  /**
+   * 获取任务状态计数（列表页筛选 tab 角标）
+   * 一次 GROUP BY 返回 all/processing/completed/failed，
+   * 替代为四个 tab 各发一次 page_size=1 列表查询。
+   */
+  async getTaskStatusCounts(): Promise<TaskStatusCounts> {
+    return request("/tasks/status-counts", { method: "GET" }, this.token)
   }
 
   /**
