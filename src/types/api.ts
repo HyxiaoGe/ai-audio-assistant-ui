@@ -1155,6 +1155,11 @@ export interface PublicTaskDetail {
   source_type: SourceType
   source_url: string | null
   audio_url: string | null // 媒体需配合 mintPublicMediaTicket 的 ?token= 使用,不可直接作 src
+  /**
+   * OSS 预签名音频直链(3600s,完整 https URL,绕开隧道):有值时优先作播放源,**不拼媒体票**;
+   * 播放失败回落 audio_url 代理路径。后端 feature 上线前可能整体缺失(undefined=null 同义)。
+   */
+  audio_direct_url?: string | null
   duration_seconds: number | null
   detected_language: string | null
   detected_summary_style: string | null

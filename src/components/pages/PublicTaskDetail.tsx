@@ -215,22 +215,33 @@ export default function PublicTaskDetail({
   const play = useAudioStore((s) => s.play);
   const seek = useAudioStore((s) => s.seek);
 
+  // 播放源:优先 OSS 预签名直链(完整 https URL,绕开隧道;appendMediaToken 对其 no-op,不拼媒体票),
+  // 无直链回落代理路径。直链经 setSource 第 4 参把 audio_url 登记为回落源:直链播放失败(如预签名
+  // 过期 403)时 audio-store 的 reloadWithFreshToken 一次性切到代理路径,走既有媒体票/换票重载链。
+  const playbackSrc = task?.audio_direct_url || task?.audio_url || null;
+  const playbackFallback = task?.audio_direct_url ? (task?.audio_url ?? null) : null;
+  // 直链失败回落后 currentSrc 变为 audio_url 代理路径:仍视作本任务激活(进度/播放态照常显示),
+  // 且后续点击只 toggle、绝不切回已坏的直链。
+  const isActiveAudio = Boolean(
+    currentSrc && (currentSrc === playbackSrc || (task?.audio_url != null && currentSrc === task.audio_url)),
+  );
+
   const handlePlayPause = useCallback(() => {
-    if (!task?.audio_url) return;
-    if (currentSrc !== task.audio_url) {
-      setSource(task.audio_url, task.id, task.title ?? '');
+    if (!playbackSrc || !task) return;
+    if (!isActiveAudio) {
+      setSource(playbackSrc, task.id, task.title ?? '', playbackFallback);
       play();
       return;
     }
     togglePlayback();
-  }, [task?.audio_url, task?.id, task?.title, currentSrc, setSource, play, togglePlayback]);
+  }, [playbackSrc, playbackFallback, isActiveAudio, task, setSource, play, togglePlayback]);
 
   const handleSeek = useCallback((time: number) => {
-    if (task?.audio_url && currentSrc !== task.audio_url) {
-      setSource(task.audio_url, task.id, task.title ?? '');
+    if (playbackSrc && task && !isActiveAudio) {
+      setSource(playbackSrc, task.id, task.title ?? '', playbackFallback);
     }
     seek(time);
-  }, [task?.audio_url, task?.id, task?.title, currentSrc, setSource, seek]);
+  }, [playbackSrc, playbackFallback, isActiveAudio, task, setSource, seek]);
 
   // TranscriptList 的 onTimeClick 接收 "MM:SS" 字符串(与私有页同款),转成秒后 seek。
   const handleTimeClick = useCallback((time: string) => {
@@ -239,7 +250,6 @@ export default function PublicTaskDetail({
     handleSeek(mins * 60 + secs);
   }, [handleSeek]);
 
-  const isActiveAudio = Boolean(task?.audio_url && currentSrc === task.audio_url);
   const duration = isActiveAudio
     ? (audioDuration || task?.duration_seconds || 0)
     : (task?.duration_seconds || 0);
@@ -395,7 +405,7 @@ export default function PublicTaskDetail({
       )}
 
       {/* 播放器区:有 youtube_info 渲 YouTube 封面卡(channel 可空已守卫);否则普通播放条 */}
-      {(task.audio_url || task.youtube_info) && (
+      {(playbackSrc || task.youtube_info) && (
         <PlayerBarContainer
           isActiveAudio={isActiveAudio}
           duration={duration}

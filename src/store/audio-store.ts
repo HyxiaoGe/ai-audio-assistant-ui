@@ -12,6 +12,11 @@ let mediaAuthRetries = 0
 // token → 代理 401）下，token 异步就绪后据此决定是否自动续播，修复「首次点击无反应、需再点一次」。
 let intendToPlay = false
 
+// 回落播放源（公开页 OSS 预签名直链场景，opt-in）：setSource 第 4 参登记。当前 src（直链，
+// appendMediaToken 对其 no-op）播放失败触发 reloadWithFreshToken 时，换票对直链无意义——
+// 一次性切到这里登记的代理路径（走既有媒体票/换票重试链）。私有页从不登记，行为零变化。
+let fallbackSrc: string | null = null
+
 // token 刷新重建的互斥标志：冷启动 401 时，applyAuthorizedSrc 的 warm-up 与 <audio> error 事件
 // 触发的 reloadWithFreshToken 会几乎同时拿到（去重后的）同一张短票。用此标志让先到者独占重建
 // src，后到者让步，保证一次冷启动只产生一轮 load()/play()，而非两三轮互相 abort、白耗重试额度。
@@ -41,7 +46,12 @@ interface AudioStore {
   isPlaying: boolean
   taskId: string | null
   registerAudio: (el: HTMLAudioElement | null) => void
-  setSource: (src: string | null, taskId?: string | null, title?: string | null) => void
+  setSource: (
+    src: string | null,
+    taskId?: string | null,
+    title?: string | null,
+    fallback?: string | null
+  ) => void
   play: () => void
   pause: () => void
   stop: () => void
@@ -72,6 +82,9 @@ export const useAudioStore = create<AudioStore>((set, get) => {
     audioEl.src = appendMediaToken(src, sync)
     audioEl.load()
     if (sync) return
+    // 非代理 URL（OSS 预签名直链等）：媒体票与之无关，appendMediaToken 恒为 no-op。
+    // 跳过异步补票 warm-up，避免用同一 URL 重写 src + 多余 load() 打断刚起的播放。
+    if (appendMediaToken(src, "probe") === src) return
     void getMediaTicket().then((token) => {
       if (!token) return
       const cur = get()
@@ -104,7 +117,7 @@ export const useAudioStore = create<AudioStore>((set, get) => {
       intendToPlay = false
       if (el && src) applyAuthorizedSrc(el, src)
     },
-    setSource: (src, taskId, title) => {
+    setSource: (src, taskId, title, fallback) => {
       const { audioEl, src: previous } = get()
       if (src === previous) {
         if (taskId !== undefined || title !== undefined) {
@@ -117,9 +130,11 @@ export const useAudioStore = create<AudioStore>((set, get) => {
       }
       // 切换到新媒体：重置鉴权恢复计数、互斥标志与播放意图，避免上一条媒体的额度/在途恢复/意图
       // 殃及新媒体（仅 play() 才会重新置 intendToPlay；seek 等不带播放意图的换源不应自动播放）。
+      // 回落源同时重登记：不传（私有页）即清空，上一条媒体的回落绝不能殃及新媒体。
       mediaAuthRetries = 0
       recovering = false
       intendToPlay = false
+      fallbackSrc = fallback ?? null
       set({
         src,
         title: title ?? null,
@@ -149,6 +164,7 @@ export const useAudioStore = create<AudioStore>((set, get) => {
     },
     stop: () => {
       intendToPlay = false
+      fallbackSrc = null
       const { audioEl } = get()
       if (audioEl) {
         audioEl.pause()
@@ -185,6 +201,16 @@ export const useAudioStore = create<AudioStore>((set, get) => {
       if (!audioEl || !src) return
       // warm-up 已在重建同一条媒体（冷启动竞态），让它独占，避免本路径再消耗一次重试额度并并发 load()。
       if (recovering) return
+      // 登记过回落源且当前源还不是它（公开页 OSS 直链失败，如预签名过期 403）：一次性切到代理
+      // 回落路径并重置重试额度——回落源是另一条媒体路径，应享有完整的换票重试预算；后续走下方
+      // 既有「取票重建 src + 保留进度续播」链。私有页 fallbackSrc 恒为 null，此分支不可达。
+      let target = src
+      if (fallbackSrc && fallbackSrc !== src) {
+        target = fallbackSrc
+        fallbackSrc = null
+        mediaAuthRetries = 0
+        set({ src: target })
+      }
       if (mediaAuthRetries >= MAX_MEDIA_AUTH_RETRIES) return
       mediaAuthRetries += 1
       recovering = true
@@ -193,7 +219,7 @@ export const useAudioStore = create<AudioStore>((set, get) => {
       const wasPlaying = !audioEl.paused
 
       const token = await getMediaTicket()
-      audioEl.src = appendMediaToken(src, token)
+      audioEl.src = appendMediaToken(target, token)
       audioEl.load()
 
       // 本轮重建只结算一次：loadedmetadata（成功）与 error（仍失败）先到者胜，另一个 once 监听
