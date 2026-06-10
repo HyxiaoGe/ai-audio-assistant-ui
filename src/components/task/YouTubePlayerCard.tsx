@@ -6,10 +6,20 @@ import { Play, Pause, ThumbsUp, MessageSquare, Eye, ExternalLink } from "lucide-
 import { useI18n } from "@/lib/i18n-context";
 import { useDateFormatter } from "@/lib/use-date-formatter";
 import { seekKeyToTime } from "@/lib/seek-keyboard";
-import type { YouTubeVideoInfo } from "@/types/api";
+import type { PublicYouTubeInfo, YouTubeVideoInfo } from "@/types/api";
+
+/**
+ * 卡片接受私有 {@link YouTubeVideoInfo} 与公开 {@link PublicYouTubeInfo} 两种来源。
+ *
+ * 私有侧 channel_id 必填、并带 channel_thumbnail / published_at / 各类计数等富字段;
+ * 公开侧 channel_id / channel_title 可空且无富字段。用联合类型让卡片同时吃下两者,
+ * 内部对公开侧缺失的字段全部按 optional 守卫(null/undefined → 降级或不渲染),
+ * 私有侧传入完整结构时行为与改造前完全一致(零回归)。
+ */
+type YouTubeCardInfo = YouTubeVideoInfo | PublicYouTubeInfo;
 
 interface YouTubePlayerCardProps {
-  youtubeInfo: YouTubeVideoInfo;
+  youtubeInfo: YouTubeCardInfo;
   sourceUrl?: string;
   currentTime?: number;
   duration: number;
@@ -138,7 +148,48 @@ export function YouTubePlayerCard({
   const ariaValueNow = Math.min(Math.max(0, Math.round(displayTime)), ariaValueMax);
 
   const youtubeUrl = sourceUrl || `https://www.youtube.com/watch?v=${youtubeInfo.video_id}`;
-  const channelUrl = `https://www.youtube.com/channel/${youtubeInfo.channel_id}`;
+  // 红线:channel_id 为 null(公开侧抓取失败)时绝不渲染 /channel/null;只有真有频道 ID 才给链接。
+  const channelUrl = youtubeInfo.channel_id
+    ? `https://www.youtube.com/channel/${youtubeInfo.channel_id}`
+    : null;
+
+  // 富字段仅私有 YouTubeVideoInfo 才有,公开侧没有。窄化为带这些 optional 字段的形状统一读取,
+  // 缺失即 undefined → 各处已有 optional 守卫,不渲染对应行/降级。
+  const rich = youtubeInfo as Partial<YouTubeVideoInfo>;
+  const channelThumbnail = rich.channel_thumbnail;
+  const publishedAt = rich.published_at;
+  const viewCount = rich.view_count;
+  const likeCount = rich.like_count;
+  const commentCount = rich.comment_count;
+
+  // 频道信息块:有链接走 <a>,无链接(公开侧无 channel_id)退化为非交互 <div>,布局/内容不变。
+  const channelInner = (
+    <>
+      {channelThumbnail ? (
+        <Image
+          src={channelThumbnail}
+          alt={youtubeInfo.channel_title || "Channel"}
+          width={24}
+          height={24}
+          className="rounded-full flex-shrink-0"
+          unoptimized
+        />
+      ) : (
+        <div
+          className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0"
+          style={{ background: "var(--app-glass-bg-strong)", color: "var(--app-text-muted)" }}
+        >
+          {youtubeInfo.channel_title?.[0] || "?"}
+        </div>
+      )}
+      <span
+        className="text-sm font-medium truncate"
+        style={{ color: "var(--app-player-text)" }}
+      >
+        {youtubeInfo.channel_title || t("common.unknown")}
+      </span>
+    </>
+  );
 
   return (
     <div
@@ -194,62 +245,44 @@ export function YouTubePlayerCard({
           {/* Top: Channel info and stats */}
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              {/* Channel */}
-              <a
-                href={channelUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-              >
-                {youtubeInfo.channel_thumbnail ? (
-                  <Image
-                    src={youtubeInfo.channel_thumbnail}
-                    alt={youtubeInfo.channel_title || "Channel"}
-                    width={24}
-                    height={24}
-                    className="rounded-full flex-shrink-0"
-                    unoptimized
-                  />
-                ) : (
-                  <div
-                    className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0"
-                    style={{ background: "var(--app-glass-bg-strong)", color: "var(--app-text-muted)" }}
-                  >
-                    {youtubeInfo.channel_title?.[0] || "?"}
-                  </div>
-                )}
-                <span
-                  className="text-sm font-medium truncate"
-                  style={{ color: "var(--app-player-text)" }}
+              {/* Channel:有 channel_id 走外链 <a>,公开侧无 channel_id 退化为非交互容器(不渲染 /channel/null) */}
+              {channelUrl ? (
+                <a
+                  href={channelUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 hover:opacity-80 transition-opacity"
                 >
-                  {youtubeInfo.channel_title || t("common.unknown")}
-                </span>
-              </a>
+                  {channelInner}
+                </a>
+              ) : (
+                <div className="flex items-center gap-2">{channelInner}</div>
+              )}
 
               {/* Stats row */}
               <div
                 className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-xs"
                 style={{ color: "var(--app-player-text-muted)" }}
               >
-                {youtubeInfo.published_at && (
-                  <span>{formatRelativeTime(youtubeInfo.published_at)}</span>
+                {publishedAt && (
+                  <span>{formatRelativeTime(publishedAt)}</span>
                 )}
-                {youtubeInfo.view_count !== undefined && (
+                {viewCount !== undefined && (
                   <span className="flex items-center gap-1">
                     <Eye className="w-3.5 h-3.5" />
-                    {formatCount(youtubeInfo.view_count, locale)}
+                    {formatCount(viewCount, locale)}
                   </span>
                 )}
-                {youtubeInfo.like_count !== undefined && (
+                {likeCount !== undefined && (
                   <span className="flex items-center gap-1">
                     <ThumbsUp className="w-3.5 h-3.5" />
-                    {formatCount(youtubeInfo.like_count, locale)}
+                    {formatCount(likeCount, locale)}
                   </span>
                 )}
-                {youtubeInfo.comment_count !== undefined && (
+                {commentCount !== undefined && (
                   <span className="flex items-center gap-1">
                     <MessageSquare className="w-3.5 h-3.5" />
-                    {formatCount(youtubeInfo.comment_count, locale)}
+                    {formatCount(commentCount, locale)}
                   </span>
                 )}
               </div>

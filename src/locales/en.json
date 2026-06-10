@@ -116,7 +116,9 @@
     "goExplore": "Browse public content in Explore →",
     "prevPage": "Previous",
     "nextPage": "Next",
-    "viewSource": "View original video"
+    "viewSource": "View original video",
+    "transcriptLoadFailed": "Failed to load transcript",
+    "summaryLoadFailed": "Failed to load summary"
   },
   "stats": {
     "title": "Stats",

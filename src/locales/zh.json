@@ -116,7 +116,9 @@
     "goExplore": "去探索广场看看公开内容 →",
     "prevPage": "上一页",
     "nextPage": "下一页",
-    "viewSource": "查看原视频"
+    "viewSource": "查看原视频",
+    "transcriptLoadFailed": "转写加载失败",
+    "summaryLoadFailed": "摘要加载失败"
   },
   "stats": {
     "title": "统计",
