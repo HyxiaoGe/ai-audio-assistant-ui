@@ -198,7 +198,16 @@ export function TranscriptList({
         <TranscriptSpinner label={t("transcript.loading")} />
       ) : transcript.length > 0 ? (
         transcript.map((segment) => (
-          <div key={segment.id} data-segment-id={segment.id}>
+          // content-visibility:auto — 视口外转写行跳过布局/绘制(长转写 1700+ 行、上万节点时
+          // 浏览器渲染成本的大头)。contain-intrinsic-size 用「auto 100px」而非固定值:首测前以
+          // 100px 估算占位,实测后记忆真实尺寸——减少长距滚动时 scroll-anchoring 的尺寸修正被
+          // 上方「3s 自动滚动暂停」机制误判为用户滚动(可自愈,但记忆尺寸能减少触发)。
+          // Safari 不支持 content-visibility:两个属性整体被忽略,按普通块原样渲染降级,无行为差异。
+          <div
+            key={segment.id}
+            data-segment-id={segment.id}
+            className="[content-visibility:auto] [contain-intrinsic-size:auto_100px]"
+          >
             <TranscriptItem
               segmentId={segment.id}
               speaker={segment.speaker}
