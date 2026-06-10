@@ -85,10 +85,15 @@ function MarkdownImg({ src, alt }: { src?: string; alt?: string }) {
   const { mediaToken, imageModel } = useContext(MarkdownImageContext);
   return (
     <figure style={{ margin: "16px 0" }}>
+      {/* loading=lazy + decoding=async:与 ImagePlaceholder 内的配图同款——视口外图延后拉取,
+          不与首屏内容抢隧道带宽;票过期的 lazy 图 401 由浏览器原生 broken-image 呈现(旧数据
+          内联图无重试链,与既有行为一致)。 */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={src ? appendMediaToken(src, mediaToken) || undefined : undefined}
         alt={alt}
+        loading="lazy"
+        decoding="async"
         style={{ maxWidth: "100%", borderRadius: "8px" }}
       />
       <figcaption

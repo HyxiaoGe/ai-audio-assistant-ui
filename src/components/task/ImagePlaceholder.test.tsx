@@ -47,6 +47,9 @@ describe('ImagePlaceholder', () => {
       const img = screen.getByRole('img');
       expect(img).toHaveAttribute('src', 'https://example.com/image.png');
       expect(img).toHaveAttribute('alt', '供应链时间轴');
+      // 视口外配图延后拉取(lazy)+异步解码,不与首屏内容抢隧道带宽。
+      expect(img).toHaveAttribute('loading', 'lazy');
+      expect(img).toHaveAttribute('decoding', 'async');
 
       // Simulate image load to reveal figcaption
       fireEvent.load(img);

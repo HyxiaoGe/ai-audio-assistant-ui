@@ -169,5 +169,8 @@ describe("MarkdownContent", () => {
     )
     const img = screen.getByRole("img", { name: "老图" })
     expect(img).toHaveAttribute("src", "/api/v1/summaries/images/legacy.png?token=tok")
+    // 旧数据内联图同样 lazy+异步解码,视口外不抢首屏隧道带宽。
+    expect(img).toHaveAttribute("loading", "lazy")
+    expect(img).toHaveAttribute("decoding", "async")
   })
 })

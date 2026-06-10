@@ -137,10 +137,15 @@ function ImageLoader({
         </div>
 
         {/* Actual image with fade-in effect */}
+        {/* loading=lazy:视口外配图延后拉取,不与首屏内容抢隧道带宽(实测 5 图 716KB);
+            decoding=async:解码移出主线程提交帧。lazy 图下滚时若已超媒体票 TTL(300s),
+            首次请求 401 → 走上方 handleError 既有换票重试链自愈,无需额外处理。 */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={imageUrl}
           alt={description}
+          loading="lazy"
+          decoding="async"
           className={`w-full h-full object-contain transition-opacity duration-500 ${
             imageLoaded ? "opacity-100" : "opacity-0"
           }`}
