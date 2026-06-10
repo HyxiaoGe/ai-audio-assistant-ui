@@ -35,6 +35,16 @@ export function setPublicMediaTask(taskId: string | null): void {
   inflight = null
 }
 
+/**
+ * 离开公开详情页时调用：仅当通道仍属于该任务时才回落私有通道，防止乱序卸载误清
+ * 新页面通道。场景：公开页 A→B 两实例切换时，若 B 的 mount 先于 A 的 unmount
+ * 执行，A 的 cleanup 无条件调 setPublicMediaTask(null) 会把 B 刚设的通道清掉；
+ * 改用比对式清除后，A 的 cleanup 发现当前通道已属于 B（不等于 A），不动通道。
+ */
+export function releasePublicMediaTask(taskId: string): void {
+  if (publicTaskId === taskId) setPublicMediaTask(null)
+}
+
 function freshToken(now: number): string | null {
   return cached && cached.channel === currentChannel() && cached.expiresAt - now > REFRESH_SKEW_MS
     ? cached.token
@@ -77,7 +87,12 @@ export function getMediaTicket(): Promise<string | null> {
   return promise
 }
 
-/** 清除缓存的媒体短票（登出/换号时调用，避免把上一用户的票用于下一用户）。 */
+/**
+ * 清除缓存的媒体短票（登出/换号时调用，避免把上一用户的票用于下一用户）。
+ *
+ * 注意：不重置公开通道（publicTaskId）——通道归属页面生命周期（usePublicMediaToken
+ * 挂卸载管理），登出后仍挂载的公开页继续匿名走公开通道是预期行为。
+ */
 export function clearMediaTicket(): void {
   cached = null
   inflight = null

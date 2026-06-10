@@ -1,7 +1,12 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { getMediaTicket, getMediaTicketSync, setPublicMediaTask } from "@/lib/media-ticket"
+import {
+  getMediaTicket,
+  getMediaTicketSync,
+  releasePublicMediaTask,
+  setPublicMediaTask,
+} from "@/lib/media-ticket"
 
 /**
  * Same-origin proxy endpoints that require an auth token. Browser <audio>/<img>
@@ -63,7 +68,7 @@ export function usePublicMediaToken(taskId: string): string | null {
     })
     return () => {
       active = false
-      setPublicMediaTask(null)
+      releasePublicMediaTask(taskId)
     }
   }, [taskId])
   return token
