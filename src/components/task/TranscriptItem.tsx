@@ -22,6 +22,8 @@ interface TranscriptItemProps {
   onTimeClick?: (time: string) => void;
   isPolished?: boolean;
   originalContent?: string | null;
+  /** 只读模式：不渲染 hover 编辑按钮、不进入编辑态。默认 false（保持原有行为）。 */
+  readOnly?: boolean;
 }
 
 function TranscriptItem({
@@ -39,6 +41,7 @@ function TranscriptItem({
   onTimeClick = () => {},
   isPolished = false,
   originalContent = null,
+  readOnly = false,
 }: TranscriptItemProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -51,6 +54,7 @@ function TranscriptItem({
   };
 
   const handleStartEdit = () => {
+    if (readOnly) return;
     setIsEditing(true);
     setEditedContent(content);
   };
@@ -137,8 +141,8 @@ function TranscriptItem({
           )}
         </div>
 
-        {/* Edit/Save Buttons */}
-        {isEditing ? (
+        {/* Edit/Save Buttons — readOnly 时不渲染任何编辑控件 */}
+        {!readOnly && (isEditing ? (
           <div className="flex items-center gap-2">
             <button
               onClick={handleSaveEdit}
@@ -168,7 +172,7 @@ function TranscriptItem({
               <span className="text-xs">{t("common.edit")}</span>
             </button>
           )
-        )}
+        ))}
       </div>
 
       {/* Content */}

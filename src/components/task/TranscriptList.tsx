@@ -34,6 +34,8 @@ interface TranscriptListProps {
   transcriptInProgress?: boolean;
   // 重试回调：局部重拉（loadTask），而非整页 window.location.reload。缺省退回整页刷新以兼容旧调用方。
   onRetry?: () => void;
+  /** 只读模式：透传给每行 TranscriptItem，隐藏编辑按钮。默认 false。 */
+  readOnly?: boolean;
 }
 
 /** 居中 spinner + 文案占位：转写「加载中」与「生成中」复用同一视觉，仅文案不同（均无失败语义、无重试）。 */
@@ -70,6 +72,7 @@ export function TranscriptList({
   transcriptError = false,
   transcriptInProgress = false,
   onRetry,
+  readOnly = false,
 }: TranscriptListProps) {
   const { t } = useI18n();
   const handleRetry = onRetry ?? (() => window.location.reload());
@@ -229,6 +232,7 @@ export function TranscriptList({
               onEdit={onEditSegment}
               isPolished={segment.isPolished}
               originalContent={segment.originalContent}
+              readOnly={readOnly}
             />
           </div>
         ))
