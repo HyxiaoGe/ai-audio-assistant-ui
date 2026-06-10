@@ -9,7 +9,8 @@ import { getMediaTicket } from "@/lib/media-ticket"
 /**
  * 公开详情页媒体票等待超时：票签发失败或 mint 后 N 毫秒仍未到达时，
  * 放弃等待、直接渲 ImageLoader（无票请求走既有 401 → 换票重试链）。
- * 私有页热票走 getMediaTicketSync 挂载即有值，基本不触发此超时。
+ * 私有页热票由 useMediaToken 在父组件同步读缓存（getMediaTicketSync）后作为非 null prop 传入，
+ * 挂载即 ready=true，基本不触发此超时。
  */
 const TOKEN_WAIT_TIMEOUT_MS = 5_000
 
@@ -187,6 +188,8 @@ function useTokenReady(
       setTokenState((prev) => (prev.ready ? prev : { ready: true, token: null }))
     }, TOKEN_WAIT_TIMEOUT_MS)
     return () => clearTimeout(tid)
+    // tokenState 故意不入 deps：若加入，每次 state 变化都会清掉并重建超时计时器（变相续期）。
+    // 正确性由 setTokenState 的函数式更新（prev.ready ? prev : ...）与「ready 单向升级」保证，无 stale closure 风险。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mediaToken])
 
