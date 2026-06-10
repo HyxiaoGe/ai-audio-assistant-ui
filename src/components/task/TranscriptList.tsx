@@ -1,23 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import type { TranscriptWord } from '@/types/api';
 import { useAudioStore } from '@/store/audio-store';
 import { useI18n } from '@/lib/i18n-context';
 import TranscriptItem from '@/components/task/TranscriptItem';
 import ErrorState from '@/components/common/ErrorState';
-
-export interface DisplayTranscriptSegment {
-  id: string;
-  speaker: string;
-  startTime: string;
-  endTime: string;
-  startSeconds: number;
-  endSeconds: number;
-  content: string;
-  words: TranscriptWord[] | null;
-  avatarColor: string;
-  isPolished: boolean;
-  originalContent: string | null;
-}
+import type { DisplayTranscriptSegment } from '@/lib/transcript-mapping';
 
 interface TranscriptListProps {
   transcript: DisplayTranscriptSegment[];
@@ -34,6 +20,8 @@ interface TranscriptListProps {
   transcriptInProgress?: boolean;
   // 重试回调：局部重拉（loadTask），而非整页 window.location.reload。缺省退回整页刷新以兼容旧调用方。
   onRetry?: () => void;
+  /** 只读模式：透传给每行 TranscriptItem，隐藏编辑按钮。默认 false。 */
+  readOnly?: boolean;
 }
 
 /** 居中 spinner + 文案占位：转写「加载中」与「生成中」复用同一视觉，仅文案不同（均无失败语义、无重试）。 */
@@ -70,6 +58,7 @@ export function TranscriptList({
   transcriptError = false,
   transcriptInProgress = false,
   onRetry,
+  readOnly = false,
 }: TranscriptListProps) {
   const { t } = useI18n();
   const handleRetry = onRetry ?? (() => window.location.reload());
@@ -229,6 +218,7 @@ export function TranscriptList({
               onEdit={onEditSegment}
               isPolished={segment.isPolished}
               originalContent={segment.originalContent}
+              readOnly={readOnly}
             />
           </div>
         ))

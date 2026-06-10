@@ -1133,6 +1133,22 @@ export interface PublicTaskListResponse {
   page_size: number
 }
 
+/**
+ * 公开详情的 YouTube 元数据(裁剪面)。
+ *
+ * 与私有 {@link YouTubeVideoInfo} 的关键差异:channel_id / channel_title 可空——
+ * 公开侧抓取失败/无频道信息时后端直接给 null,前端必须容忍并降级(不渲染 /channel/null 链接)。
+ * 该字段在后端 feature 分支上线前可能整体缺失(undefined),消费方须按 null 同义处理。
+ */
+export interface PublicYouTubeInfo {
+  video_id: string
+  title: string
+  thumbnail_url: string | null
+  duration_seconds: number | null
+  channel_id: string | null
+  channel_title: string | null
+}
+
 export interface PublicTaskDetail {
   id: string
   title: string | null
@@ -1144,6 +1160,8 @@ export interface PublicTaskDetail {
   detected_summary_style: string | null
   published_at: string | null
   created_at: string
+  // YouTube 视频封面卡元数据(仅 YouTube 来源任务;后端 feature 分支上线前可能整体缺失=null 同义)。
+  youtube_info?: PublicYouTubeInfo | null
 }
 
 export interface PublicTranscriptItem {

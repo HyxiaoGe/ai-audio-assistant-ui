@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { ImagePlaceholder } from './ImagePlaceholder';
 import { getMediaTicket } from '@/lib/media-ticket';
 
@@ -244,6 +244,103 @@ describe('ImagePlaceholder', () => {
       );
 
       expect(container.firstChild).toHaveClass('custom-class');
+    });
+  });
+
+  describe('token 竞速守卫（公开详情页场景）', () => {
+    beforeEach(() => {
+      getMediaTicketMock.mockClear();
+    });
+
+    it('mediaToken 初始 null 时不发无票请求，token 到后 img src 带 token', async () => {
+      // 代理 URL，token 初始 null：不应立即渲 <img>
+      const { rerender } = render(
+        <ImagePlaceholder
+          description="竞速图"
+          status="ready"
+          imageUrl="/api/v1/summaries/images/race.webp"
+          mediaToken={null}
+        />
+      );
+
+      // token 未到：不渲 img，渲骨架占位
+      expect(screen.queryByRole('img')).toBeNull();
+      expect(screen.getByText('正在加载图片...')).toBeInTheDocument();
+
+      // token 后到（模拟 mint 完成后父组件更新 prop）
+      await act(async () => {
+        rerender(
+          <ImagePlaceholder
+            description="竞速图"
+            status="ready"
+            imageUrl="/api/v1/summaries/images/race.webp"
+            mediaToken="mint-tok"
+          />
+        );
+      });
+
+      // token 就绪后 img 出现且 src 带 token
+      const img = screen.getByRole('img');
+      expect(img).toHaveAttribute('src', '/api/v1/summaries/images/race.webp?token=mint-tok');
+    });
+
+    it('mediaToken 一直 null（mint 失败）→ 超时后降级发请求走重试链', async () => {
+      vi.useFakeTimers();
+      try {
+        render(
+          <ImagePlaceholder
+            description="超时图"
+            status="ready"
+            imageUrl="/api/v1/summaries/images/timeout.webp"
+            mediaToken={null}
+          />
+        );
+
+        // 超时前：占位，无 img
+        expect(screen.queryByRole('img')).toBeNull();
+
+        // 推进 5s 超时，act 确保 React state 更新被 flush
+        await act(async () => {
+          vi.advanceTimersByTime(5000);
+        });
+
+        // 超时后降级：img 出现，src 无 token（走既有 401 重试链兜底）
+        const img = screen.getByRole('img');
+        // 代理 URL 无 token 时 appendMediaToken 原样返回
+        expect(img).toHaveAttribute('src', '/api/v1/summaries/images/timeout.webp');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('非代理 URL（外链）不等待 token，立即渲染', () => {
+      render(
+        <ImagePlaceholder
+          description="外链图"
+          status="ready"
+          imageUrl="https://example.com/image.png"
+          mediaToken={null}
+        />
+      );
+
+      // 外链图不需要票，直接渲 img
+      const img = screen.getByRole('img');
+      expect(img).toHaveAttribute('src', 'https://example.com/image.png');
+    });
+
+    it('私有页：mediaToken 挂载时即有值，直接渲 img 无骨架等待', () => {
+      render(
+        <ImagePlaceholder
+          description="私有页图"
+          status="ready"
+          imageUrl="/api/v1/summaries/images/priv.webp"
+          mediaToken="hot-tok"
+        />
+      );
+
+      // token 初值有效，直接 img，无「正在加载图片…」骨架
+      const img = screen.getByRole('img');
+      expect(img).toHaveAttribute('src', '/api/v1/summaries/images/priv.webp?token=hot-tok');
     });
   });
 });

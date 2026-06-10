@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Clock, Globe } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
@@ -23,7 +23,6 @@ interface ExploreProps {
 export default function Explore({ isAuthenticated, onOpenLogin, onToggleTheme }: ExploreProps) {
   const { t } = useI18n();
   const { formatDate } = useDateFormatter();
-  const router = useRouter();
   const client = useAPIClient();
 
   const [items, setItems] = useState<PublicTaskListItem[]>([]);
@@ -50,6 +49,13 @@ export default function Explore({ isAuthenticated, onOpenLogin, onToggleTheme }:
   useEffect(() => {
     void load(1);
   }, [load]);
+
+  useEffect(() => {
+    // 慢隧道下消灭点击后的冷 chunk 串行:用户停留列表页时提前拉取
+    // 详情页的重模块 chunk,让 chunk 下载与详情数据请求并行而非串行。
+    void import('@/components/task/MarkdownContent');
+    void import('@/components/pages/PublicTaskDetail');
+  }, []);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -104,10 +110,13 @@ export default function Explore({ isAuthenticated, onOpenLogin, onToggleTheme }:
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {items.map((item) => (
-                  <button
+                  // Link 替换 button+router.push,App Router 对视口内 Link 自动 prefetch(RSC payload+路由 chunk),
+                  // 消灭慢隧道下「点了没反应」;prefetch={true} 显式标注,防未来默认值变化。
+                  <Link
                     key={item.id}
-                    onClick={() => router.push(`/explore/${item.id}`)}
-                    className="text-left p-4 border rounded-xl hover:bg-[var(--app-glass-bg-strong)] transition-colors"
+                    href={`/explore/${item.id}`}
+                    prefetch={true}
+                    className="block text-left p-4 border rounded-xl hover:bg-[var(--app-glass-bg-strong)] transition-colors"
                     style={{ borderColor: 'var(--app-border)', background: 'var(--app-glass-bg)' }}
                   >
                     <div className="text-base mb-2 line-clamp-2" style={{ fontWeight: 500, color: 'var(--app-text)' }}>
@@ -126,7 +135,7 @@ export default function Explore({ isAuthenticated, onOpenLogin, onToggleTheme }:
                         </span>
                       )}
                     </div>
-                  </button>
+                  </Link>
                 ))}
               </div>
 

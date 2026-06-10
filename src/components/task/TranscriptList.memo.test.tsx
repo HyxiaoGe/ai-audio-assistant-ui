@@ -23,7 +23,8 @@ vi.mock("@/lib/i18n-context", () => ({
   useI18n: () => ({ t: (k: string) => k, locale: "zh" }),
 }))
 
-import { TranscriptList, type DisplayTranscriptSegment } from "./TranscriptList"
+import { TranscriptList } from "./TranscriptList"
+import type { DisplayTranscriptSegment } from "@/lib/transcript-mapping"
 
 function seg(over: Partial<DisplayTranscriptSegment> & { id: string }): DisplayTranscriptSegment {
   return {
