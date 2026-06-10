@@ -64,6 +64,7 @@ import {
 } from '@/lib/summary-images';
 import { useI18n } from '@/lib/i18n-context';
 import { useDateFormatter } from '@/lib/use-date-formatter';
+import { mapApiTranscript as mapApiTranscriptUtil } from '@/lib/transcript-mapping';
 
 // 摘要 SSE 流 / 轮询的时间参数（毫秒）。原先散落为魔数，抽成命名常量便于核对与统一。
 const SUMMARY_POLL_INTERVAL_MS = 2000; // 轮询 getSummary 检测版本号变化的间隔
@@ -237,46 +238,11 @@ export default function TaskDetail({
     { name: t("transcript.unknownSpeaker"), color: 'var(--app-text-subtle)' }
   ]), [t]);
 
-  const formatTimestamp = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
   // 把后端转写 items 映射为展示分段（含 speaker 调色板按出现顺序分配）。
   // loadTask 与「进入可见阶段补拉转写」复用同一映射，避免重复。
   const mapApiTranscript = useCallback((items: ApiTranscriptSegment[]): DisplayTranscriptSegment[] => {
     const unknownSpeakerLabel = t("transcript.unknownSpeaker");
-    const speakerPalette = availableSpeakers.filter((spk) => spk.name !== unknownSpeakerLabel);
-    const speakerMap = new Map<string, Speaker>();
-    let paletteIndex = 0;
-    items.forEach((segment) => {
-      const speakerId = segment.speaker_id;
-      if (!speakerId) return;
-      if (!speakerMap.has(speakerId)) {
-        const speakerInfo = speakerPalette[paletteIndex % speakerPalette.length];
-        if (speakerInfo) {
-          speakerMap.set(speakerId, speakerInfo);
-        }
-        paletteIndex += 1;
-      }
-    });
-    return items.map((segment) => {
-      const speakerInfo = segment.speaker_id ? speakerMap.get(segment.speaker_id) : null;
-      return {
-        id: segment.id,
-        speaker: speakerInfo?.name || unknownSpeakerLabel,
-        startTime: formatTimestamp(segment.start_time),
-        endTime: formatTimestamp(segment.end_time),
-        startSeconds: segment.start_time,
-        endSeconds: segment.end_time,
-        content: segment.content,
-        words: segment.words ?? null,
-        avatarColor: speakerInfo?.color || 'var(--app-text-subtle)',
-        isPolished: segment.is_edited ?? false,
-        originalContent: segment.original_content ?? null,
-      };
-    });
+    return mapApiTranscriptUtil(items, availableSpeakers, unknownSpeakerLabel);
   }, [availableSpeakers, t]);
 
   // 行动项缺省占位文案（已本地化）；解析逻辑见 @/lib/summary-parse。
