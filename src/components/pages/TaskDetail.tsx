@@ -318,80 +318,89 @@ export default function TaskDetail({
     // 白付一整段。transcript/summary 发出即各自 .catch 收编为值：既保持「各自独立成败、互不连带」，
     // 也保证 getTask 失败整段早退时这两路不产生 unhandled rejection。
     const taskPromise = client.getTask(id);
-    const transcriptPromise = client.getTranscript(id).catch((err) => err);
-    const summaryPromise = client.getSummary(id).catch((err) => err);
+    // catch 回调归一化为 ApiError（标注返回类型让 promise 推断回 Promise<XxxResponse | ApiError>，
+    // 不丢静态检查）；api-client 正常只抛 ApiError，归一化兜的是理论上的非 ApiError 异常。
+    const toApiError = (err: unknown): ApiError =>
+      err instanceof ApiError ? err : new ApiError(0, err instanceof Error ? err.message : String(err), "");
+    const transcriptPromise = client.getTranscript(id).catch(toApiError);
+    const summaryPromise = client.getSummary(id).catch(toApiError);
 
     try {
-      const taskData = await taskPromise;
-      if (gen !== loadTaskGenRef.current) return;
-      setTask(taskData);
-      setProgress(taskData.progress ?? 0);
-    } catch (err) {
-      // getTask 失败 = 任务级失败（401→登录、其余→整页错误态），整体丢弃 transcript/summary
-      // 两路的结果与错误：直接 return，不 setState、不 toast、不进其局部错误分支
-      //（否则 401 时会三连 toast）。两路 promise 已被上面的 .catch 收编，丢弃无副作用。
-      if (gen !== loadTaskGenRef.current) return;
-      if (err instanceof ApiError) {
-        setError(err.message);
-        notifyError(err.message);
-        if (err.code >= 40100 && err.code < 40200) {
-          setLoginOpen(true);
+      try {
+        const taskData = await taskPromise;
+        if (gen !== loadTaskGenRef.current) return;
+        setTask(taskData);
+        setProgress(taskData.progress ?? 0);
+      } catch (err) {
+        // getTask 失败 = 任务级失败（401→登录、其余→整页错误态），整体丢弃 transcript/summary
+        // 两路的结果与错误：直接 return，不 setState、不 toast、不进其局部错误分支
+        //（否则 401 时会三连 toast）。两路 promise 已被上面的 .catch 收编，丢弃无副作用。
+        if (gen !== loadTaskGenRef.current) return;
+        if (err instanceof ApiError) {
+          setError(err.message);
+          notifyError(err.message);
+          if (err.code >= 40100 && err.code < 40200) {
+            setLoginOpen(true);
+          }
+        } else {
+          const message = err instanceof Error ? err.message : t("errors.loadTaskFailed");
+          setError(message);
+          notifyError(message);
         }
-      } else {
-        const message = err instanceof Error ? err.message : t("errors.loadTaskFailed");
-        setError(message);
-        notifyError(message);
+        return;
       }
-      if (!silentTranscript) setTranscriptLoading(false);
-      setLoading(false);
-      return;
-    }
 
-    // 转写与摘要解耦：各自独立成败，互不连带（错误已在发出处收编为值，这里只等结果）。
-    const [transcriptResult, summaryResult] = await Promise.all([transcriptPromise, summaryPromise]);
-    if (gen !== loadTaskGenRef.current) return;
+      // 转写与摘要解耦：各自独立成败，互不连带（错误已在发出处收编为值，这里只等结果）。
+      const [transcriptResult, summaryResult] = await Promise.all([transcriptPromise, summaryPromise]);
+      if (gen !== loadTaskGenRef.current) return;
 
-    if (transcriptResult instanceof ApiError) {
-      // silent 模式（completed 同步重拉）下这一次没拉到：静默保持已显示的旧转写，
-      // 不清空、不报「加载失败」——否则会把已显示转写的已完成任务从列表跳成 PR#64 要避免的误报。
-      if (!silentTranscript) {
-        // 40401 = 转写尚未就绪（任务还在处理早期），静默置空、不算错误。
-        // 其它（含 50000 超时/网络/网关瞬态）= 这一次没拉到，标记 transcriptError 让面板显示
-        // 「加载失败可重试」，而不是把已完成任务一律冤枉成「任务处理失败」。
-        if (transcriptResult.code !== 40401) {
-          notifyError(transcriptResult.message);
-          setTranscriptError(true);
+      if (transcriptResult instanceof ApiError) {
+        // silent 模式（completed 同步重拉）下这一次没拉到：静默保持已显示的旧转写，
+        // 不清空、不报「加载失败」——否则会把已显示转写的已完成任务从列表跳成 PR#64 要避免的误报。
+        if (!silentTranscript) {
+          // 40401 = 转写尚未就绪（任务还在处理早期），静默置空、不算错误。
+          // 其它（含 50000 超时/网络/网关瞬态）= 这一次没拉到，标记 transcriptError 让面板显示
+          // 「加载失败可重试」，而不是把已完成任务一律冤枉成「任务处理失败」。
+          if (transcriptResult.code !== 40401) {
+            notifyError(transcriptResult.message);
+            setTranscriptError(true);
+          }
+          setTranscript([]);
         }
-        setTranscript([]);
+      } else if (transcriptResult) {
+        // 成功：无论是否 silent 都原位替换（行 key=segment.id，润色为就地改同一行、id 不变，
+        // React 仅重渲染内容变化的行、不整列重挂，故 silent 下不闪烁）。
+        setTranscript(mapApiTranscript(transcriptResult.items));
       }
-    } else if (transcriptResult) {
-      // 成功：无论是否 silent 都原位替换（行 key=segment.id，润色为就地改同一行、id 不变，
-      // React 仅重渲染内容变化的行、不整列重挂，故 silent 下不闪烁）。
-      setTranscript(mapApiTranscript(transcriptResult.items));
-    }
-    if (!silentTranscript) setTranscriptLoading(false);
 
-    if (summaryResult instanceof ApiError) {
-      // 摘要未就绪（40401）= 还没生成，静默置空；其它 = 右栏局部报错（不藏转写、不整页失败）。
-      if (summaryResult.code === 40401) {
-        setKeyPoints([]);
-        setActionItems([]);
-        setSummaryOverviewMarkdown('');
-      } else {
-        setSummaryError(summaryResult.message);
+      if (summaryResult instanceof ApiError) {
+        // 摘要未就绪（40401）= 还没生成，静默置空；其它 = 右栏局部报错（不藏转写、不整页失败）。
+        if (summaryResult.code === 40401) {
+          setKeyPoints([]);
+          setActionItems([]);
+          setSummaryOverviewMarkdown('');
+        } else {
+          setSummaryError(summaryResult.message);
+        }
+      } else if (summaryResult) {
+        buildSummaryState(summaryResult.items);
+        // 渐进式展示：用持久图集 summary.images 初始化/刷新占位符 Map（替代旧的「仅 regenerate 临时填充」）。
+        // 用 merge 而非整体替换：completed 重载重拉 summary.images 时，DB 快照可能滞后于已到达的
+        // image_ready WS（本地某占位符已 patch 成 ready），直接替换会把已显示的图退回 pending 且不重放。
+        // images[] 优先；completed 那刻它偶发还没落库时，从 overview 正文占位符兜底 seed 成 pending，
+        // 保证对账轮询能武装、把异步生成的图补出来（不必手刷）。
+        const dbImages = buildStreamingImagesFromSummaryOrSeed(summaryResult.items);
+        setStreamingImages((prev) => mergeStreamingImages(prev, dbImages));
       }
-    } else if (summaryResult) {
-      buildSummaryState(summaryResult.items);
-      // 渐进式展示：用持久图集 summary.images 初始化/刷新占位符 Map（替代旧的「仅 regenerate 临时填充」）。
-      // 用 merge 而非整体替换：completed 重载重拉 summary.images 时，DB 快照可能滞后于已到达的
-      // image_ready WS（本地某占位符已 patch 成 ready），直接替换会把已显示的图退回 pending 且不重放。
-      // images[] 优先；completed 那刻它偶发还没落库时，从 overview 正文占位符兜底 seed 成 pending，
-      // 保证对账轮询能武装、把异步生成的图补出来（不必手刷）。
-      const dbImages = buildStreamingImagesFromSummaryOrSeed(summaryResult.items);
-      setStreamingImages((prev) => mergeStreamingImages(prev, dbImages));
+    } finally {
+      // 统一收尾（蓝本 PublicTaskDetail 同款 finally+代际校验）：只有仍是最新代际才清 loading——
+      // 过期代际绝不能清（守卫 return 时必有更新调用在跑，清了会打掉它刚亮起的 spinner，
+      // 由那次调用自己的 finally 负责）；finally 同时兜住结果处理中途抛异常时 spinner 卡死。
+      if (gen === loadTaskGenRef.current) {
+        setLoading(false);
+        if (!silentTranscript) setTranscriptLoading(false);
+      }
     }
-
-    setLoading(false);
   }, [buildSummaryState, client, id, authUser, t, mapApiTranscript]);
 
   // 方案B「提早整块」：转写在进入 polishing/summarizing 时其实已全量落库（ASR 批量、转写写完才进润色），
