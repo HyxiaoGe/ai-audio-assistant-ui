@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useParams } from "next/navigation";
 import { useAuthStore } from "@/store/auth-store";
 import { useTheme } from "next-themes";
 import PublicTaskDetail from "@/components/pages/PublicTaskDetail";
@@ -9,6 +10,8 @@ import { useSettingsActions } from "@/lib/settings-context";
 
 export default function PublicTaskDetailPage() {
   const authUser = useAuthStore((s) => s.user);
+  const params = useParams();
+  const id = typeof params?.id === 'string' ? params.id : '';
   const [showLoginModal, setShowLoginModal] = useState(false);
   const { setTheme } = useSettingsActions();
   const { resolvedTheme } = useTheme();
@@ -26,7 +29,7 @@ export default function PublicTaskDetailPage() {
         onOpenLogin={openLoginModal}
         onToggleTheme={toggleTheme}
       />
-      <LoginModal isOpen={showLoginModal} onClose={closeLoginModal} callbackUrl="/explore" />
+      <LoginModal isOpen={showLoginModal} onClose={closeLoginModal} callbackUrl={`/explore/${id}`} />
     </>
   );
 }

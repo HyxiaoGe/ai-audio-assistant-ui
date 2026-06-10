@@ -74,8 +74,8 @@ function mockHappyPath() {
   mockClient.getPublicTask.mockResolvedValue({
     id: "t1",
     title: "公开详情标题",
-    source_type: "upload",
-    source_url: null,
+    source_type: "youtube",
+    source_url: "https://www.youtube.com/watch?v=test123",
     audio_url: "/api/v1/media/upload/u1/t1.mp3",
     duration_seconds: 90,
     detected_language: "zh",
@@ -121,6 +121,37 @@ describe("PublicTaskDetail 公开详情页", () => {
       expect(screen.getByText("转写第一段")).toBeInTheDocument()
       expect(screen.getByText("讲话人 1")).toBeInTheDocument()
     }, { timeout: 3000 })
+  })
+
+  it("YouTube 来源时渲染外链 href 正确", async () => {
+    mockHappyPath()
+    render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
+    await waitFor(() => {
+      const link = screen.getByRole("link", { name: "explore.viewSource" })
+      expect(link).toBeInTheDocument()
+      expect(link).toHaveAttribute("href", "https://www.youtube.com/watch?v=test123")
+      expect(link).toHaveAttribute("target", "_blank")
+    }, { timeout: 3000 })
+  })
+
+  it("非 YouTube 来源时不渲染来源链接", async () => {
+    mockClient.getPublicTask.mockResolvedValue({
+      id: "t1",
+      title: "上传任务",
+      source_type: "upload",
+      source_url: null,
+      audio_url: null,
+      duration_seconds: 60,
+      detected_language: "zh",
+      detected_summary_style: "general",
+      published_at: "2026-06-10T00:00:00Z",
+      created_at: "2026-06-09T00:00:00Z",
+    })
+    mockClient.getPublicTranscript.mockResolvedValue({ task_id: "t1", total: 0, items: [] })
+    mockClient.getPublicSummary.mockResolvedValue({ task_id: "t1", total: 0, items: [] })
+    render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
+    await waitFor(() => expect(screen.getByText("上传任务")).toBeInTheDocument(), { timeout: 3000 })
+    expect(screen.queryByRole("link", { name: "explore.viewSource" })).not.toBeInTheDocument()
   })
 
   it("40401(不存在/已取消公开)渲染 notFound 态", async () => {

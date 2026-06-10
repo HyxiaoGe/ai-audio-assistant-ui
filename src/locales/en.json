@@ -115,7 +115,8 @@
     "publishedAt": "Published",
     "goExplore": "Browse public content in Explore →",
     "prevPage": "Previous",
-    "nextPage": "Next"
+    "nextPage": "Next",
+    "viewSource": "View original video"
   },
   "stats": {
     "title": "Stats",

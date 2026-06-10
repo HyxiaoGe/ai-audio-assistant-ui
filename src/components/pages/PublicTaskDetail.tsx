@@ -218,6 +218,21 @@ export default function PublicTaskDetail({ isAuthenticated, onOpenLogin, onToggl
         </span>
       </div>
 
+      {/* YouTube 来源归属链接 */}
+      {task.source_type === 'youtube' && task.source_url && (
+        <div className="flex justify-center">
+          <a
+            href={task.source_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm underline hover:text-foreground"
+            style={{ color: 'var(--app-text-muted)' }}
+          >
+            {t('explore.viewSource')}
+          </a>
+        </div>
+      )}
+
       {/* 播放条(audio_url 经公开媒体票,token 注入由 audio-store 统一处理) */}
       {task.audio_url && (
         <PlayerBarContainer
