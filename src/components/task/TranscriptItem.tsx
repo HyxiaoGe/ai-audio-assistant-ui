@@ -1,9 +1,15 @@
-import { memo, useMemo, useState } from 'react';
+import { lazy, memo, Suspense, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { Edit2, Check, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n-context';
 import type { TranscriptWord } from '@/types/api';
-import DiffContent from '@/components/task/DiffContent';
+
+// DiffContent 经 @/lib/text-diff 拖入 diff-match-patch(78KB 源码),但只有「已润色且
+// 原文≠现文」的行才渲染——React.lazy 把它挪出主 bundle。不用仓内 next/dynamic 惯例:
+// 其 loading 组件拿不到行文本,会闪空行;Suspense fallback 直接显示校对稿纯文本
+// (与就绪后的文字逐字相同,仅缺标注,零位移)。转写全部由客户端 API 拉取,
+// SSR/首屏 HTML 阶段本分支不会挂载,lazy 不会在服务端 suspend。
+const DiffContent = lazy(() => import('@/components/task/DiffContent'));
 
 interface TranscriptItemProps {
   segmentId: string;
@@ -218,7 +224,9 @@ function TranscriptItem({
           className="text-base leading-relaxed"
           style={{ color: 'var(--app-text)', lineHeight: '24px' }}
         >
-          <DiffContent content={content} originalContent={originalContent} />
+          <Suspense fallback={content}>
+            <DiffContent content={content} originalContent={originalContent} />
+          </Suspense>
         </p>
       ) : (
         <p
