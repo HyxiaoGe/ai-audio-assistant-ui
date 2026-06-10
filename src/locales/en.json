@@ -95,7 +95,27 @@
     "tasks": "Tasks",
     "subscriptions": "Subscriptions",
     "stats": "Stats",
-    "settings": "Settings"
+    "settings": "Settings",
+    "explore": "Explore"
+  },
+  "explore": {
+    "pageTitle": "Explore",
+    "pageSubtitle": "Browse publicly shared transcripts and summaries",
+    "emptyTitle": "Nothing public yet",
+    "emptyDescription": "Tasks published by admins will show up here",
+    "loadFailed": "Failed to load, please try again",
+    "retry": "Retry",
+    "notFoundTitle": "Not found or no longer public",
+    "notFoundDescription": "This item may have been unpublished by its author",
+    "backToExplore": "Back to Explore",
+    "transcriptTitle": "Transcript",
+    "summaryTitle": "Summary",
+    "keyPointsTitle": "Key Points",
+    "actionItemsTitle": "Action Items",
+    "publishedAt": "Published",
+    "goExplore": "Browse public content in Explore →",
+    "prevPage": "Previous",
+    "nextPage": "Next"
   },
   "stats": {
     "title": "Stats",
@@ -451,7 +471,13 @@
       "openOnYouTube": "Open on YouTube",
       "hideInfo": "Hide",
       "showInfo": "Show"
-    }
+    },
+    "visibilityPublic": "Public",
+    "visibilityMakePublic": "Make public",
+    "visibilityMakePrivate": "Unpublish",
+    "visibilityPublicSuccess": "Published — anyone can see it in Explore",
+    "visibilityPrivateSuccess": "Unpublished",
+    "visibilityFailed": "Operation failed, please retry"
   },
   "status": {
     "processing": "Processing",
