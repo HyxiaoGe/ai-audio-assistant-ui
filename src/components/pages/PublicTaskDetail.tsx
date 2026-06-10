@@ -20,6 +20,7 @@ import type { DisplayTranscriptSegment } from '@/lib/transcript-mapping';
 import { ApiError } from '@/types/api';
 import type {
   PublicSummaryItem,
+  PublicSummaryResponse,
   PublicTaskDetail as PublicTaskDetailData,
   PublicTranscriptItem,
   StreamingImage,
@@ -86,9 +87,23 @@ interface PublicTaskDetailProps {
   isAuthenticated: boolean;
   onOpenLogin: () => void;
   onToggleTheme?: () => void;
+  /**
+   * 服务端 LAN 预取初值(可选):有初值的路对应 state 直接以 props 初始化,跳过该路的
+   * 客户端初始拉取(loading 初值 false,无 spinner 阶段);没有的路照常客户端拉取。
+   * 转写刻意不内嵌(1772 段进 RSC flight 会让 HTML 爆炸),恒走客户端,与 hydration 并行。
+   * 局部重试(loadDetail/loadSummary)与初值无关,重试时照常走客户端拉取。
+   */
+  initialDetail?: PublicTaskDetailData;
+  initialSummary?: PublicSummaryResponse;
 }
 
-export default function PublicTaskDetail({ isAuthenticated, onOpenLogin, onToggleTheme }: PublicTaskDetailProps) {
+export default function PublicTaskDetail({
+  isAuthenticated,
+  onOpenLogin,
+  onToggleTheme,
+  initialDetail,
+  initialSummary,
+}: PublicTaskDetailProps) {
   const { t } = useI18n();
   const router = useRouter();
   const params = useParams();
@@ -97,8 +112,9 @@ export default function PublicTaskDetail({ isAuthenticated, onOpenLogin, onToggl
   const mediaToken = usePublicMediaToken(id);
 
   // detail 单独成态:它回来即可渲染整页骨架,不再被转写/摘要拖住(拆瀑布的核心)。
-  const [task, setTask] = useState<PublicTaskDetailData | null>(null);
-  const [detailLoading, setDetailLoading] = useState(true);
+  // 有服务端预取初值时直接以初值落地,loading 从 false 起步(无整页 spinner 阶段)。
+  const [task, setTask] = useState<PublicTaskDetailData | null>(initialDetail ?? null);
+  const [detailLoading, setDetailLoading] = useState(!initialDetail);
   const [notFound, setNotFound] = useState(false);
   const [loadError, setLoadError] = useState(false);
 
@@ -108,8 +124,8 @@ export default function PublicTaskDetail({ isAuthenticated, onOpenLogin, onToggl
   const [transcriptError, setTranscriptError] = useState(false);
 
   // 摘要:独立 loading / error,失败只显示右栏局部错误 + 局部重试。
-  const [summaries, setSummaries] = useState<PublicSummaryItem[]>([]);
-  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [summaries, setSummaries] = useState<PublicSummaryItem[]>(initialSummary?.items ?? []);
+  const [summaryLoading, setSummaryLoading] = useState(!initialSummary);
   const [summaryError, setSummaryError] = useState(false);
 
   const [activeTab, setActiveTab] = useState<PublicTab>('summary');
@@ -182,11 +198,13 @@ export default function PublicTaskDetail({ isAuthenticated, onOpenLogin, onToggl
   }, [client, id]);
 
   // 三请求仍同时发出(并行,不串行),但各自独立落态:detail 回来即渲骨架,转写/摘要各自栏内 loading/error。
+  // 有服务端预取初值的路(detail/summary)跳过初始客户端拉取——初值即数据,重复拉只是浪费一次
+  // 隧道往返;转写恒走客户端(刻意不内嵌,见 props 注释)。错误后的局部重试直接调 loadXxx,不经此处。
   useEffect(() => {
-    void loadDetail();
+    if (!initialDetail) void loadDetail();
     void loadTranscript();
-    void loadSummary();
-  }, [loadDetail, loadTranscript, loadSummary]);
+    if (!initialSummary) void loadSummary();
+  }, [loadDetail, loadTranscript, loadSummary, initialDetail, initialSummary]);
 
   // ===== 音频播放(与 TaskDetail 同款 audio-store 集成;媒体票走公开通道) =====
   const isPlaying = useAudioStore((s) => s.isPlaying);

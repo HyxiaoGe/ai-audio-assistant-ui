@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { useState, useEffect, type ComponentType } from "react"
 
 import { ApiError } from "@/types/api"
+import type { PublicSummaryResponse, PublicTaskDetail as PublicTaskDetailData } from "@/types/api"
 
 const mockClient = vi.hoisted(() => ({
   getPublicTask: vi.fn(),
@@ -80,7 +81,7 @@ vi.mock("@/store/audio-store", () => ({
 
 import PublicTaskDetail from "./PublicTaskDetail"
 
-const DETAIL_YOUTUBE = {
+const DETAIL_YOUTUBE: PublicTaskDetailData = {
   id: "t1",
   title: "公开详情标题",
   source_type: "youtube" as const,
@@ -101,7 +102,7 @@ const TRANSCRIPT_OK = {
   ],
 }
 
-const SUMMARY_OK = {
+const SUMMARY_OK: PublicSummaryResponse = {
   task_id: "t1",
   total: 3,
   items: [
@@ -296,5 +297,58 @@ describe("PublicTaskDetail 公开详情页", () => {
     render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
     await waitFor(() => expect(screen.getByText("explore.loadFailed")).toBeInTheDocument())
     expect(screen.getByText("explore.retry")).toBeInTheDocument()
+  })
+
+  // ===== 服务端 LAN 预取初值(initialDetail / initialSummary)=====
+
+  it("传 initialDetail/initialSummary:立即渲染标题/摘要,且不发对应客户端请求(转写照常)", async () => {
+    mockClient.getPublicTranscript.mockResolvedValue(TRANSCRIPT_OK)
+    render(
+      <PublicTaskDetail
+        isAuthenticated={false}
+        onOpenLogin={() => {}}
+        initialDetail={DETAIL_YOUTUBE}
+        initialSummary={SUMMARY_OK}
+      />
+    )
+    // detail 有初值:标题同步可见(无整页 spinner 阶段)
+    expect(screen.getByText("公开详情标题")).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText("这是公开摘要正文")).toBeInTheDocument()
+      expect(screen.getByText("转写第一段")).toBeInTheDocument()
+    }, { timeout: 3000 })
+    // 有初值的两路绝不重复发客户端初始请求;转写刻意不内嵌,仍走客户端拉取
+    expect(mockClient.getPublicTask).not.toHaveBeenCalled()
+    expect(mockClient.getPublicSummary).not.toHaveBeenCalled()
+    expect(mockClient.getPublicTranscript).toHaveBeenCalledTimes(1)
+  })
+
+  it("只传 initialDetail:summary 照常客户端拉取", async () => {
+    mockClient.getPublicTranscript.mockResolvedValue(TRANSCRIPT_OK)
+    mockClient.getPublicSummary.mockResolvedValue(SUMMARY_OK)
+    render(
+      <PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} initialDetail={DETAIL_YOUTUBE} />
+    )
+    expect(screen.getByText("公开详情标题")).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText("这是公开摘要正文")).toBeInTheDocument()
+    }, { timeout: 3000 })
+    expect(mockClient.getPublicTask).not.toHaveBeenCalled()
+    expect(mockClient.getPublicSummary).toHaveBeenCalledTimes(1)
+  })
+
+  it("initialSummary 摘要失败路独立:有初值时右栏不可能进错误态,局部重试仍走客户端", async () => {
+    // 初值即数据,右栏直接渲染;此用例兼回归「summaryLoading 初值 false」不闪 spinner
+    mockClient.getPublicTask.mockResolvedValue(DETAIL_YOUTUBE)
+    mockClient.getPublicTranscript.mockResolvedValue(TRANSCRIPT_OK)
+    render(
+      <PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} initialSummary={SUMMARY_OK} />
+    )
+    await waitFor(() => {
+      expect(screen.getByText("这是公开摘要正文")).toBeInTheDocument()
+    }, { timeout: 3000 })
+    expect(mockClient.getPublicSummary).not.toHaveBeenCalled()
+    expect(mockClient.getPublicTask).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText("explore.summaryLoadFailed")).not.toBeInTheDocument()
   })
 })
