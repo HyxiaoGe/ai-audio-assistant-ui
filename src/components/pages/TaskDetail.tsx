@@ -19,7 +19,8 @@ import {
 } from '@/components/ui/dialog';
 import TabSwitch from '@/components/task/TabSwitch';
 import { PlayerBarContainer } from '@/components/task/PlayerBarContainer';
-import { TranscriptList, type DisplayTranscriptSegment } from '@/components/task/TranscriptList';
+import { TranscriptList } from '@/components/task/TranscriptList';
+import type { DisplayTranscriptSegment } from '@/lib/transcript-mapping';
 import { type ActionItem, parseActionItems, parseSummaryLines } from '@/lib/summary-parse';
 import { ActionItemToggle } from '@/components/task/ActionItemToggle';
 import { ExportMenu } from '@/components/task/ExportMenu';

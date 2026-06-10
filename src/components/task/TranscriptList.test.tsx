@@ -1,7 +1,8 @@
 import { act, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { useAudioStore } from "@/store/audio-store"
-import { TranscriptList, type DisplayTranscriptSegment } from "./TranscriptList"
+import { TranscriptList } from "./TranscriptList"
+import type { DisplayTranscriptSegment } from "@/lib/transcript-mapping"
 
 // TranscriptList 拥有 currentTime 订阅 + 高亮派生 + 自动滚动，是把 per-tick 重渲染
 // 从 2788 行的 TaskDetail 里隔离出来的核心 seam。这里锁定它必须保留的行为。

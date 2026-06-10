@@ -28,15 +28,15 @@ function renderItem(overrides: Partial<React.ComponentProps<typeof TranscriptIte
 // ──────────────────────────────────────────────────────────────
 describe('TranscriptItem — default (editable) behaviour', () => {
   it('shows the edit button on hover', () => {
-    const { container } = renderItem();
-    const row = container.querySelector('div.px-4.py-4') as HTMLElement;
+    renderItem();
+    const row = screen.getByTestId('transcript-item');
     fireEvent.mouseEnter(row);
     expect(screen.getByText('common.edit')).toBeTruthy();
   });
 
   it('enters editing mode when the edit button is clicked', () => {
-    const { container } = renderItem();
-    const row = container.querySelector('div.px-4.py-4') as HTMLElement;
+    renderItem();
+    const row = screen.getByTestId('transcript-item');
     fireEvent.mouseEnter(row);
     fireEvent.click(screen.getByText('common.edit'));
     expect(screen.getByRole('textbox')).toBeTruthy();
@@ -48,16 +48,16 @@ describe('TranscriptItem — default (editable) behaviour', () => {
 // ──────────────────────────────────────────────────────────────
 describe('TranscriptItem — readOnly mode', () => {
   it('does not show the edit button on hover when readOnly=true', () => {
-    const { container } = renderItem({ readOnly: true });
-    const row = container.querySelector('div.px-4.py-4') as HTMLElement;
+    renderItem({ readOnly: true });
+    const row = screen.getByTestId('transcript-item');
     fireEvent.mouseEnter(row);
     expect(screen.queryByText('common.edit')).toBeNull();
   });
 
   it('does not enter editing mode (no textarea) when readOnly=true', () => {
-    const { container } = renderItem({ readOnly: true });
-    const row = container.querySelector('div.px-4.py-4') as HTMLElement;
-    // hover してから手動で handleStartEdit が呼ばれないことを確認
+    renderItem({ readOnly: true });
+    const row = screen.getByTestId('transcript-item');
+    // hover 后确认 handleStartEdit 不会被调用
     fireEvent.mouseEnter(row);
     // 编辑按钮不存在，自然无法进入编辑态
     expect(screen.queryByRole('textbox')).toBeNull();
@@ -73,8 +73,8 @@ describe('TranscriptItem — readOnly mode', () => {
 
   it('readOnly=false (default) behaves identically to omitting the prop', () => {
     // 不传 readOnly 时，hover 仍然显示编辑按钮
-    const { container } = renderItem({ readOnly: false });
-    const row = container.querySelector('div.px-4.py-4') as HTMLElement;
+    renderItem({ readOnly: false });
+    const row = screen.getByTestId('transcript-item');
     fireEvent.mouseEnter(row);
     expect(screen.getByText('common.edit')).toBeTruthy();
   });

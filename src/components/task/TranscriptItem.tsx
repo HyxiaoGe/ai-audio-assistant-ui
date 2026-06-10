@@ -81,6 +81,7 @@ function TranscriptItem({
 
   return (
     <div
+      data-testid="transcript-item"
       className="px-4 py-4 transition-colors cursor-default border-b relative"
       style={{
         background: isEditing

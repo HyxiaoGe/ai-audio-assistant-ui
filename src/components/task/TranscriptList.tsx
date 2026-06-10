@@ -1,23 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import type { TranscriptWord } from '@/types/api';
 import { useAudioStore } from '@/store/audio-store';
 import { useI18n } from '@/lib/i18n-context';
 import TranscriptItem from '@/components/task/TranscriptItem';
 import ErrorState from '@/components/common/ErrorState';
-
-export interface DisplayTranscriptSegment {
-  id: string;
-  speaker: string;
-  startTime: string;
-  endTime: string;
-  startSeconds: number;
-  endSeconds: number;
-  content: string;
-  words: TranscriptWord[] | null;
-  avatarColor: string;
-  isPolished: boolean;
-  originalContent: string | null;
-}
+import type { DisplayTranscriptSegment } from '@/lib/transcript-mapping';
 
 interface TranscriptListProps {
   transcript: DisplayTranscriptSegment[];

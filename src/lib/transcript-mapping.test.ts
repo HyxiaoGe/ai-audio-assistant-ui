@@ -140,4 +140,14 @@ describe('mapApiTranscript — speaker palette assignment', () => {
   it('returns empty array for empty input', () => {
     expect(mapApiTranscript([], SPEAKER_LABELS, UNKNOWN_LABEL)).toEqual([]);
   });
+
+  it('uses UNKNOWN_SPEAKER_COLOR for all segments when speakerLabels is empty', () => {
+    // 边界：调色板为空（或全为 unknown）时，不应抛错，所有段一律兜底 UNKNOWN_SPEAKER_COLOR
+    const items = [seg('s1', 'spk_A'), seg('s2', 'spk_B'), seg('s3', null)];
+    const result = mapApiTranscript(items, [], UNKNOWN_LABEL);
+    expect(() => mapApiTranscript(items, [], UNKNOWN_LABEL)).not.toThrow();
+    for (const r of result) {
+      expect(r.avatarColor).toBe(UNKNOWN_SPEAKER_COLOR);
+    }
+  });
 });

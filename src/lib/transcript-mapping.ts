@@ -5,8 +5,22 @@
  * 并按出现顺序为每位说话人分配调色板色彩。抽离到此文件供 TaskDetail 与 PublicTaskDetail 共用。
  */
 
-import type { TranscriptSegment as ApiTranscriptSegment } from '@/types/api';
-import type { DisplayTranscriptSegment } from '@/components/task/TranscriptList';
+import type { TranscriptSegment as ApiTranscriptSegment, TranscriptWord } from '@/types/api';
+
+/** 前端展示用的转写分段（从后端 TranscriptSegment 映射而来）。 */
+export interface DisplayTranscriptSegment {
+  id: string;
+  speaker: string;
+  startTime: string;
+  endTime: string;
+  startSeconds: number;
+  endSeconds: number;
+  content: string;
+  words: TranscriptWord[] | null;
+  avatarColor: string;
+  isPolished: boolean;
+  originalContent: string | null;
+}
 
 /** 说话人调色板（按出现顺序分配，最多 5 个具名色；超出后循环）。 */
 export const SPEAKER_PALETTE_COLORS: string[] = [
@@ -50,8 +64,8 @@ export function mapApiTranscript(
       const speakerInfo = speakerPalette[paletteIndex % speakerPalette.length];
       if (speakerInfo) {
         speakerMap.set(speakerId, speakerInfo);
+        paletteIndex += 1;
       }
-      paletteIndex += 1;
     }
   });
 
