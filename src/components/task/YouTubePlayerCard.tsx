@@ -155,6 +155,8 @@ export function YouTubePlayerCard({
 
   // 富字段仅私有 YouTubeVideoInfo 才有,公开侧没有。窄化为带这些 optional 字段的形状统一读取,
   // 缺失即 undefined → 各处已有 optional 守卫,不渲染对应行/降级。
+  // ⚠️ 富字段读取必须保持 optional 守卫:此 cast 不会捕获将来 YouTubeVideoInfo 必填字段漂移,
+  //    若新增必填字段须同步在下方加 optional 访问(/undefined 兜底),否则公开侧会取到 undefined。
   const rich = youtubeInfo as Partial<YouTubeVideoInfo>;
   const channelThumbnail = rich.channel_thumbnail;
   const publishedAt = rich.published_at;

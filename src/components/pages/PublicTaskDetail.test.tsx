@@ -154,9 +154,9 @@ describe("PublicTaskDetail 公开详情页", () => {
     mockClient.getPublicTranscript.mockRejectedValueOnce(new Error("network"))
     mockClient.getPublicSummary.mockResolvedValue(SUMMARY_OK)
     render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
-    // 左栏局部错误 + 右栏内容并存
+    // 左栏局部错误(TranscriptList 内建 task.transcriptLoadFailed)+ 右栏内容并存
     await waitFor(() => {
-      expect(screen.getByText("explore.transcriptLoadFailed")).toBeInTheDocument()
+      expect(screen.getByText("task.transcriptLoadFailed")).toBeInTheDocument()
       expect(screen.getByText("这是公开摘要正文")).toBeInTheDocument()
     }, { timeout: 3000 })
     // 整页未进 notFound / loadError
@@ -170,6 +170,9 @@ describe("PublicTaskDetail 公开详情页", () => {
     }, { timeout: 3000 })
   })
 
+  // 注:loader 的代际守卫(过期响应丢弃)防的是 StrictMode 双跑/路由复用等场景,
+  // 同 id 下 UI 无入口在请求在途时触发第二次请求(retry 仅在前一请求 settle 后可见),
+  // 黑盒不可达故不设用例;id 切换场景由路由层 key={id} 整树重挂覆盖。
   it("摘要失败而转写正常:右栏局部错误+可重试,左栏转写仍在", async () => {
     mockClient.getPublicTask.mockResolvedValue(DETAIL_YOUTUBE)
     mockClient.getPublicTranscript.mockResolvedValue(TRANSCRIPT_OK)

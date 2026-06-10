@@ -24,7 +24,9 @@ export default function PublicTaskDetailPage() {
 
   return (
     <>
+      {/* key={id} 让 id 切换时整棵子树重挂,三 state 天然清零,防止 A→B 路由时 A 的在途响应写进 B 的 state */}
       <PublicTaskDetail
+        key={id}
         isAuthenticated={!!authUser}
         onOpenLogin={openLoginModal}
         onToggleTheme={toggleTheme}

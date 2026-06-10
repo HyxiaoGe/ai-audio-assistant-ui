@@ -1,13 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { ArrowLeft, FileText, Globe } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
 import EmptyState from '@/components/common/EmptyState';
-import ErrorState from '@/components/common/ErrorState';
 import TabSwitch from '@/components/task/TabSwitch';
 import { PlayerBarContainer } from '@/components/task/PlayerBarContainer';
 import { TranscriptList } from '@/components/task/TranscriptList';
@@ -28,6 +27,22 @@ import type {
   TranscriptSegment as ApiTranscriptSegment,
 } from '@/types/api';
 
+/**
+ * 三处内联 spinner(dynamic 占位/整页/摘要栏)样式相同——抽成小函数组件 DRY。
+ * size: 'sm'(size-4,摘要栏/dynamic 占位) | 'md'(size-5,整页居中)
+ */
+function InlineSpinner({ size = 'sm' }: { size?: 'sm' | 'md' }) {
+  const cls = size === 'md' ? 'size-5' : 'size-4';
+  return (
+    <div className="flex items-center justify-center py-16">
+      <div
+        className={`${cls} border-2 rounded-full animate-spin`}
+        style={{ borderColor: 'var(--app-primary) transparent var(--app-primary) var(--app-primary)' }}
+      />
+    </div>
+  );
+}
+
 // 与 TaskDetail 同款:react-markdown + remark-gfm + rehype-sanitize(约 47KB chunk)移出首屏 JS。
 // 给 loading 占位避免「内容到位前白屏」;并在组件挂载时主动预热该 chunk(见下方 useEffect),
 // 让它与 detail/transcript/summary 三请求并行下载,而非等三请求都回来才开始下,消灭可见闪烁。
@@ -35,14 +50,7 @@ const MarkdownContent = dynamic(
   () => import('@/components/task/MarkdownContent').then((m) => m.MarkdownContent),
   {
     ssr: false,
-    loading: () => (
-      <div className="flex items-center justify-center py-16">
-        <div
-          className="size-4 border-2 rounded-full animate-spin"
-          style={{ borderColor: 'var(--app-primary) transparent var(--app-primary) var(--app-primary)' }}
-        />
-      </div>
-    ),
+    loading: () => <InlineSpinner size="sm" />,
   },
 );
 
@@ -106,6 +114,12 @@ export default function PublicTaskDetail({ isAuthenticated, onOpenLogin, onToggl
 
   const [activeTab, setActiveTab] = useState<PublicTab>('summary');
 
+  // 代际计数 ref:每个 loader 独立一个 ref,防止旧响应(局部重试连点 / id 切换)覆盖新结果。
+  // 调用开头记录当前代,所有 setState 前先校验代际是否仍是最新,过期则丢弃。
+  const detailGenRef = useRef(0);
+  const transcriptGenRef = useRef(0);
+  const summaryGenRef = useRef(0);
+
   // 挂载即预热 MarkdownContent chunk:与三请求并行下载,内容就绪时通常已加载完,无白屏。
   useEffect(() => {
     void import('@/components/task/MarkdownContent');
@@ -113,48 +127,57 @@ export default function PublicTaskDetail({ isAuthenticated, onOpenLogin, onToggl
 
   const loadDetail = useCallback(async () => {
     if (!id) return;
+    const gen = ++detailGenRef.current;
     setDetailLoading(true);
     setNotFound(false);
     setLoadError(false);
     try {
       const detail = await client.getPublicTask(id);
+      if (gen !== detailGenRef.current) return;
       setTask(detail);
     } catch (err) {
+      if (gen !== detailGenRef.current) return;
       // 40401 = 不存在/未公开/已收回 → 终态 notFound;其余(网络/5xx)→ 整页可重试。
       if (err instanceof ApiError && err.code === 40401) setNotFound(true);
       else setLoadError(true);
     } finally {
-      setDetailLoading(false);
+      if (gen === detailGenRef.current) setDetailLoading(false);
     }
   }, [client, id]);
 
   const loadTranscript = useCallback(async () => {
     if (!id) return;
+    const gen = ++transcriptGenRef.current;
     setTranscriptLoading(true);
     setTranscriptError(false);
     try {
       const transcript = await client.getPublicTranscript(id);
+      if (gen !== transcriptGenRef.current) return;
       setTranscripts(transcript.items);
     } catch {
+      if (gen !== transcriptGenRef.current) return;
       // 转写瞬态失败:只标左栏错误,可局部重试;不影响整页与右栏。
       setTranscriptError(true);
     } finally {
-      setTranscriptLoading(false);
+      if (gen === transcriptGenRef.current) setTranscriptLoading(false);
     }
   }, [client, id]);
 
   const loadSummary = useCallback(async () => {
     if (!id) return;
+    const gen = ++summaryGenRef.current;
     setSummaryLoading(true);
     setSummaryError(false);
     try {
       const summary = await client.getPublicSummary(id);
+      if (gen !== summaryGenRef.current) return;
       setSummaries(summary.items);
     } catch {
+      if (gen !== summaryGenRef.current) return;
       // 摘要瞬态失败:只标右栏错误,可局部重试;不影响整页与左栏。
       setSummaryError(true);
     } finally {
-      setSummaryLoading(false);
+      if (gen === summaryGenRef.current) setSummaryLoading(false);
     }
   }, [client, id]);
 
@@ -276,10 +299,7 @@ export default function PublicTaskDetail({ isAuthenticated, onOpenLogin, onToggl
   if (detailLoading) {
     return shell(
       <div className="flex-1 flex items-center justify-center">
-        <div
-          className="size-5 border-2 rounded-full animate-spin"
-          style={{ borderColor: 'var(--app-primary) transparent var(--app-primary) var(--app-primary)' }}
-        />
+        <InlineSpinner size="md" />
       </div>,
     );
   }
@@ -382,27 +402,17 @@ export default function PublicTaskDetail({ isAuthenticated, onOpenLogin, onToggl
               {t('task.transcriptTitle')}
             </h2>
           </div>
-          {transcriptError ? (
-            <div className="flex-1 overflow-y-auto">
-              <ErrorState
-                type="network"
-                title={t('explore.transcriptLoadFailed')}
-                description={t('errors.networkFailedDesc')}
-                onRetry={() => void loadTranscript()}
-                retryLabel={t('common.retry')}
-              />
-            </div>
-          ) : (
-            <TranscriptList
-              transcript={displayTranscript}
-              transcriptLoading={transcriptLoading}
-              isActiveAudio={isActiveAudio}
-              onTimeClick={handleTimeClick}
-              onEditSegment={() => {}}
-              onRetry={() => void loadTranscript()}
-              readOnly
-            />
-          )}
+          {/* 转写错误/加载统一交给 TranscriptList 内建 UI 处理,与私有页 TaskDetail 保持一致 */}
+          <TranscriptList
+            transcript={displayTranscript}
+            transcriptLoading={transcriptLoading}
+            transcriptError={transcriptError}
+            isActiveAudio={isActiveAudio}
+            onTimeClick={handleTimeClick}
+            onEditSegment={() => {}}
+            onRetry={() => void loadTranscript()}
+            readOnly
+          />
         </div>
 
         {/* 右栏:摘要 / 要点 / 行动项(TabSwitch 三页签 + MarkdownContent 配图管线) */}
@@ -429,12 +439,7 @@ export default function PublicTaskDetail({ isAuthenticated, onOpenLogin, onToggl
                     {t(titleKey)}
                   </h3>
                   {summaryLoading ? (
-                    <div className="flex items-center justify-center py-16">
-                      <div
-                        className="size-4 border-2 rounded-full animate-spin"
-                        style={{ borderColor: 'var(--app-primary) transparent var(--app-primary) var(--app-primary)' }}
-                      />
-                    </div>
+                    <InlineSpinner size="sm" />
                   ) : summaryError ? (
                     <div className="space-y-3 text-center py-12">
                       <p className="text-sm" style={{ color: 'var(--app-danger)' }}>
