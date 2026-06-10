@@ -383,6 +383,7 @@ export default function TaskList({
                   onClick={handleTaskClick}
                   onRetry={handleRetryTask}
                   isRetrying={retryingTaskId === task.id}
+                  publicLabel={task.is_public ? t('task.visibilityPublic') : undefined}
                 />
               ))
             ) : (
