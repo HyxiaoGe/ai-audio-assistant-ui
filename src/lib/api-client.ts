@@ -144,15 +144,43 @@ function buildStatsQuery(params?: {
 }
 
 /**
- * 发送 HTTP 请求
+ * 发送 HTTP 请求（带认证）
  */
 async function request<T>(
   endpoint: string,
   options: RequestInit = {},
   token?: string
 ): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint}`
+  // 取 token 可能触发 SDK refresh（经隧道 0.5-1.5s）：token 临期时所有并发请求会被同一次
+  // refresh 集体闸住——这是认证请求的必要代价，公开请求走下面的 publicRequest 免排队。
   const authToken = await getAuthToken(token)
+  return dispatchRequest<T>(endpoint, options, authToken)
+}
+
+/**
+ * 发送匿名 HTTP 请求（公开端点专用变体）。
+ *
+ * 后端 /public/* 端点零鉴权、不读 Authorization；这里跳过 getAuthToken（不 await、
+ * 不触发/不等待 token refresh），也不挂 Authorization 头——登录用户 token 临期时,
+ * 公开页请求不再被同一次经隧道的 refresh 集体闸住。
+ * 代价（已接受）：公开页因此失去「refresh 失败 → 登出感知」，由既有 checkLiveness 覆盖。
+ */
+async function publicRequest<T>(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<T> {
+  return dispatchRequest<T>(endpoint, options, null)
+}
+
+/**
+ * 请求主体：信封解析 / 错误归一化 / 超时中断，对认证与匿名请求完全一致。
+ */
+async function dispatchRequest<T>(
+  endpoint: string,
+  options: RequestInit,
+  authToken: string | null
+): Promise<T> {
+  const url = `${API_BASE_URL}${endpoint}`
   const locale = getLocale()
 
   const headers: Record<string, string> = {
@@ -181,6 +209,8 @@ async function request<T>(
     // getAccessToken（未过期时直接返回本地缓存）：401 已表明服务端不接受这张令牌，可能是
     // 真过期、也可能是跨应用单点登出后被吊销标记拦截（签名仍有效、本地无从察觉）。会话仍在
     // 则拿到轮转后的新令牌重试；别处已登出则返回 null（store 内部已翻转为未登录）→ 不重试。
+    // 注：publicRequest（匿名通道）的目标端点零鉴权、不返回 401，此分支对其为死代码——
+    // 即使理论上触发，revalidateToken 也只是一次无害的会话校验，不影响匿名请求语义。
     if (response.status === 401 && typeof window !== "undefined") {
       const { useAuthStore } = await import("@/store/auth-store")
       const newToken = await useAuthStore.getState().revalidateToken()
@@ -547,7 +577,8 @@ export class APIClient {
   }
 
   // ==========================================================================
-  // 公开探索(匿名,无需登录;this.token 为 null 时照常工作)
+  // 公开探索(匿名;走 publicRequest 免 token 变体:后端零鉴权不读 Authorization,
+  // 跳过 getAuthToken,登录用户 token 临期时不被同一次经隧道的 refresh 集体闸住)
   // ==========================================================================
 
   /** 公开任务分页列表(仅 is_public+completed,出参为白名单裁剪字段)。 */
@@ -556,27 +587,27 @@ export class APIClient {
     if (params?.page) searchParams.set("page", String(params.page))
     if (params?.page_size) searchParams.set("page_size", String(params.page_size))
     const qs = searchParams.toString()
-    return request(`/public/tasks${qs ? `?${qs}` : ""}`, { method: "GET" }, this.token)
+    return publicRequest(`/public/tasks${qs ? `?${qs}` : ""}`, { method: "GET" })
   }
 
   /** 公开任务详情(非公开/不存在一律 40401)。 */
   async getPublicTask(taskId: string): Promise<PublicTaskDetail> {
-    return request(`/public/tasks/${taskId}`, { method: "GET" }, this.token)
+    return publicRequest(`/public/tasks/${taskId}`, { method: "GET" })
   }
 
   /** 公开任务转写列表(仅返回白名单字段,不含用户信息)。 */
   async getPublicTranscript(taskId: string): Promise<PublicTranscriptResponse> {
-    return request(`/public/tasks/${taskId}/transcripts`, { method: "GET" }, this.token)
+    return publicRequest(`/public/tasks/${taskId}/transcripts`, { method: "GET" })
   }
 
   /** 公开任务摘要(仅返回白名单字段,不含用户信息)。 */
   async getPublicSummary(taskId: string): Promise<PublicSummaryResponse> {
-    return request(`/public/tasks/${taskId}/summaries`, { method: "GET" }, this.token)
+    return publicRequest(`/public/tasks/${taskId}/summaries`, { method: "GET" })
   }
 
   /** 公开任务媒体短票(匿名可签;票内 resource 钉死该任务,服务端逐请求复核仍公开)。 */
   async mintPublicMediaTicket(taskId: string): Promise<MediaTicketResponse> {
-    return request(`/public/tasks/${taskId}/media-ticket`, { method: "POST" }, this.token)
+    return publicRequest(`/public/tasks/${taskId}/media-ticket`, { method: "POST" })
   }
 
   /** 管理员把自己的已完成任务设为公开/取消公开。 */
