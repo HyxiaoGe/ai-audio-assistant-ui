@@ -10,6 +10,7 @@ const i18n = vi.hoisted(() => ({ t: (key: string) => key }))
 
 vi.mock("@/lib/use-api-client", () => ({ useAPIClient: () => mockClient }))
 vi.mock("@/lib/i18n-context", () => ({ useI18n: () => ({ locale: "zh", t: i18n.t }) }))
+vi.mock("@/lib/use-date-formatter", () => ({ useDateFormatter: () => ({ formatDate: () => "2026-06-10" }) }))
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }))
 vi.mock("@/components/layout/Header", () => ({ default: () => null }))
 vi.mock("@/components/layout/Sidebar", () => ({ default: () => null }))

@@ -8,6 +8,7 @@ import Sidebar from '@/components/layout/Sidebar';
 import EmptyState from '@/components/common/EmptyState';
 import { useAPIClient } from '@/lib/use-api-client';
 import { useI18n } from '@/lib/i18n-context';
+import { useDateFormatter } from '@/lib/use-date-formatter';
 import { formatDuration } from '@/lib/utils';
 import type { PublicTaskListItem } from '@/types/api';
 
@@ -20,7 +21,8 @@ interface ExploreProps {
 }
 
 export default function Explore({ isAuthenticated, onOpenLogin, onToggleTheme }: ExploreProps) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
+  const { formatDate } = useDateFormatter();
   const router = useRouter();
   const client = useAPIClient();
 
@@ -109,7 +111,7 @@ export default function Explore({ isAuthenticated, onOpenLogin, onToggleTheme }:
                     style={{ borderColor: 'var(--app-border)', background: 'var(--app-glass-bg)' }}
                   >
                     <div className="text-base mb-2 line-clamp-2" style={{ fontWeight: 500, color: 'var(--app-text)' }}>
-                      {item.title || t('explore.pageTitle')}
+                      {item.title || t('audio.untitled')}
                     </div>
                     <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--app-text-muted)' }}>
                       {item.duration_seconds != null && (
@@ -120,7 +122,7 @@ export default function Explore({ isAuthenticated, onOpenLogin, onToggleTheme }:
                       )}
                       {item.published_at && (
                         <span>
-                          {t('explore.publishedAt')} {new Date(item.published_at).toLocaleDateString(locale)}
+                          {t('explore.publishedAt')} {formatDate(item.published_at)}
                         </span>
                       )}
                     </div>
