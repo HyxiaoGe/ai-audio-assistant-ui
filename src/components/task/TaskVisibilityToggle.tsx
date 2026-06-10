@@ -43,6 +43,7 @@ export function TaskVisibilityToggle({ taskId, status, isPublic, onChanged }: Ta
 
   return (
     <button
+      type="button"
       onClick={() => { void toggle(); }}
       disabled={busy}
       className="flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors hover:bg-[var(--app-glass-bg-strong)] disabled:opacity-60"

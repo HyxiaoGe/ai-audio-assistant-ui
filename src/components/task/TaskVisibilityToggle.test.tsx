@@ -11,6 +11,7 @@ vi.mock("@/store/user-store", () => ({
   useUserStore: (selector: (s: typeof storeState) => unknown) => selector(storeState),
 }))
 
+import { notifyError } from "@/lib/notify"
 import { TaskVisibilityToggle } from "./TaskVisibilityToggle"
 
 beforeEach(() => {
@@ -55,5 +56,15 @@ describe("TaskVisibilityToggle", () => {
       <TaskVisibilityToggle taskId="t1" status="summarizing" isPublic={false} onChanged={() => {}} />,
     )
     expect(container.firstChild).toBeNull()
+  })
+
+  it("接口失败:notifyError 被调用、onChanged 未调用、按钮恢复非 disabled", async () => {
+    mockClient.updateTaskVisibility.mockRejectedValue(new Error('fail'))
+    const onChanged = vi.fn()
+    render(<TaskVisibilityToggle taskId="t1" status="completed" isPublic={false} onChanged={onChanged} />)
+    fireEvent.click(screen.getByRole("button"))
+    await waitFor(() => expect(screen.getByRole("button")).not.toBeDisabled())
+    expect(notifyError).toHaveBeenCalledTimes(1)
+    expect(onChanged).not.toHaveBeenCalled()
   })
 })
