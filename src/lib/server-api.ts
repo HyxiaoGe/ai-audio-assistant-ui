@@ -1,5 +1,8 @@
+// 硬护栏:被客户端组件误 import 时构建期即报错,而非静默把内网地址打进客户端 bundle。
+import "server-only"
+
 /**
- * 服务端专用公开接口取数(server-only 语义:仅供服务器组件 import,勿进客户端 bundle)。
+ * 服务端专用公开接口取数(仅供服务器组件 import,勿进客户端 bundle)。
  *
  * 背景:UI 容器与后端容器同机同 Docker 网络,容器内直连
  * `http://ai-audio-assistant-web-api:8000` 是 LAN 级延迟(<10ms);而浏览器侧每个公开接口
