@@ -209,6 +209,10 @@ export default function TaskDetail({
   const comparePollRef = useRef<number | null>(null);
   const compareStreamRef = useRef<EventSource | null>(null);
   const compareExpectedRef = useRef<number>(0);
+  // loadTask 代际计数:防旧响应乱序覆盖(mount 拉取 vs completed 重载 vs 手动重试并发时,
+  // 慢隧道下窗口很大)。调用头取代,所有 await 之后的 setState 出口前校验,过期整段丢弃。
+  // 同款模式见 PublicTaskDetail 的 per-loader 代际 ref。
+  const loadTaskGenRef = useRef(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // 右栏摘要局部错误：摘要文字失败时 task 仍 completed，仅右栏报错、不连带藏转写左栏。
@@ -300,6 +304,7 @@ export default function TaskDetail({
   const loadTask = useCallback(async (opts?: { silentTranscript?: boolean }) => {
     if (!id || !authUser) return;
     const silentTranscript = opts?.silentTranscript ?? false;
+    const gen = ++loadTaskGenRef.current;
     setLoading(true);
     setError(null);
     setSummaryError(null);
@@ -308,11 +313,24 @@ export default function TaskDetail({
       setTranscript([]);
     }
     setTranscriptError(false);
+
+    // 三请求同拍发出：每个请求经隧道 ~1.5s 基线，旧的「先 getTask、成功后再拉另两路」串行瀑布
+    // 白付一整段。transcript/summary 发出即各自 .catch 收编为值：既保持「各自独立成败、互不连带」，
+    // 也保证 getTask 失败整段早退时这两路不产生 unhandled rejection。
+    const taskPromise = client.getTask(id);
+    const transcriptPromise = client.getTranscript(id).catch((err) => err);
+    const summaryPromise = client.getSummary(id).catch((err) => err);
+
     try {
-      const taskData = await client.getTask(id);
+      const taskData = await taskPromise;
+      if (gen !== loadTaskGenRef.current) return;
       setTask(taskData);
       setProgress(taskData.progress ?? 0);
     } catch (err) {
+      // getTask 失败 = 任务级失败（401→登录、其余→整页错误态），整体丢弃 transcript/summary
+      // 两路的结果与错误：直接 return，不 setState、不 toast、不进其局部错误分支
+      //（否则 401 时会三连 toast）。两路 promise 已被上面的 .catch 收编，丢弃无副作用。
+      if (gen !== loadTaskGenRef.current) return;
       if (err instanceof ApiError) {
         setError(err.message);
         notifyError(err.message);
@@ -329,11 +347,9 @@ export default function TaskDetail({
       return;
     }
 
-    // 转写与摘要解耦：各自独立成败，互不连带（不再 Promise.all 同拉同 set）。
-    const [transcriptResult, summaryResult] = await Promise.all([
-      client.getTranscript(id).catch((err) => err),
-      client.getSummary(id).catch((err) => err),
-    ]);
+    // 转写与摘要解耦：各自独立成败，互不连带（错误已在发出处收编为值，这里只等结果）。
+    const [transcriptResult, summaryResult] = await Promise.all([transcriptPromise, summaryPromise]);
+    if (gen !== loadTaskGenRef.current) return;
 
     if (transcriptResult instanceof ApiError) {
       // silent 模式（completed 同步重拉）下这一次没拉到：静默保持已显示的旧转写，

@@ -398,6 +398,65 @@ describe("TaskDetail — progressive disclosure", () => {
   }, 20000)
 })
 
+describe("TaskDetail — loadTask 三请求并发", () => {
+  it("getTask 尚未返回时 transcript/summary 已同拍发出(无串行瀑布)", async () => {
+    // getTask 受控挂起:断言它 resolve 前另两路已发出 = 三请求并发,而非旧的串行瀑布
+    let resolveTask: ((v: ApiTaskDetail) => void) | undefined
+    apiMock.getTask
+      .mockReturnValueOnce(new Promise<ApiTaskDetail>((res) => { resolveTask = res }))
+      .mockResolvedValue(task({ status: "summarizing" })) // 兜底:后续补拉 task(audio_url effect)不悬挂
+    const { ApiError } = await import("@/types/api")
+    apiMock.getSummary.mockRejectedValue(new ApiError(40401, "not found", "tr"))
+
+    render(<TaskDetail />)
+
+    await waitFor(() => {
+      expect(apiMock.getTranscript).toHaveBeenCalled()
+      expect(apiMock.getSummary).toHaveBeenCalled()
+    })
+    expect(apiMock.getTask).toHaveBeenCalled()
+
+    // 放行 getTask → 正常落态收尾,不把挂起的 promise 泄漏给后续用例
+    act(() => {
+      resolveTask?.(task({ status: "summarizing" }))
+    })
+    await waitFor(() => {
+      expect(screen.getByText("这是一段转写文本")).toBeInTheDocument()
+    })
+  })
+
+  it("getTask 失败时整体丢弃 transcript/summary 两路——不渲染结果、不 toast 其错误", async () => {
+    const { ApiError } = await import("@/types/api")
+    const { notifyError } = await import("@/lib/notify")
+    // getTask 401:走登录处理 + 整页错误态;transcript/summary 均瞬态失败(非 40401)。
+    // transcript 须用【失败】而非默认成功:其瞬态错误分支会 notifyError,是唯一在整页错误态
+    // early-return 下仍可观察的「未丢弃」信号——若并发后没丢弃,401 时就是三连 toast。
+    apiMock.getTask.mockRejectedValue(new ApiError(40101, "登录已过期", "tr"))
+    apiMock.getTranscript.mockReset()
+    apiMock.getTranscript.mockRejectedValue(new ApiError(50000, "转写拉取失败", "tr"))
+    apiMock.getSummary.mockRejectedValue(new ApiError(50000, "摘要拉取失败", "tr"))
+
+    render(<TaskDetail />)
+
+    // getTask 失败语义保留:整页错误态,description 即 getTask 的错误信息
+    await waitFor(() => {
+      expect(screen.getByText("errors.taskNotFound")).toBeInTheDocument()
+    })
+    expect(screen.getByText("登录已过期")).toBeInTheDocument()
+
+    // 并发已发出(非旧串行的「getTask 失败则另两路根本不发」)
+    expect(apiMock.getTranscript).toHaveBeenCalled()
+    expect(apiMock.getSummary).toHaveBeenCalled()
+
+    // 关键:另两路错误被整体丢弃——不进 transcript/summary 的错误分支、不渲染其错误文案
+    expect(screen.queryByText("转写拉取失败")).toBeNull()
+    expect(screen.queryByText("摘要拉取失败")).toBeNull()
+    // toast 只来自 getTask 一次,无三连(transcript 瞬态错误分支若未被屏蔽会多 toast 一次)
+    expect(notifyError).toHaveBeenCalledTimes(1)
+    expect(notifyError).toHaveBeenCalledWith("登录已过期")
+  })
+})
+
 describe("TaskDetail — detected summary style", () => {
   it("renders the detected-style line when detected_summary_style matches a loaded style", async () => {
     apiMock.getTask.mockResolvedValue(
