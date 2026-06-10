@@ -1138,7 +1138,7 @@ export interface PublicTaskDetail {
   title: string | null
   source_type: SourceType
   source_url: string | null
-  audio_url: string | null
+  audio_url: string | null // 媒体需配合 mintPublicMediaTicket 的 ?token= 使用,不可直接作 src
   duration_seconds: number | null
   detected_language: string | null
   detected_summary_style: string | null

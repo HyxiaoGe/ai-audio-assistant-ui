@@ -546,7 +546,9 @@ export class APIClient {
     )
   }
 
-  // ===== 公开探索(匿名,无需登录;this.token 为 null 时照常工作) =====
+  // ==========================================================================
+  // 公开探索(匿名,无需登录;this.token 为 null 时照常工作)
+  // ==========================================================================
 
   /** 公开任务分页列表(仅 is_public+completed,出参为白名单裁剪字段)。 */
   async getPublicTasks(params?: { page?: number; page_size?: number }): Promise<PublicTaskListResponse> {
@@ -562,10 +564,12 @@ export class APIClient {
     return request(`/public/tasks/${taskId}`, { method: "GET" }, this.token)
   }
 
+  /** 公开任务转写列表(仅返回白名单字段,不含用户信息)。 */
   async getPublicTranscript(taskId: string): Promise<PublicTranscriptResponse> {
     return request(`/public/tasks/${taskId}/transcripts`, { method: "GET" }, this.token)
   }
 
+  /** 公开任务摘要(仅返回白名单字段,不含用户信息)。 */
   async getPublicSummary(taskId: string): Promise<PublicSummaryResponse> {
     return request(`/public/tasks/${taskId}/summaries`, { method: "GET" }, this.token)
   }
