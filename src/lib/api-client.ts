@@ -67,6 +67,11 @@ import {
   YouTubeTranscribeRequest,
   YouTubeTranscribeResponse,
   YouTubeVideoListResponse,
+  PublicTaskListResponse,
+  PublicTaskDetail,
+  PublicTranscriptResponse,
+  PublicSummaryResponse,
+  TaskVisibilityResponse,
 } from "@/types/api"
 
 // ============================================================================
@@ -538,6 +543,44 @@ export class APIClient {
       `/summaries/${taskId}/stream-ticket?summary_type=${encodeURIComponent(summaryType)}`,
       { method: "POST" },
       this.token
+    )
+  }
+
+  // ===== 公开探索(匿名,无需登录;this.token 为 null 时照常工作) =====
+
+  /** 公开任务分页列表(仅 is_public+completed,出参为白名单裁剪字段)。 */
+  async getPublicTasks(params?: { page?: number; page_size?: number }): Promise<PublicTaskListResponse> {
+    const searchParams = new URLSearchParams()
+    if (params?.page) searchParams.set("page", String(params.page))
+    if (params?.page_size) searchParams.set("page_size", String(params.page_size))
+    const qs = searchParams.toString()
+    return request(`/public/tasks${qs ? `?${qs}` : ""}`, { method: "GET" }, this.token)
+  }
+
+  /** 公开任务详情(非公开/不存在一律 40401)。 */
+  async getPublicTask(taskId: string): Promise<PublicTaskDetail> {
+    return request(`/public/tasks/${taskId}`, { method: "GET" }, this.token)
+  }
+
+  async getPublicTranscript(taskId: string): Promise<PublicTranscriptResponse> {
+    return request(`/public/tasks/${taskId}/transcripts`, { method: "GET" }, this.token)
+  }
+
+  async getPublicSummary(taskId: string): Promise<PublicSummaryResponse> {
+    return request(`/public/tasks/${taskId}/summaries`, { method: "GET" }, this.token)
+  }
+
+  /** 公开任务媒体短票(匿名可签;票内 resource 钉死该任务,服务端逐请求复核仍公开)。 */
+  async mintPublicMediaTicket(taskId: string): Promise<MediaTicketResponse> {
+    return request(`/public/tasks/${taskId}/media-ticket`, { method: "POST" }, this.token)
+  }
+
+  /** 管理员把自己的已完成任务设为公开/取消公开。 */
+  async updateTaskVisibility(taskId: string, isPublic: boolean): Promise<TaskVisibilityResponse> {
+    return request(
+      `/tasks/${taskId}/visibility`,
+      { method: "PATCH", body: JSON.stringify({ is_public: isPublic }) },
+      this.token,
     )
   }
 
