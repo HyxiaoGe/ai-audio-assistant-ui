@@ -1,7 +1,12 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { getMediaTicket, getMediaTicketSync } from "@/lib/media-ticket"
+import {
+  getMediaTicket,
+  getMediaTicketSync,
+  releasePublicMediaTask,
+  setPublicMediaTask,
+} from "@/lib/media-ticket"
 
 /**
  * Same-origin proxy endpoints that require an auth token. Browser <audio>/<img>
@@ -43,5 +48,28 @@ export function useMediaToken(): string | null {
       active = false
     }
   }, [])
+  return token
+}
+
+/**
+ * 公开任务详情页的媒体票：挂载时把签发通道切到该任务的公开票（匿名可签），
+ * 卸载时切回私有通道。通道切换后，页面内所有媒体消费方（MarkdownContent 配图、
+ * audio-store 播放源、ImagePlaceholder 401 重签）都经 getMediaTicket() 自动
+ * 拿到公开票，无需各自感知。
+ */
+export function usePublicMediaToken(taskId: string): string | null {
+  const [token, setToken] = useState<string | null>(null)
+  useEffect(() => {
+    if (!taskId) return
+    setPublicMediaTask(taskId)
+    let active = true
+    getMediaTicket().then((ticket) => {
+      if (active && ticket) setToken(ticket)
+    })
+    return () => {
+      active = false
+      releasePublicMediaTask(taskId)
+    }
+  }, [taskId])
   return token
 }

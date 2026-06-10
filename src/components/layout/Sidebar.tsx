@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { BarChart3, Settings, List, LineChart, Youtube, Shield } from 'lucide-react';
+import { BarChart3, Settings, List, LineChart, Youtube, Shield, Compass } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useI18n } from '@/lib/i18n-context';
 import { useUserStore } from '@/store/user-store';
@@ -47,6 +47,11 @@ export default function Sidebar() {
       path: '/tasks'
     },
     {
+      icon: <Compass className="w-5 h-5" />,
+      label: t("nav.explore"),
+      path: '/explore'
+    },
+    {
       icon: <Youtube className="w-5 h-5" />,
       label: t("nav.subscriptions"),
       path: '/subscriptions'
@@ -86,6 +91,10 @@ export default function Sidebar() {
 
     if (itemPath === '/admin') {
       return pathname === '/admin' || pathname.startsWith('/admin/');
+    }
+
+    if (itemPath === '/explore') {
+      return pathname === '/explore' || pathname.startsWith('/explore/');
     }
 
     // 其他页面：精确匹配

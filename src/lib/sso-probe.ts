@@ -26,6 +26,7 @@ const LOGGED_OUT_KEY = "audio_sso_logged_out" // 显式登出守卫：reload 也
 const RETURN_KEY = "audio_sso_return"
 const ACCESS_TOKEN_KEY = "auth_access_token"
 const CALLBACK_PATH = "/auth/callback"
+const PUBLIC_PATH_PREFIXES = ["/explore"]
 
 function session(): Storage | null {
   try {
@@ -127,6 +128,9 @@ export function maybeSilentLogin(currentPath: string): boolean {
   const s = session()
   if (!s) return false // 无 sessionStorage → 保守放弃，绝不死循环
   if (currentPath.startsWith(CALLBACK_PATH)) return false // 换码进行中，勿探测
+
+  // 公开探索路由:匿名浏览是产品功能本身,绝不在这里发起静默 SSO 跳转打断浏览
+  if (PUBLIC_PATH_PREFIXES.some((prefix) => currentPath.startsWith(prefix))) return false
 
   let loggedOut: string | null
   let probed: string | null

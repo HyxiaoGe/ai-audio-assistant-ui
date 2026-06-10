@@ -193,16 +193,27 @@ export default function Dashboard({
             {/* 任务列表 */}
             <div className="space-y-3">
               {!isAuthenticated ? (
-                <EmptyState
-                  variant="default"
-                  title={t("dashboard.loginToViewTitle")}
-                  description={t("dashboard.loginToViewDescription")}
-                  action={{
-                    label: t("dashboard.goLogin"),
-                    onClick: onOpenLogin,
-                    variant: 'primary'
-                  }}
-                />
+                <div className="space-y-3">
+                  <EmptyState
+                    variant="default"
+                    title={t("dashboard.loginToViewTitle")}
+                    description={t("dashboard.loginToViewDescription")}
+                    action={{
+                      label: t("dashboard.goLogin"),
+                      onClick: onOpenLogin,
+                      variant: 'primary'
+                    }}
+                  />
+                  <div className="flex justify-center">
+                    <button
+                      onClick={() => router.push('/explore')}
+                      className="text-sm hover:underline underline-offset-4"
+                      style={{ color: 'var(--app-primary)' }}
+                    >
+                      {t("explore.goExplore")}
+                    </button>
+                  </div>
+                </div>
               ) : loading ? (
                 <div className="text-sm" style={{ color: "var(--app-text-muted)" }}>
                   {t("common.loading")}...

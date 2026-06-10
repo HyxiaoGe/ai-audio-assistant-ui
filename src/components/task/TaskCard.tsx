@@ -17,6 +17,8 @@ interface TaskCardProps {
   onDelete?: (id: string) => void;
   isRetrying?: boolean;
   isDeleting?: boolean;
+  /** 已公开徽标文案;不传则不渲染 */
+  publicLabel?: string;
 }
 
 function TaskCard({
@@ -30,7 +32,8 @@ function TaskCard({
   onRetry,
   onDelete,
   isRetrying = false,
-  isDeleting = false
+  isDeleting = false,
+  publicLabel,
 }: TaskCardProps) {
   const { t } = useI18n();
   
@@ -88,14 +91,22 @@ function TaskCard({
         {/* 文字信息 */}
         <div className="text-left">
           {/* 标题 */}
-          <div 
+          <div
             className="text-base mb-1"
-            style={{ 
+            style={{
               fontWeight: 500,
               color: "var(--app-text)"
             }}
           >
             {title}
+            {publicLabel && (
+              <span
+                className="ml-2 inline-flex items-center px-1.5 py-0.5 text-xs rounded align-middle"
+                style={{ background: 'var(--app-glass-bg-strong)', color: 'var(--app-primary)' }}
+              >
+                {publicLabel}
+              </span>
+            )}
           </div>
           
           {/* 副信息 */}

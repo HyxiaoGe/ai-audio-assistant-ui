@@ -23,6 +23,7 @@ import { TranscriptList, type DisplayTranscriptSegment } from '@/components/task
 import { type ActionItem, parseActionItems, parseSummaryLines } from '@/lib/summary-parse';
 import { ActionItemToggle } from '@/components/task/ActionItemToggle';
 import { ExportMenu } from '@/components/task/ExportMenu';
+import { TaskVisibilityToggle } from '@/components/task/TaskVisibilityToggle';
 import { resolveSummaryStreamBaseUrl, attachSseServerErrorListener, createSummaryStreamErrorHandler } from '@/lib/summary-stream';
 import ProcessingState from '@/components/common/ProcessingState';
 import ErrorState from '@/components/common/ErrorState';
@@ -2009,6 +2010,14 @@ export default function TaskDetail({
             </h1>
 
             <div className="flex items-center gap-3">
+              <TaskVisibilityToggle
+                taskId={task.id}
+                status={task.status}
+                isPublic={Boolean(task.is_public)}
+                onChanged={(isPublic, publishedAt) =>
+                  setTask((prev) => (prev ? { ...prev, is_public: isPublic, published_at: publishedAt } : prev))
+                }
+              />
               <button
                 onClick={() => setDeleteOpen(true)}
                 className="flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors hover:bg-[var(--app-danger-bg-soft)]"

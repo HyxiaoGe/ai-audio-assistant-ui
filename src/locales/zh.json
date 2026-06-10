@@ -95,7 +95,28 @@
     "tasks": "任务",
     "subscriptions": "订阅",
     "stats": "统计",
-    "settings": "设置"
+    "settings": "设置",
+    "explore": "探索"
+  },
+  "explore": {
+    "pageTitle": "探索广场",
+    "pageSubtitle": "浏览公开分享的转写与摘要",
+    "emptyTitle": "还没有公开内容",
+    "emptyDescription": "管理员把任务设为公开后会出现在这里",
+    "loadFailed": "加载失败，请稍后重试",
+    "retry": "重试",
+    "notFoundTitle": "内容不存在或已取消公开",
+    "notFoundDescription": "这条公开内容可能已被作者收回",
+    "backToExplore": "返回探索广场",
+    "transcriptTitle": "转写全文",
+    "summaryTitle": "智能摘要",
+    "keyPointsTitle": "关键要点",
+    "actionItemsTitle": "行动项",
+    "publishedAt": "公开于",
+    "goExplore": "去探索广场看看公开内容 →",
+    "prevPage": "上一页",
+    "nextPage": "下一页",
+    "viewSource": "查看原视频"
   },
   "stats": {
     "title": "统计",
@@ -451,7 +472,13 @@
       "openOnYouTube": "在 YouTube 打开",
       "hideInfo": "收起",
       "showInfo": "展开"
-    }
+    },
+    "visibilityPublic": "已公开",
+    "visibilityMakePublic": "设为公开",
+    "visibilityMakePrivate": "取消公开",
+    "visibilityPublicSuccess": "已设为公开，任意访客可在探索广场看到",
+    "visibilityPrivateSuccess": "已取消公开",
+    "visibilityFailed": "操作失败，请重试"
   },
   "status": {
     "processing": "处理中",

@@ -306,6 +306,7 @@ export interface TaskListItem {
   created_at: string
   updated_at: string
   error_message?: string
+  is_public?: boolean
 }
 
 export interface TaskListResponse {
@@ -364,6 +365,9 @@ export interface TaskDetail {
   error_code?: number
   youtube_info?: YouTubeVideoInfo  // YouTube 视频元数据（仅 YouTube 来源任务）
   detected_summary_style?: string | null  // 后台自动识别得到的摘要风格 key（用户显式选风格时为 null）
+  // 公开可见性(探索广场;后端 feature/public-explore 起返回)
+  is_public?: boolean
+  published_at?: string | null
 }
 
 export type TaskRetryResponse =
@@ -1106,4 +1110,83 @@ export interface StreamingImage {
   description: string
   url: string | null
   status: "pending" | "generating" | "ready" | "failed"
+}
+
+// ============================================================================
+// 公开探索(/api/v1/public/*,匿名只读;对应后端 app/schemas/public.py 白名单裁剪字段)
+// ============================================================================
+
+export interface PublicTaskListItem {
+  id: string
+  title: string | null
+  source_type: SourceType
+  duration_seconds: number | null
+  detected_language: string | null
+  detected_summary_style: string | null
+  published_at: string | null
+}
+
+export interface PublicTaskListResponse {
+  items: PublicTaskListItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface PublicTaskDetail {
+  id: string
+  title: string | null
+  source_type: SourceType
+  source_url: string | null
+  audio_url: string | null // 媒体需配合 mintPublicMediaTicket 的 ?token= 使用,不可直接作 src
+  duration_seconds: number | null
+  detected_language: string | null
+  detected_summary_style: string | null
+  published_at: string | null
+  created_at: string
+}
+
+export interface PublicTranscriptItem {
+  sequence: number
+  speaker_id: string | null
+  speaker_label: string | null
+  content: string
+  start_time: number
+  end_time: number
+}
+
+export interface PublicTranscriptResponse {
+  task_id: string
+  total: number
+  items: PublicTranscriptItem[]
+}
+
+/** 公开摘要配图(裁剪面:无 model_id/error)。 */
+export interface PublicSummaryImage {
+  placeholder: string
+  status: "pending" | "ready" | "failed"
+  url: string | null
+  alt: string
+}
+
+export interface PublicSummaryItem {
+  summary_type: SummaryType
+  version: number
+  content: string
+  image_url: string | null
+  images: PublicSummaryImage[] | null
+  created_at: string
+}
+
+export interface PublicSummaryResponse {
+  task_id: string
+  total: number
+  items: PublicSummaryItem[]
+}
+
+/** PATCH /tasks/{id}/visibility 出参。 */
+export interface TaskVisibilityResponse {
+  id: string
+  is_public: boolean
+  published_at: string | null
 }

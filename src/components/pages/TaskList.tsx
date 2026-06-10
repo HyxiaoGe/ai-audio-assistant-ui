@@ -343,16 +343,27 @@ export default function TaskList({
           {/* 任务列表 */}
           <div className="space-y-3">
             {!isAuthenticated ? (
-              <EmptyState
-                variant="default"
-                title={t("tasks.loginToViewTitle")}
-                description={t("tasks.loginToViewDescription")}
-                action={{
-                  label: t("dashboard.goLogin"),
-                  onClick: onOpenLogin,
-                  variant: 'primary'
-                }}
-              />
+              <div className="space-y-3">
+                <EmptyState
+                  variant="default"
+                  title={t("tasks.loginToViewTitle")}
+                  description={t("tasks.loginToViewDescription")}
+                  action={{
+                    label: t("dashboard.goLogin"),
+                    onClick: onOpenLogin,
+                    variant: 'primary'
+                  }}
+                />
+                <div className="flex justify-center">
+                  <button
+                    onClick={() => router.push('/explore')}
+                    className="text-sm hover:underline underline-offset-4"
+                    style={{ color: 'var(--app-primary)' }}
+                  >
+                    {t("explore.goExplore")}
+                  </button>
+                </div>
+              </div>
             ) : loading && currentTasks.length === 0 ? (
               <div style={{ minHeight: "72px" }} />
             ) : error ? (
@@ -372,6 +383,7 @@ export default function TaskList({
                   onClick={handleTaskClick}
                   onRetry={handleRetryTask}
                   isRetrying={retryingTaskId === task.id}
+                  publicLabel={task.is_public ? t('task.visibilityPublic') : undefined}
                 />
               ))
             ) : (
