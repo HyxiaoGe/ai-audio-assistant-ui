@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAudioStore } from '@/store/audio-store';
 import { useI18n } from '@/lib/i18n-context';
 import TranscriptItem from '@/components/task/TranscriptItem';
@@ -49,7 +49,7 @@ function TranscriptSpinner({ label }: { label: string }) {
  * 不再随播放每秒重渲染数次——逐帧重渲染被限制在本组件内，且行级 TranscriptItem 已 memo 化，
  * 只有正在高亮的那一行会重渲染。
  */
-export function TranscriptList({
+function TranscriptListImpl({
   transcript,
   transcriptLoading,
   isActiveAudio,
@@ -258,3 +258,9 @@ export function TranscriptList({
     </div>
   );
 }
+
+// memo:摘要再生 SSE 流式期间父组件(TaskDetail)每次 flush 都整页重渲染;本组件的 props
+// 全部引用稳定(transcript state 引用不变、回调经 useCallback/模块级常量提稳、其余为原始值),
+// 浅比较直接跳过长转写(1700+ 行)的整列 reconcile。内部 currentTime 订阅来自 zustand、
+// 不经 props,memo 不影响——播放高亮照常逐帧驱动,且行级 TranscriptItem 已 memo 收口。
+export const TranscriptList = memo(TranscriptListImpl);

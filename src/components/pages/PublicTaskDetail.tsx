@@ -63,6 +63,10 @@ const SECTION_ORDER: { type: SummaryType; titleKey: string; emptyKey: string }[]
 
 type PublicTab = 'summary' | 'keypoints' | 'actions';
 
+// 公开页只读,不可编辑:空回调提为模块级常量(引用恒定)。内联 `() => {}` 每次渲染都是
+// 新引用,会击穿 TranscriptList 的 memo,1700+ 行整列白白 reconcile。
+const NOOP_EDIT_SEGMENT = () => {};
+
 const TAB_TO_SECTION: Record<PublicTab, SummaryType> = {
   summary: 'overview',
   keypoints: 'key_points',
@@ -253,6 +257,11 @@ export default function PublicTaskDetail({
     handleSeek(mins * 60 + secs);
   }, [handleSeek]);
 
+  // onRetry 提稳(useCallback):与 NOOP_EDIT_SEGMENT 同理,保住 TranscriptList 的 memo。
+  const handleTranscriptRetry = useCallback(() => {
+    void loadTranscript();
+  }, [loadTranscript]);
+
   const duration = isActiveAudio
     ? (audioDuration || task?.duration_seconds || 0)
     : (task?.duration_seconds || 0);
@@ -440,8 +449,8 @@ export default function PublicTaskDetail({
             transcriptError={transcriptError}
             isActiveAudio={isActiveAudio}
             onTimeClick={handleTimeClick}
-            onEditSegment={() => {}}
-            onRetry={() => void loadTranscript()}
+            onEditSegment={NOOP_EDIT_SEGMENT}
+            onRetry={handleTranscriptRetry}
             readOnly
           />
         </div>

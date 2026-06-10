@@ -26,6 +26,7 @@ import { ActionItemToggle } from '@/components/task/ActionItemToggle';
 import { ExportMenu } from '@/components/task/ExportMenu';
 import { TaskVisibilityToggle } from '@/components/task/TaskVisibilityToggle';
 import { resolveSummaryStreamBaseUrl, attachSseServerErrorListener, createSummaryStreamErrorHandler } from '@/lib/summary-stream';
+import { createStreamThrottle } from '@/lib/stream-throttle';
 import ProcessingState from '@/components/common/ProcessingState';
 import ErrorState from '@/components/common/ErrorState';
 import LoginModal from '@/components/auth/LoginModal';
@@ -69,6 +70,7 @@ import { mapApiTranscript as mapApiTranscriptUtil } from '@/lib/transcript-mappi
 
 // 摘要 SSE 流 / 轮询的时间参数（毫秒）。原先散落为魔数，抽成命名常量便于核对与统一。
 const SUMMARY_POLL_INTERVAL_MS = 2000; // 轮询 getSummary 检测版本号变化的间隔
+const SUMMARY_STREAM_FLUSH_MS = 100; // SSE delta 帧合并窗口:每窗口最多写一次 state(整页重渲染+全文重 parse 的频率上限)
 const SUMMARY_CONNECTION_TIMEOUT_MS = 3000; // 等 SSE connected 事件，超时则回退轮询
 const SUMMARY_IMAGE_TIMEOUT_MS = 90000; // summary 完成后等 images.completed 的上限（60s/张 + 30s 缓冲）
 const SUMMARY_IMAGE_RECONCILE_INTERVAL_MS = 4000; // completed 后图集对账重拉间隔（补 WS image_ready 漏收）
@@ -184,6 +186,17 @@ export default function TaskDetail({
     key_points: null,
     action_items: null,
   });
+  // SSE 流式 delta 帧合并节流器:useState 惰性初始化成单例(整个生命周期同一张定时器表,
+  // 卸载清理 effect 可统一 cancelAll,故须在该 effect 之前声明)。flush 实现依赖下方才定义的
+  // updateSummaryFromStream,经 ref 转发——定时器到点时总是调到最新闭包;真正的 flush 语义
+  // 与动机见 flushSummaryStream 定义处。
+  const flushSummaryStreamRef = useRef<(summaryType: SummaryRegenerateType) => void>(() => {});
+  const [summaryStreamThrottle] = useState(() =>
+    createStreamThrottle<SummaryRegenerateType>(
+      (summaryType) => flushSummaryStreamRef.current(summaryType),
+      SUMMARY_STREAM_FLUSH_MS
+    )
+  );
   // State for streaming images in summary (for overview only)
   const [streamingImages, setStreamingImages] = useState<Map<string, StreamingImage>>(new Map());
   const imagesTimeoutRef = useRef<number | null>(null);
@@ -466,8 +479,10 @@ export default function TaskDetail({
       if (imagesTimeout) {
         window.clearTimeout(imagesTimeout);
       }
+      // SSE delta 节流器的在途 flush 定时器一并丢弃(卸载后不得再 setState)。
+      summaryStreamThrottle.cancelAll();
     };
-  }, []);
+  }, [summaryStreamThrottle]);
 
   const updateSummaryFromStream = useCallback(
     (summaryType: SummaryRegenerateType, content: string) => {
@@ -502,6 +517,45 @@ export default function TaskDetail({
     });
   }, []);
 
+  // SSE 流式 delta 帧合并节流:每个 delta 都直接 setState 会让 2400+ 行的本组件整页重渲染、
+  // 右栏 MarkdownContent 对增长全文整篇重 parse(流式期间的主要成本)、左栏长转写整列 reconcile。
+  // 改为 delta 只追加 summaryBufferRef 并 schedule;每 SUMMARY_STREAM_FLUSH_MS 才把 buffer
+  // 全量 flush 进 state 一次(渲染次数砍 5-10x)。buffer 是唯一事实源、flush 取全量,绝不丢字;
+  // 流结束/出错时 flushNow 立即清余量。SSE 协议与轮询兜底不动。
+  const flushSummaryStream = useCallback((summaryType: SummaryRegenerateType) => {
+    const content = summaryBufferRef.current[summaryType];
+    updateSummaryFromStream(summaryType, content);
+    // Auto-scroll to follow new content
+    scrollSummaryToBottom();
+    // 占位符探测随 flush 搭车(原先每个 delta 都全文扫一遍;overview 才有配图)。
+    if (summaryType === 'overview') {
+      const placeholders = findImagePlaceholders(content);
+      setStreamingImages((prev) => {
+        const next = new Map(prev);
+        let changed = false;
+        for (const placeholder of placeholders) {
+          if (!next.has(placeholder)) {
+            next.set(placeholder, {
+              placeholder,
+              description: extractPlaceholderDescription(placeholder),
+              url: null,
+              status: 'pending',
+            });
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    }
+  }, [scrollSummaryToBottom, updateSummaryFromStream]);
+
+  // 同步最新 flush 闭包进 ref(节流器声明在前、本闭包依赖的 updateSummaryFromStream 在后,
+  // 见 summaryStreamThrottle 声明处)。effect 在首个定时器可能到点之前必已跑过:SSE 流只会
+  // 在用户触发 regenerate 后才存在。
+  useEffect(() => {
+    flushSummaryStreamRef.current = flushSummaryStream;
+  }, [flushSummaryStream]);
+
   const regenerateSummary = useCallback(
     async (summaryType: SummaryRegenerateType) => {
       if (!id) return;
@@ -519,6 +573,8 @@ export default function TaskDetail({
         window.clearInterval(summaryPollRef.current[summaryType] ?? undefined);
         summaryPollRef.current[summaryType] = null;
       }
+      // buffer 即将重置:丢弃上一轮流的在途 flush 定时器,避免旧定时器立刻 flush 空串。
+      summaryStreamThrottle.cancel(summaryType);
       summaryBufferRef.current[summaryType] = '';
 
       // Reset streaming images state (only overview supports images)
@@ -608,6 +664,8 @@ export default function TaskDetail({
           // 错误处理器先幂等补发 triggerRegenerate 再轮询，否则后端从未 regenerate，轮询空等。
           const handleStreamError = createSummaryStreamErrorHandler({
             cleanup: (message?: string) => {
+              // 出错收尾:先把 buffer 余量立即 flush,已收到的部分内容保持可见,绝不丢字。
+              summaryStreamThrottle.flushNow(summaryType);
               window.clearTimeout(connectionTimeout);
               eventSource.close();
               summaryStreamRef.current[summaryType] = null;
@@ -630,6 +688,7 @@ export default function TaskDetail({
             try {
               const payload = JSON.parse(event.data);
               if (payload.summary_type && payload.summary_type !== summaryType) return;
+              summaryStreamThrottle.cancel(summaryType);
               summaryBufferRef.current[summaryType] = '';
               updateSummaryFromStream(summaryType, '');
             } catch {
@@ -642,32 +701,10 @@ export default function TaskDetail({
               const payload = JSON.parse(event.data);
               if (payload.summary_type && payload.summary_type !== summaryType) return;
               if (typeof payload.content !== 'string') return;
+              // 帧合并:delta 只追加 buffer 并 schedule,每 ~100ms 才一次性 flush 进 state
+              //(state 写入/自动滚动/占位符探测都在 flushSummaryStream 里搭车执行)。
               summaryBufferRef.current[summaryType] += payload.content;
-              updateSummaryFromStream(summaryType, summaryBufferRef.current[summaryType]);
-
-              // Auto-scroll to follow new content
-              scrollSummaryToBottom();
-
-              // Detect and initialize image placeholders during streaming (overview only)
-              if (summaryType === 'overview') {
-                const placeholders = findImagePlaceholders(summaryBufferRef.current[summaryType]);
-                setStreamingImages((prev) => {
-                  const next = new Map(prev);
-                  let changed = false;
-                  for (const placeholder of placeholders) {
-                    if (!next.has(placeholder)) {
-                      next.set(placeholder, {
-                        placeholder,
-                        description: extractPlaceholderDescription(placeholder),
-                        url: null,
-                        status: 'pending',
-                      });
-                      changed = true;
-                    }
-                  }
-                  return changed ? next : prev;
-                });
-              }
+              summaryStreamThrottle.schedule(summaryType);
             } catch {
               // Ignore malformed payloads
             }
@@ -735,6 +772,9 @@ export default function TaskDetail({
           });
 
           eventSource.addEventListener("summary.completed", (event) => {
+            // 流结束:立即 flush buffer 余量(全文),绝不丢字——等下方 getSummary 整版
+            // 经隧道回来之前,已收到的完整内容先显示完。
+            summaryStreamThrottle.flushNow(summaryType);
             let hasImages = false;
             try {
               const payload = JSON.parse(event.data);
@@ -798,7 +838,7 @@ export default function TaskDetail({
         }
       }
     },
-    [buildSummaryState, client, id, llmModels, scrollSummaryToBottom, summaryModelSelection, summaryStreaming, summaryVersions, t, updateSummaryFromStream]
+    [buildSummaryState, client, id, llmModels, scrollSummaryToBottom, summaryModelSelection, summaryStreaming, summaryStreamThrottle, summaryVersions, t, updateSummaryFromStream]
   );
 
   useEffect(() => {
@@ -1153,6 +1193,12 @@ export default function TaskDetail({
       )
     );
   }, []);
+
+  // TranscriptList 已 memo:onRetry 若内联箭头,每次渲染都是新引用会击穿 memo
+  //(SSE 流式期间父组件每次 flush 都重渲染,1700+ 行整列 reconcile 就回来了)。
+  const handleTranscriptRetry = useCallback(() => {
+    void loadTask();
+  }, [loadTask]);
 
   const isActiveAudio = Boolean(task?.audio_url && currentSrc === task.audio_url);
   // 优先使用音频元素的实际 duration，如果没有则使用后端提供的 duration_seconds
@@ -2065,7 +2111,7 @@ export default function TaskDetail({
                 onEditSegment={handleEditTranscript}
                 transcriptError={transcriptError}
                 transcriptInProgress={transcriptInProgress}
-                onRetry={() => loadTask()}
+                onRetry={handleTranscriptRetry}
               />
             </div>
 
