@@ -210,6 +210,127 @@ describe('ImagePlaceholder', () => {
     });
   });
 
+  describe('直链过期回落（fallbackUrl，公开页 OSS 预签名直链场景）', () => {
+    beforeEach(() => {
+      getMediaTicketMock.mockClear();
+      getMediaTicketMock.mockResolvedValue('fresh-tok');
+    });
+
+    it('主 URL（非代理直链）失败且有 fallbackUrl → 切到代理回落 URL 重挂（带媒体票）', async () => {
+      render(
+        <ImagePlaceholder
+          description="直链图"
+          status="ready"
+          imageUrl="https://oss.example.com/img/abc.webp?Expires=1"
+          mediaToken="tok1"
+          fallbackUrl="/api/v1/summaries/images/abc.webp"
+        />
+      );
+
+      // 初始:直链原样作 src(不拼票)
+      const img = screen.getByRole('img');
+      expect(img).toHaveAttribute('src', 'https://oss.example.com/img/abc.webp?Expires=1');
+
+      // 直链失败(如预签名过期 403):不进显示回退,切到代理回落 URL,走既有 token 拼接
+      fireEvent.error(img);
+      await waitFor(() => {
+        expect(screen.getByRole('img')).toHaveAttribute(
+          'src',
+          '/api/v1/summaries/images/abc.webp?token=tok1'
+        );
+      });
+      expect(screen.queryByText('[图片：直链图]')).not.toBeInTheDocument();
+    });
+
+    it('回落 URL 上耗尽换票重试后才进显示回退（绝不无限切换）', async () => {
+      render(
+        <ImagePlaceholder
+          description="回落耗尽图"
+          status="ready"
+          imageUrl="https://oss.example.com/img/x.webp"
+          mediaToken="tok1"
+          fallbackUrl="/api/v1/summaries/images/x.webp"
+        />
+      );
+
+      // 直链失败 → 切回落
+      fireEvent.error(screen.getByRole('img'));
+      await waitFor(() => {
+        expect(screen.getByRole('img')).toHaveAttribute(
+          'src',
+          '/api/v1/summaries/images/x.webp?token=tok1'
+        );
+      });
+
+      // 回落(代理)上走既有换票重试链:失败 #1 → fresh-tok + _r=1
+      fireEvent.error(screen.getByRole('img'));
+      await waitFor(() => {
+        expect(screen.getByRole('img')).toHaveAttribute(
+          'src',
+          '/api/v1/summaries/images/x.webp?token=fresh-tok&_r=1'
+        );
+      });
+      // 失败 #2 → _r=2
+      fireEvent.error(screen.getByRole('img'));
+      await waitFor(() => {
+        expect(screen.getByRole('img')).toHaveAttribute(
+          'src',
+          '/api/v1/summaries/images/x.webp?token=fresh-tok&_r=2'
+        );
+      });
+      // 失败 #3:重试耗尽 → 终态显示回退,不再切回直链
+      fireEvent.error(screen.getByRole('img'));
+      await waitFor(() => {
+        expect(screen.getByText('[图片：回落耗尽图]')).toBeInTheDocument();
+      });
+      expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    });
+
+    it('无 fallbackUrl 时行为同现状：非代理 URL 一次失败即显示回退（私有页零回归）', () => {
+      render(
+        <ImagePlaceholder
+          description="无回落图"
+          status="ready"
+          imageUrl="https://example.com/broken.png"
+        />
+      );
+
+      fireEvent.error(screen.getByRole('img'));
+      expect(screen.getByText('[图片：无回落图]')).toBeInTheDocument();
+      expect(getMediaTicketMock).not.toHaveBeenCalled();
+    });
+
+    it('代理主 URL + 无 fallbackUrl（私有页形态）：既有换票重试链零回归', async () => {
+      render(
+        <ImagePlaceholder
+          description="私有回归图"
+          status="ready"
+          imageUrl="/api/v1/summaries/images/priv.webp"
+          mediaToken="tok1"
+        />
+      );
+
+      fireEvent.error(screen.getByRole('img'));
+      await waitFor(() => {
+        expect(screen.getByRole('img')).toHaveAttribute(
+          'src',
+          '/api/v1/summaries/images/priv.webp?token=fresh-tok&_r=1'
+        );
+      });
+      fireEvent.error(screen.getByRole('img'));
+      await waitFor(() => {
+        expect(screen.getByRole('img')).toHaveAttribute(
+          'src',
+          '/api/v1/summaries/images/priv.webp?token=fresh-tok&_r=2'
+        );
+      });
+      fireEvent.error(screen.getByRole('img'));
+      await waitFor(() => {
+        expect(screen.getByText('[图片：私有回归图]')).toBeInTheDocument();
+      });
+    });
+  });
+
   describe('failed state', () => {
     it('renders fallback text', () => {
       render(

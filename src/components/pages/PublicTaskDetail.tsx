@@ -78,6 +78,9 @@ function buildPublicStreamingImages(summary: PublicSummaryItem): Map<string, Str
       description: extractPlaceholderDescription(img.placeholder),
       url: img.url,
       status: img.status === 'ready' ? 'ready' : 'failed',
+      // url 为 OSS 预签名直链(600s)时带上代理回落路径:直链过期(长开页面 403)
+      // 由 ImagePlaceholder 切到 proxy_url 自愈;url 已是代理回落形态时后端给 null。
+      fallbackUrl: img.proxy_url ?? null,
     });
   }
   return map;

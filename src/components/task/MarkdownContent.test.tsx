@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 import { MarkdownContent } from "./MarkdownContent"
 import type { StreamingImage } from "@/types/api"
@@ -74,6 +74,36 @@ describe("MarkdownContent", () => {
     const img = screen.getByRole("img", { name: "时间轴" })
     // ImagePlaceholder 的 ready 分支直出 imageUrl（已被 appendMediaToken 注入 token）
     expect(img).toHaveAttribute("src", "/api/v1/summaries/images/t.png?token=tok")
+  })
+
+  it("threads StreamingImage.fallbackUrl to ImagePlaceholder: direct-url error falls back to the proxy url (public OSS presigned links)", async () => {
+    // 公开页摘要配图:url 为 OSS 预签名直链(600s),fallbackUrl 为代理回落路径。
+    // 直链过期加载失败时必须切到代理路径重试(带媒体票),而非一次失败即「[图片:..]」回退。
+    const ph = "{{IMAGE: 架构图}}"
+    const images = new Map<string, StreamingImage>([
+      [
+        ph,
+        {
+          placeholder: ph,
+          description: "架构图",
+          url: "https://oss.example.com/img/arch.webp?Expires=1",
+          status: "ready",
+          fallbackUrl: "/api/v1/summaries/images/arch.webp",
+        },
+      ],
+    ])
+    render(<MarkdownContent content={ph} streamingImages={images} mediaToken={"tok"} />)
+
+    const img = screen.getByRole("img", { name: "架构图" })
+    expect(img).toHaveAttribute("src", "https://oss.example.com/img/arch.webp?Expires=1")
+
+    fireEvent.error(img)
+    await waitFor(() => {
+      expect(screen.getByRole("img", { name: "架构图" })).toHaveAttribute(
+        "src",
+        "/api/v1/summaries/images/arch.webp?token=tok"
+      )
+    })
   })
 
   it("renders the FAILED fallback when streamingImages marks the placeholder failed", () => {

@@ -70,6 +70,8 @@ function SummaryImagePlaceholder({ placeholder }: { placeholder: string }) {
       status={imageState?.status || "generating"}
       imageUrl={imageState?.url || undefined}
       mediaToken={mediaToken}
+      // 公开页 OSS 预签名直链的代理回落 URL(StreamingImage.fallbackUrl);私有页不设置=null,零变化。
+      fallbackUrl={imageState?.fallbackUrl ?? null}
     />
   );
 }
