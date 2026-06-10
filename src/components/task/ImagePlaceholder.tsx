@@ -67,7 +67,7 @@ function ImageLoader({
 
   const handleError = () => {
     // 仅对走鉴权的媒体代理 URL 做「换票 + 重试」；非代理 URL 没有 token 问题，直接放弃本 URL。
-    const isProxy = appendMediaToken(baseUrl, "probe") !== baseUrl
+    const isProxy = isProxyUrl(baseUrl)
     if (!isProxy || attempt >= MAX_IMAGE_RETRIES) {
       // 有回落 URL（OSS 预签名直链过期自愈）：交给父组件切到代理回落路径重挂，
       // 而非直接进「[图片：..]」显示回退；没有才终态回退（既有行为）。
