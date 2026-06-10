@@ -26,6 +26,7 @@ import { ActionItemToggle } from '@/components/task/ActionItemToggle';
 import { ExportMenu } from '@/components/task/ExportMenu';
 import { TaskVisibilityToggle } from '@/components/task/TaskVisibilityToggle';
 import { resolveSummaryStreamBaseUrl, attachSseServerErrorListener, createSummaryStreamErrorHandler } from '@/lib/summary-stream';
+import { createStreamThrottle } from '@/lib/stream-throttle';
 import ProcessingState from '@/components/common/ProcessingState';
 import ErrorState from '@/components/common/ErrorState';
 import LoginModal from '@/components/auth/LoginModal';
@@ -69,6 +70,7 @@ import { mapApiTranscript as mapApiTranscriptUtil } from '@/lib/transcript-mappi
 
 // 摘要 SSE 流 / 轮询的时间参数（毫秒）。原先散落为魔数，抽成命名常量便于核对与统一。
 const SUMMARY_POLL_INTERVAL_MS = 2000; // 轮询 getSummary 检测版本号变化的间隔
+const SUMMARY_STREAM_FLUSH_MS = 100; // SSE delta 帧合并窗口:每窗口最多写一次 state(整页重渲染+全文重 parse 的频率上限)
 const SUMMARY_CONNECTION_TIMEOUT_MS = 3000; // 等 SSE connected 事件，超时则回退轮询
 const SUMMARY_IMAGE_TIMEOUT_MS = 90000; // summary 完成后等 images.completed 的上限（60s/张 + 30s 缓冲）
 const SUMMARY_IMAGE_RECONCILE_INTERVAL_MS = 4000; // completed 后图集对账重拉间隔（补 WS image_ready 漏收）
@@ -184,6 +186,17 @@ export default function TaskDetail({
     key_points: null,
     action_items: null,
   });
+  // SSE 流式 delta 帧合并节流器:useState 惰性初始化成单例(整个生命周期同一张定时器表,
+  // 卸载清理 effect 可统一 cancelAll,故须在该 effect 之前声明)。flush 实现依赖下方才定义的
+  // updateSummaryFromStream,经 ref 转发——定时器到点时总是调到最新闭包;真正的 flush 语义
+  // 与动机见 flushSummaryStream 定义处。
+  const flushSummaryStreamRef = useRef<(summaryType: SummaryRegenerateType) => void>(() => {});
+  const [summaryStreamThrottle] = useState(() =>
+    createStreamThrottle<SummaryRegenerateType>(
+      (summaryType) => flushSummaryStreamRef.current(summaryType),
+      SUMMARY_STREAM_FLUSH_MS
+    )
+  );
   // State for streaming images in summary (for overview only)
   const [streamingImages, setStreamingImages] = useState<Map<string, StreamingImage>>(new Map());
   const imagesTimeoutRef = useRef<number | null>(null);
@@ -209,6 +222,10 @@ export default function TaskDetail({
   const comparePollRef = useRef<number | null>(null);
   const compareStreamRef = useRef<EventSource | null>(null);
   const compareExpectedRef = useRef<number>(0);
+  // loadTask 代际计数:防旧响应乱序覆盖(mount 拉取 vs completed 重载 vs 手动重试并发时,
+  // 慢隧道下窗口很大)。调用头取代,所有 await 之后的 setState 出口前校验,过期整段丢弃。
+  // 同款模式见 PublicTaskDetail 的 per-loader 代际 ref。
+  const loadTaskGenRef = useRef(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // 右栏摘要局部错误：摘要文字失败时 task 仍 completed，仅右栏报错、不连带藏转写左栏。
@@ -300,6 +317,7 @@ export default function TaskDetail({
   const loadTask = useCallback(async (opts?: { silentTranscript?: boolean }) => {
     if (!id || !authUser) return;
     const silentTranscript = opts?.silentTranscript ?? false;
+    const gen = ++loadTaskGenRef.current;
     setLoading(true);
     setError(null);
     setSummaryError(null);
@@ -308,74 +326,94 @@ export default function TaskDetail({
       setTranscript([]);
     }
     setTranscriptError(false);
+
+    // 三请求同拍发出：每个请求经隧道 ~1.5s 基线，旧的「先 getTask、成功后再拉另两路」串行瀑布
+    // 白付一整段。transcript/summary 发出即各自 .catch 收编为值：既保持「各自独立成败、互不连带」，
+    // 也保证 getTask 失败整段早退时这两路不产生 unhandled rejection。
+    const taskPromise = client.getTask(id);
+    // catch 回调归一化为 ApiError（标注返回类型让 promise 推断回 Promise<XxxResponse | ApiError>，
+    // 不丢静态检查）；api-client 正常只抛 ApiError，归一化兜的是理论上的非 ApiError 异常。
+    const toApiError = (err: unknown): ApiError =>
+      err instanceof ApiError ? err : new ApiError(0, err instanceof Error ? err.message : String(err), "");
+    const transcriptPromise = client.getTranscript(id).catch(toApiError);
+    const summaryPromise = client.getSummary(id).catch(toApiError);
+
     try {
-      const taskData = await client.getTask(id);
-      setTask(taskData);
-      setProgress(taskData.progress ?? 0);
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-        notifyError(err.message);
-        if (err.code >= 40100 && err.code < 40200) {
-          setLoginOpen(true);
+      try {
+        const taskData = await taskPromise;
+        if (gen !== loadTaskGenRef.current) return;
+        setTask(taskData);
+        setProgress(taskData.progress ?? 0);
+      } catch (err) {
+        // getTask 失败 = 任务级失败（401→登录、其余→整页错误态），整体丢弃 transcript/summary
+        // 两路的结果与错误：直接 return，不 setState、不 toast、不进其局部错误分支
+        //（否则 401 时会三连 toast）。两路 promise 已被上面的 .catch 收编，丢弃无副作用。
+        if (gen !== loadTaskGenRef.current) return;
+        if (err instanceof ApiError) {
+          setError(err.message);
+          notifyError(err.message);
+          if (err.code >= 40100 && err.code < 40200) {
+            setLoginOpen(true);
+          }
+        } else {
+          const message = err instanceof Error ? err.message : t("errors.loadTaskFailed");
+          setError(message);
+          notifyError(message);
         }
-      } else {
-        const message = err instanceof Error ? err.message : t("errors.loadTaskFailed");
-        setError(message);
-        notifyError(message);
+        return;
       }
-      if (!silentTranscript) setTranscriptLoading(false);
-      setLoading(false);
-      return;
-    }
 
-    // 转写与摘要解耦：各自独立成败，互不连带（不再 Promise.all 同拉同 set）。
-    const [transcriptResult, summaryResult] = await Promise.all([
-      client.getTranscript(id).catch((err) => err),
-      client.getSummary(id).catch((err) => err),
-    ]);
+      // 转写与摘要解耦：各自独立成败，互不连带（错误已在发出处收编为值，这里只等结果）。
+      const [transcriptResult, summaryResult] = await Promise.all([transcriptPromise, summaryPromise]);
+      if (gen !== loadTaskGenRef.current) return;
 
-    if (transcriptResult instanceof ApiError) {
-      // silent 模式（completed 同步重拉）下这一次没拉到：静默保持已显示的旧转写，
-      // 不清空、不报「加载失败」——否则会把已显示转写的已完成任务从列表跳成 PR#64 要避免的误报。
-      if (!silentTranscript) {
-        // 40401 = 转写尚未就绪（任务还在处理早期），静默置空、不算错误。
-        // 其它（含 50000 超时/网络/网关瞬态）= 这一次没拉到，标记 transcriptError 让面板显示
-        // 「加载失败可重试」，而不是把已完成任务一律冤枉成「任务处理失败」。
-        if (transcriptResult.code !== 40401) {
-          notifyError(transcriptResult.message);
-          setTranscriptError(true);
+      if (transcriptResult instanceof ApiError) {
+        // silent 模式（completed 同步重拉）下这一次没拉到：静默保持已显示的旧转写，
+        // 不清空、不报「加载失败」——否则会把已显示转写的已完成任务从列表跳成 PR#64 要避免的误报。
+        if (!silentTranscript) {
+          // 40401 = 转写尚未就绪（任务还在处理早期），静默置空、不算错误。
+          // 其它（含 50000 超时/网络/网关瞬态）= 这一次没拉到，标记 transcriptError 让面板显示
+          // 「加载失败可重试」，而不是把已完成任务一律冤枉成「任务处理失败」。
+          if (transcriptResult.code !== 40401) {
+            notifyError(transcriptResult.message);
+            setTranscriptError(true);
+          }
+          setTranscript([]);
         }
-        setTranscript([]);
+      } else if (transcriptResult) {
+        // 成功：无论是否 silent 都原位替换（行 key=segment.id，润色为就地改同一行、id 不变，
+        // React 仅重渲染内容变化的行、不整列重挂，故 silent 下不闪烁）。
+        setTranscript(mapApiTranscript(transcriptResult.items));
       }
-    } else if (transcriptResult) {
-      // 成功：无论是否 silent 都原位替换（行 key=segment.id，润色为就地改同一行、id 不变，
-      // React 仅重渲染内容变化的行、不整列重挂，故 silent 下不闪烁）。
-      setTranscript(mapApiTranscript(transcriptResult.items));
-    }
-    if (!silentTranscript) setTranscriptLoading(false);
 
-    if (summaryResult instanceof ApiError) {
-      // 摘要未就绪（40401）= 还没生成，静默置空；其它 = 右栏局部报错（不藏转写、不整页失败）。
-      if (summaryResult.code === 40401) {
-        setKeyPoints([]);
-        setActionItems([]);
-        setSummaryOverviewMarkdown('');
-      } else {
-        setSummaryError(summaryResult.message);
+      if (summaryResult instanceof ApiError) {
+        // 摘要未就绪（40401）= 还没生成，静默置空；其它 = 右栏局部报错（不藏转写、不整页失败）。
+        if (summaryResult.code === 40401) {
+          setKeyPoints([]);
+          setActionItems([]);
+          setSummaryOverviewMarkdown('');
+        } else {
+          setSummaryError(summaryResult.message);
+        }
+      } else if (summaryResult) {
+        buildSummaryState(summaryResult.items);
+        // 渐进式展示：用持久图集 summary.images 初始化/刷新占位符 Map（替代旧的「仅 regenerate 临时填充」）。
+        // 用 merge 而非整体替换：completed 重载重拉 summary.images 时，DB 快照可能滞后于已到达的
+        // image_ready WS（本地某占位符已 patch 成 ready），直接替换会把已显示的图退回 pending 且不重放。
+        // images[] 优先；completed 那刻它偶发还没落库时，从 overview 正文占位符兜底 seed 成 pending，
+        // 保证对账轮询能武装、把异步生成的图补出来（不必手刷）。
+        const dbImages = buildStreamingImagesFromSummaryOrSeed(summaryResult.items);
+        setStreamingImages((prev) => mergeStreamingImages(prev, dbImages));
       }
-    } else if (summaryResult) {
-      buildSummaryState(summaryResult.items);
-      // 渐进式展示：用持久图集 summary.images 初始化/刷新占位符 Map（替代旧的「仅 regenerate 临时填充」）。
-      // 用 merge 而非整体替换：completed 重载重拉 summary.images 时，DB 快照可能滞后于已到达的
-      // image_ready WS（本地某占位符已 patch 成 ready），直接替换会把已显示的图退回 pending 且不重放。
-      // images[] 优先；completed 那刻它偶发还没落库时，从 overview 正文占位符兜底 seed 成 pending，
-      // 保证对账轮询能武装、把异步生成的图补出来（不必手刷）。
-      const dbImages = buildStreamingImagesFromSummaryOrSeed(summaryResult.items);
-      setStreamingImages((prev) => mergeStreamingImages(prev, dbImages));
+    } finally {
+      // 统一收尾（蓝本 PublicTaskDetail 同款 finally+代际校验）：只有仍是最新代际才清 loading——
+      // 过期代际绝不能清（守卫 return 时必有更新调用在跑，清了会打掉它刚亮起的 spinner，
+      // 由那次调用自己的 finally 负责）；finally 同时兜住结果处理中途抛异常时 spinner 卡死。
+      if (gen === loadTaskGenRef.current) {
+        setLoading(false);
+        if (!silentTranscript) setTranscriptLoading(false);
+      }
     }
-
-    setLoading(false);
   }, [buildSummaryState, client, id, authUser, t, mapApiTranscript]);
 
   // 方案B「提早整块」：转写在进入 polishing/summarizing 时其实已全量落库（ASR 批量、转写写完才进润色），
@@ -441,8 +479,10 @@ export default function TaskDetail({
       if (imagesTimeout) {
         window.clearTimeout(imagesTimeout);
       }
+      // SSE delta 节流器的在途 flush 定时器一并丢弃(卸载后不得再 setState)。
+      summaryStreamThrottle.cancelAll();
     };
-  }, []);
+  }, [summaryStreamThrottle]);
 
   const updateSummaryFromStream = useCallback(
     (summaryType: SummaryRegenerateType, content: string) => {
@@ -477,6 +517,45 @@ export default function TaskDetail({
     });
   }, []);
 
+  // SSE 流式 delta 帧合并节流:每个 delta 都直接 setState 会让 2400+ 行的本组件整页重渲染、
+  // 右栏 MarkdownContent 对增长全文整篇重 parse(流式期间的主要成本)、左栏长转写整列 reconcile。
+  // 改为 delta 只追加 summaryBufferRef 并 schedule;每 SUMMARY_STREAM_FLUSH_MS 才把 buffer
+  // 全量 flush 进 state 一次(渲染次数砍 5-10x)。buffer 是唯一事实源、flush 取全量,绝不丢字;
+  // 流结束/出错时 flushNow 立即清余量。SSE 协议与轮询兜底不动。
+  const flushSummaryStream = useCallback((summaryType: SummaryRegenerateType) => {
+    const content = summaryBufferRef.current[summaryType];
+    updateSummaryFromStream(summaryType, content);
+    // Auto-scroll to follow new content
+    scrollSummaryToBottom();
+    // 占位符探测随 flush 搭车(原先每个 delta 都全文扫一遍;overview 才有配图)。
+    if (summaryType === 'overview') {
+      const placeholders = findImagePlaceholders(content);
+      setStreamingImages((prev) => {
+        const next = new Map(prev);
+        let changed = false;
+        for (const placeholder of placeholders) {
+          if (!next.has(placeholder)) {
+            next.set(placeholder, {
+              placeholder,
+              description: extractPlaceholderDescription(placeholder),
+              url: null,
+              status: 'pending',
+            });
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    }
+  }, [scrollSummaryToBottom, updateSummaryFromStream]);
+
+  // 同步最新 flush 闭包进 ref(节流器声明在前、本闭包依赖的 updateSummaryFromStream 在后,
+  // 见 summaryStreamThrottle 声明处)。effect 在首个定时器可能到点之前必已跑过:SSE 流只会
+  // 在用户触发 regenerate 后才存在。
+  useEffect(() => {
+    flushSummaryStreamRef.current = flushSummaryStream;
+  }, [flushSummaryStream]);
+
   const regenerateSummary = useCallback(
     async (summaryType: SummaryRegenerateType) => {
       if (!id) return;
@@ -494,6 +573,8 @@ export default function TaskDetail({
         window.clearInterval(summaryPollRef.current[summaryType] ?? undefined);
         summaryPollRef.current[summaryType] = null;
       }
+      // buffer 即将重置:丢弃上一轮流的在途 flush 定时器,避免旧定时器立刻 flush 空串。
+      summaryStreamThrottle.cancel(summaryType);
       summaryBufferRef.current[summaryType] = '';
 
       // Reset streaming images state (only overview supports images)
@@ -583,6 +664,8 @@ export default function TaskDetail({
           // 错误处理器先幂等补发 triggerRegenerate 再轮询，否则后端从未 regenerate，轮询空等。
           const handleStreamError = createSummaryStreamErrorHandler({
             cleanup: (message?: string) => {
+              // 出错收尾:先把 buffer 余量立即 flush,已收到的部分内容保持可见,绝不丢字。
+              summaryStreamThrottle.flushNow(summaryType);
               window.clearTimeout(connectionTimeout);
               eventSource.close();
               summaryStreamRef.current[summaryType] = null;
@@ -605,6 +688,7 @@ export default function TaskDetail({
             try {
               const payload = JSON.parse(event.data);
               if (payload.summary_type && payload.summary_type !== summaryType) return;
+              summaryStreamThrottle.cancel(summaryType);
               summaryBufferRef.current[summaryType] = '';
               updateSummaryFromStream(summaryType, '');
             } catch {
@@ -617,32 +701,10 @@ export default function TaskDetail({
               const payload = JSON.parse(event.data);
               if (payload.summary_type && payload.summary_type !== summaryType) return;
               if (typeof payload.content !== 'string') return;
+              // 帧合并:delta 只追加 buffer 并 schedule,每 ~100ms 才一次性 flush 进 state
+              //(state 写入/自动滚动/占位符探测都在 flushSummaryStream 里搭车执行)。
               summaryBufferRef.current[summaryType] += payload.content;
-              updateSummaryFromStream(summaryType, summaryBufferRef.current[summaryType]);
-
-              // Auto-scroll to follow new content
-              scrollSummaryToBottom();
-
-              // Detect and initialize image placeholders during streaming (overview only)
-              if (summaryType === 'overview') {
-                const placeholders = findImagePlaceholders(summaryBufferRef.current[summaryType]);
-                setStreamingImages((prev) => {
-                  const next = new Map(prev);
-                  let changed = false;
-                  for (const placeholder of placeholders) {
-                    if (!next.has(placeholder)) {
-                      next.set(placeholder, {
-                        placeholder,
-                        description: extractPlaceholderDescription(placeholder),
-                        url: null,
-                        status: 'pending',
-                      });
-                      changed = true;
-                    }
-                  }
-                  return changed ? next : prev;
-                });
-              }
+              summaryStreamThrottle.schedule(summaryType);
             } catch {
               // Ignore malformed payloads
             }
@@ -710,6 +772,9 @@ export default function TaskDetail({
           });
 
           eventSource.addEventListener("summary.completed", (event) => {
+            // 流结束:立即 flush buffer 余量(全文),绝不丢字——等下方 getSummary 整版
+            // 经隧道回来之前,已收到的完整内容先显示完。
+            summaryStreamThrottle.flushNow(summaryType);
             let hasImages = false;
             try {
               const payload = JSON.parse(event.data);
@@ -773,7 +838,7 @@ export default function TaskDetail({
         }
       }
     },
-    [buildSummaryState, client, id, llmModels, scrollSummaryToBottom, summaryModelSelection, summaryStreaming, summaryVersions, t, updateSummaryFromStream]
+    [buildSummaryState, client, id, llmModels, scrollSummaryToBottom, summaryModelSelection, summaryStreaming, summaryStreamThrottle, summaryVersions, t, updateSummaryFromStream]
   );
 
   useEffect(() => {
@@ -1128,6 +1193,12 @@ export default function TaskDetail({
       )
     );
   }, []);
+
+  // TranscriptList 已 memo:onRetry 若内联箭头,每次渲染都是新引用会击穿 memo
+  //(SSE 流式期间父组件每次 flush 都重渲染,1700+ 行整列 reconcile 就回来了)。
+  const handleTranscriptRetry = useCallback(() => {
+    void loadTask();
+  }, [loadTask]);
 
   const isActiveAudio = Boolean(task?.audio_url && currentSrc === task.audio_url);
   // 优先使用音频元素的实际 duration，如果没有则使用后端提供的 duration_seconds
@@ -2040,7 +2111,7 @@ export default function TaskDetail({
                 onEditSegment={handleEditTranscript}
                 transcriptError={transcriptError}
                 transcriptInProgress={transcriptInProgress}
-                onRetry={() => loadTask()}
+                onRetry={handleTranscriptRetry}
               />
             </div>
 

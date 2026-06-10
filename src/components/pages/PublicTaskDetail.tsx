@@ -20,6 +20,7 @@ import type { DisplayTranscriptSegment } from '@/lib/transcript-mapping';
 import { ApiError } from '@/types/api';
 import type {
   PublicSummaryItem,
+  PublicSummaryResponse,
   PublicTaskDetail as PublicTaskDetailData,
   PublicTranscriptItem,
   StreamingImage,
@@ -62,6 +63,10 @@ const SECTION_ORDER: { type: SummaryType; titleKey: string; emptyKey: string }[]
 
 type PublicTab = 'summary' | 'keypoints' | 'actions';
 
+// 公开页只读,不可编辑:空回调提为模块级常量(引用恒定)。内联 `() => {}` 每次渲染都是
+// 新引用,会击穿 TranscriptList 的 memo,1700+ 行整列白白 reconcile。
+const NOOP_EDIT_SEGMENT = () => {};
+
 const TAB_TO_SECTION: Record<PublicTab, SummaryType> = {
   summary: 'overview',
   keypoints: 'key_points',
@@ -77,6 +82,9 @@ function buildPublicStreamingImages(summary: PublicSummaryItem): Map<string, Str
       description: extractPlaceholderDescription(img.placeholder),
       url: img.url,
       status: img.status === 'ready' ? 'ready' : 'failed',
+      // url 为 OSS 预签名直链(600s)时带上代理回落路径:直链过期(长开页面 403)
+      // 由 ImagePlaceholder 切到 proxy_url 自愈;url 已是代理回落形态时后端给 null。
+      fallbackUrl: img.proxy_url ?? null,
     });
   }
   return map;
@@ -86,9 +94,23 @@ interface PublicTaskDetailProps {
   isAuthenticated: boolean;
   onOpenLogin: () => void;
   onToggleTheme?: () => void;
+  /**
+   * 服务端 LAN 预取初值(可选):有初值的路对应 state 直接以 props 初始化,跳过该路的
+   * 客户端初始拉取(loading 初值 false,无 spinner 阶段);没有的路照常客户端拉取。
+   * 转写刻意不内嵌(1772 段进 RSC flight 会让 HTML 爆炸),恒走客户端,与 hydration 并行。
+   * 局部重试(loadDetail/loadSummary)与初值无关,重试时照常走客户端拉取。
+   */
+  initialDetail?: PublicTaskDetailData;
+  initialSummary?: PublicSummaryResponse;
 }
 
-export default function PublicTaskDetail({ isAuthenticated, onOpenLogin, onToggleTheme }: PublicTaskDetailProps) {
+export default function PublicTaskDetail({
+  isAuthenticated,
+  onOpenLogin,
+  onToggleTheme,
+  initialDetail,
+  initialSummary,
+}: PublicTaskDetailProps) {
   const { t } = useI18n();
   const router = useRouter();
   const params = useParams();
@@ -97,8 +119,9 @@ export default function PublicTaskDetail({ isAuthenticated, onOpenLogin, onToggl
   const mediaToken = usePublicMediaToken(id);
 
   // detail 单独成态:它回来即可渲染整页骨架,不再被转写/摘要拖住(拆瀑布的核心)。
-  const [task, setTask] = useState<PublicTaskDetailData | null>(null);
-  const [detailLoading, setDetailLoading] = useState(true);
+  // 有服务端预取初值时直接以初值落地,loading 从 false 起步(无整页 spinner 阶段)。
+  const [task, setTask] = useState<PublicTaskDetailData | null>(initialDetail ?? null);
+  const [detailLoading, setDetailLoading] = useState(!initialDetail);
   const [notFound, setNotFound] = useState(false);
   const [loadError, setLoadError] = useState(false);
 
@@ -108,8 +131,8 @@ export default function PublicTaskDetail({ isAuthenticated, onOpenLogin, onToggl
   const [transcriptError, setTranscriptError] = useState(false);
 
   // 摘要:独立 loading / error,失败只显示右栏局部错误 + 局部重试。
-  const [summaries, setSummaries] = useState<PublicSummaryItem[]>([]);
-  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [summaries, setSummaries] = useState<PublicSummaryItem[]>(initialSummary?.items ?? []);
+  const [summaryLoading, setSummaryLoading] = useState(!initialSummary);
   const [summaryError, setSummaryError] = useState(false);
 
   const [activeTab, setActiveTab] = useState<PublicTab>('summary');
@@ -182,11 +205,13 @@ export default function PublicTaskDetail({ isAuthenticated, onOpenLogin, onToggl
   }, [client, id]);
 
   // 三请求仍同时发出(并行,不串行),但各自独立落态:detail 回来即渲骨架,转写/摘要各自栏内 loading/error。
+  // 有服务端预取初值的路(detail/summary)跳过初始客户端拉取——初值即数据,重复拉只是浪费一次
+  // 隧道往返;转写恒走客户端(刻意不内嵌,见 props 注释)。错误后的局部重试直接调 loadXxx,不经此处。
   useEffect(() => {
-    void loadDetail();
+    if (!initialDetail) void loadDetail();
     void loadTranscript();
-    void loadSummary();
-  }, [loadDetail, loadTranscript, loadSummary]);
+    if (!initialSummary) void loadSummary();
+  }, [loadDetail, loadTranscript, loadSummary, initialDetail, initialSummary]);
 
   // ===== 音频播放(与 TaskDetail 同款 audio-store 集成;媒体票走公开通道) =====
   const isPlaying = useAudioStore((s) => s.isPlaying);
@@ -197,22 +222,33 @@ export default function PublicTaskDetail({ isAuthenticated, onOpenLogin, onToggl
   const play = useAudioStore((s) => s.play);
   const seek = useAudioStore((s) => s.seek);
 
+  // 播放源:优先 OSS 预签名直链(完整 https URL,绕开隧道;appendMediaToken 对其 no-op,不拼媒体票),
+  // 无直链回落代理路径。直链经 setSource 第 4 参把 audio_url 登记为回落源:直链播放失败(如预签名
+  // 过期 403)时 audio-store 的 reloadWithFreshToken 一次性切到代理路径,走既有媒体票/换票重载链。
+  const playbackSrc = task?.audio_direct_url || task?.audio_url || null;
+  const playbackFallback = task?.audio_direct_url ? (task?.audio_url ?? null) : null;
+  // 直链失败回落后 currentSrc 变为 audio_url 代理路径:仍视作本任务激活(进度/播放态照常显示),
+  // 且后续点击只 toggle、绝不切回已坏的直链。
+  const isActiveAudio = Boolean(
+    currentSrc && (currentSrc === playbackSrc || (task?.audio_url != null && currentSrc === task.audio_url)),
+  );
+
   const handlePlayPause = useCallback(() => {
-    if (!task?.audio_url) return;
-    if (currentSrc !== task.audio_url) {
-      setSource(task.audio_url, task.id, task.title ?? '');
+    if (!playbackSrc || !task) return;
+    if (!isActiveAudio) {
+      setSource(playbackSrc, task.id, task.title ?? '', playbackFallback);
       play();
       return;
     }
     togglePlayback();
-  }, [task?.audio_url, task?.id, task?.title, currentSrc, setSource, play, togglePlayback]);
+  }, [playbackSrc, playbackFallback, isActiveAudio, task, setSource, play, togglePlayback]);
 
   const handleSeek = useCallback((time: number) => {
-    if (task?.audio_url && currentSrc !== task.audio_url) {
-      setSource(task.audio_url, task.id, task.title ?? '');
+    if (playbackSrc && task && !isActiveAudio) {
+      setSource(playbackSrc, task.id, task.title ?? '', playbackFallback);
     }
     seek(time);
-  }, [task?.audio_url, task?.id, task?.title, currentSrc, setSource, seek]);
+  }, [playbackSrc, playbackFallback, isActiveAudio, task, setSource, seek]);
 
   // TranscriptList 的 onTimeClick 接收 "MM:SS" 字符串(与私有页同款),转成秒后 seek。
   const handleTimeClick = useCallback((time: string) => {
@@ -221,7 +257,11 @@ export default function PublicTaskDetail({ isAuthenticated, onOpenLogin, onToggl
     handleSeek(mins * 60 + secs);
   }, [handleSeek]);
 
-  const isActiveAudio = Boolean(task?.audio_url && currentSrc === task.audio_url);
+  // onRetry 提稳(useCallback):与 NOOP_EDIT_SEGMENT 同理,保住 TranscriptList 的 memo。
+  const handleTranscriptRetry = useCallback(() => {
+    void loadTranscript();
+  }, [loadTranscript]);
+
   const duration = isActiveAudio
     ? (audioDuration || task?.duration_seconds || 0)
     : (task?.duration_seconds || 0);
@@ -377,7 +417,7 @@ export default function PublicTaskDetail({ isAuthenticated, onOpenLogin, onToggl
       )}
 
       {/* 播放器区:有 youtube_info 渲 YouTube 封面卡(channel 可空已守卫);否则普通播放条 */}
-      {(task.audio_url || task.youtube_info) && (
+      {(playbackSrc || task.youtube_info) && (
         <PlayerBarContainer
           isActiveAudio={isActiveAudio}
           duration={duration}
@@ -409,8 +449,8 @@ export default function PublicTaskDetail({ isAuthenticated, onOpenLogin, onToggl
             transcriptError={transcriptError}
             isActiveAudio={isActiveAudio}
             onTimeClick={handleTimeClick}
-            onEditSegment={() => {}}
-            onRetry={() => void loadTranscript()}
+            onEditSegment={NOOP_EDIT_SEGMENT}
+            onRetry={handleTranscriptRetry}
             readOnly
           />
         </div>

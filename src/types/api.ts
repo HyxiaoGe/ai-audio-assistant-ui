@@ -1110,6 +1110,12 @@ export interface StreamingImage {
   description: string
   url: string | null
   status: "pending" | "generating" | "ready" | "failed"
+  /**
+   * 代理回落 URL(前端内部字段,仅公开页使用):url 为 OSS 预签名直链(600s)时,
+   * 这里带上 /api/v1/summaries/images/.. 代理路径。直链过期(长开页面)加载失败时,
+   * ImagePlaceholder 切到该回落 URL 重试(走既有媒体票 + 401 换票链)。私有页不设置。
+   */
+  fallbackUrl?: string | null
 }
 
 // ============================================================================
@@ -1155,6 +1161,11 @@ export interface PublicTaskDetail {
   source_type: SourceType
   source_url: string | null
   audio_url: string | null // 媒体需配合 mintPublicMediaTicket 的 ?token= 使用,不可直接作 src
+  /**
+   * OSS 预签名音频直链(3600s,完整 https URL,绕开隧道):有值时优先作播放源,**不拼媒体票**;
+   * 播放失败回落 audio_url 代理路径。后端 feature 上线前可能整体缺失(undefined=null 同义)。
+   */
+  audio_direct_url?: string | null
   duration_seconds: number | null
   detected_language: string | null
   detected_summary_style: string | null
@@ -1183,8 +1194,14 @@ export interface PublicTranscriptResponse {
 export interface PublicSummaryImage {
   placeholder: string
   status: "pending" | "ready" | "failed"
+  /** OSS 预签名直链(600s);后端直链签发失败时为代理回落形态(此时 proxy_url=null)。 */
   url: string | null
   alt: string
+  /**
+   * /api/v1/summaries/images/.. 代理路径(url 为直链时的回落通道;url 已是代理回落形态时为 null)。
+   * 后端 feature 上线前可能整体缺失(undefined=null 同义)。
+   */
+  proxy_url?: string | null
 }
 
 export interface PublicSummaryItem {

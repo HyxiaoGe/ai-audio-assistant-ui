@@ -1,5 +1,5 @@
-import { act, render } from "@testing-library/react"
-import { memo } from "react"
+import { act, fireEvent, render, screen } from "@testing-library/react"
+import { memo, useState } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { useAudioStore } from "@/store/audio-store"
 
@@ -12,6 +12,10 @@ const renderSpy = vi.fn<(segmentId: string) => void>()
 const renderCount = (segmentId: string) =>
   renderSpy.mock.calls.filter(([id]) => id === segmentId).length
 
+// 统计 TranscriptList 自身的渲染次数：组件体内每次渲染恰好调用一次 useI18n
+//（TranscriptItem 已 mock、不会额外调用），借 mock 的 useI18n 当渲染探针。
+const listRenderSpy = vi.hoisted(() => vi.fn())
+
 vi.mock("@/components/task/TranscriptItem", () => ({
   default: memo(function MockTranscriptItem(props: { segmentId: string }) {
     renderSpy(props.segmentId)
@@ -20,7 +24,10 @@ vi.mock("@/components/task/TranscriptItem", () => ({
 }))
 
 vi.mock("@/lib/i18n-context", () => ({
-  useI18n: () => ({ t: (k: string) => k, locale: "zh" }),
+  useI18n: () => {
+    listRenderSpy()
+    return { t: (k: string) => k, locale: "zh" }
+  },
 }))
 
 import { TranscriptList } from "./TranscriptList"
@@ -59,6 +66,7 @@ const onEditSegment = () => {}
 beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn()
   renderSpy.mockClear()
+  listRenderSpy.mockClear()
   act(() => useAudioStore.setState({ currentTime: 0, src: null, isPlaying: false }))
 })
 
@@ -86,5 +94,39 @@ describe("TranscriptList memoization", () => {
     expect(renderCount("c")).toBe(baseline.c)
     // 高亮行 b 因 activeWordProgress 变化而重渲染一次
     expect(renderCount("b")).toBe(baseline.b + 1)
+  })
+
+  // SSE 流式 delta 节流的搭车收益：TaskDetail 每次 flush 都整页重渲染，TranscriptList 的
+  // props（transcript state 引用、useCallback 回调、原始值）全程不变——列表级 memo 必须把
+  // 这类「父组件无关重渲染」整个挡掉（1700+ 行的 reconcile 实测 9.8ms/次）。
+  it("memo on the list itself: a parent re-render with stable props skips the whole list render", () => {
+    function Parent() {
+      const [, setTick] = useState(0)
+      const [loading, setLoading] = useState(false)
+      return (
+        <>
+          <button onClick={() => setTick((v) => v + 1)}>tick</button>
+          <button onClick={() => setLoading(true)}>load</button>
+          <TranscriptList
+            transcript={SEGMENTS}
+            transcriptLoading={loading}
+            isActiveAudio={true}
+            onTimeClick={onTimeClick}
+            onEditSegment={onEditSegment}
+          />
+        </>
+      )
+    }
+    render(<Parent />)
+    const baseline = listRenderSpy.mock.calls.length
+    expect(baseline).toBeGreaterThan(0)
+
+    // 父组件因无关 state 重渲染、传入 props 引用全部稳定 → memo 浅比较命中，列表整体跳过
+    fireEvent.click(screen.getByText("tick"))
+    expect(listRenderSpy.mock.calls.length).toBe(baseline)
+
+    // 负向对照：真正的 props 变化（transcriptLoading 翻转）仍然正常触发列表重渲染
+    fireEvent.click(screen.getByText("load"))
+    expect(listRenderSpy.mock.calls.length).toBeGreaterThan(baseline)
   })
 })

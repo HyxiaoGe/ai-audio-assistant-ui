@@ -25,6 +25,12 @@ interface ImagePlaceholderProps {
   imageUrl?: string | null
   /** 媒体短票：拼到代理图 URL 的 ?token=。缺省 null（外链图不需要）。 */
   mediaToken?: string | null
+  /**
+   * 代理回落 URL（公开页 OSS 预签名直链场景，opt-in）：imageUrl（直链）加载失败且尚未切换过时，
+   * 切到这里重挂重试（代理路径，走既有媒体票拼 query + 401 换票重试链）；在回落 URL 上仍失败
+   * 才进「[图片：..]」显示回退。私有页不传，行为零变化。
+   */
+  fallbackUrl?: string | null
   className?: string
 }
 
@@ -37,11 +43,14 @@ function ImageLoader({
   mediaToken,
   description,
   className,
+  onExhausted,
 }: {
   baseUrl: string
   mediaToken: string | null
   description: string
   className: string
+  /** 本 URL 的重试机会耗尽时回调（代替显示回退）：父组件据此切到回落 URL 重挂。 */
+  onExhausted?: (() => void) | null
 }) {
   const [token, setToken] = useState<string | null>(mediaToken)
   const [attempt, setAttempt] = useState(0)
@@ -57,9 +66,15 @@ function ImageLoader({
   }, [baseUrl, token, attempt])
 
   const handleError = () => {
-    // 仅对走鉴权的媒体代理 URL 做「换票 + 重试」；非代理 URL 没有 token 问题，直接回退。
-    const isProxy = appendMediaToken(baseUrl, "probe") !== baseUrl
+    // 仅对走鉴权的媒体代理 URL 做「换票 + 重试」；非代理 URL 没有 token 问题，直接放弃本 URL。
+    const isProxy = isProxyUrl(baseUrl)
     if (!isProxy || attempt >= MAX_IMAGE_RETRIES) {
+      // 有回落 URL（OSS 预签名直链过期自愈）：交给父组件切到代理回落路径重挂，
+      // 而非直接进「[图片：..]」显示回退；没有才终态回退（既有行为）。
+      if (onExhausted) {
+        onExhausted()
+        return
+      }
       setImageError(true)
       return
     }
@@ -122,10 +137,15 @@ function ImageLoader({
         </div>
 
         {/* Actual image with fade-in effect */}
+        {/* loading=lazy:视口外配图延后拉取,不与首屏内容抢隧道带宽(实测 5 图 716KB);
+            decoding=async:解码移出主线程提交帧。lazy 图下滚时若已超媒体票 TTL(300s),
+            首次请求 401 → 走上方 handleError 既有换票重试链自愈,无需额外处理。 */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={imageUrl}
           alt={description}
+          loading="lazy"
+          decoding="async"
           className={`w-full h-full object-contain transition-opacity duration-500 ${
             imageLoaded ? "opacity-100" : "opacity-0"
           }`}
@@ -206,11 +226,13 @@ function ImagePlaceholderReady({
   mediaToken,
   description,
   className,
+  onExhausted,
 }: {
   imageUrl: string
   mediaToken: string | null
   description: string
   className: string
+  onExhausted?: (() => void) | null
 }) {
   const { ready, token } = useTokenReady(mediaToken, imageUrl)
 
@@ -254,6 +276,7 @@ function ImagePlaceholderReady({
       mediaToken={token}
       description={description}
       className={className}
+      onExhausted={onExhausted}
     />
   )
 }
@@ -278,8 +301,16 @@ export function ImagePlaceholder({
   status,
   imageUrl,
   mediaToken = null,
+  fallbackUrl = null,
   className = "",
 }: ImagePlaceholderProps) {
+  // 直链过期回落（fallbackUrl，opt-in）：记录「已放弃的主 URL」而非布尔开关——imageUrl 一旦换新
+  // （如重拉摘要拿到新预签名直链），failedPrimaryUrl 自动不再匹配，回到主 URL 重试，无需 effect 重置。
+  // 切换经 effectiveUrl 反映到 ImagePlaceholderReady 的 key：整支重挂、状态清零，
+  // useTokenReady 以代理 URL 语义重新初始化（需要票则等票/超时降级），干净走既有票链。
+  const [failedPrimaryUrl, setFailedPrimaryUrl] = useState<string | null>(null)
+  const usingFallback = Boolean(fallbackUrl && imageUrl && failedPrimaryUrl === imageUrl)
+
   // Failed state - show fallback text
   if (status === "failed") {
     return (
@@ -298,12 +329,17 @@ export function ImagePlaceholder({
 
   // Ready state with valid image URL
   if (status === "ready" && imageUrl) {
+    const effectiveUrl = usingFallback && fallbackUrl ? fallbackUrl : imageUrl
     return (
       <ImagePlaceholderReady
-        imageUrl={imageUrl}
+        key={effectiveUrl}
+        imageUrl={effectiveUrl}
         mediaToken={mediaToken}
         description={description}
         className={className}
+        // 仅主 URL 阶段且有回落 URL 时提供「耗尽即切换」出口；已在回落 URL 上（或无回落）则
+        // 不提供——重试机会耗尽走既有「[图片：..]」显示回退，绝不无限循环切换。
+        onExhausted={!usingFallback && fallbackUrl ? () => setFailedPrimaryUrl(imageUrl) : null}
       />
     )
   }

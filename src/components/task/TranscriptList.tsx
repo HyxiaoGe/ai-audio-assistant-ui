@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAudioStore } from '@/store/audio-store';
 import { useI18n } from '@/lib/i18n-context';
 import TranscriptItem from '@/components/task/TranscriptItem';
@@ -49,7 +49,7 @@ function TranscriptSpinner({ label }: { label: string }) {
  * 不再随播放每秒重渲染数次——逐帧重渲染被限制在本组件内，且行级 TranscriptItem 已 memo 化，
  * 只有正在高亮的那一行会重渲染。
  */
-export function TranscriptList({
+function TranscriptListImpl({
   transcript,
   transcriptLoading,
   isActiveAudio,
@@ -198,7 +198,16 @@ export function TranscriptList({
         <TranscriptSpinner label={t("transcript.loading")} />
       ) : transcript.length > 0 ? (
         transcript.map((segment) => (
-          <div key={segment.id} data-segment-id={segment.id}>
+          // content-visibility:auto — 视口外转写行跳过布局/绘制(长转写 1700+ 行、上万节点时
+          // 浏览器渲染成本的大头)。contain-intrinsic-size 用「auto 100px」而非固定值:首测前以
+          // 100px 估算占位,实测后记忆真实尺寸——减少长距滚动时 scroll-anchoring 的尺寸修正被
+          // 上方「3s 自动滚动暂停」机制误判为用户滚动(可自愈,但记忆尺寸能减少触发)。
+          // Safari 不支持 content-visibility:两个属性整体被忽略,按普通块原样渲染降级,无行为差异。
+          <div
+            key={segment.id}
+            data-segment-id={segment.id}
+            className="[content-visibility:auto] [contain-intrinsic-size:auto_100px]"
+          >
             <TranscriptItem
               segmentId={segment.id}
               speaker={segment.speaker}
@@ -249,3 +258,9 @@ export function TranscriptList({
     </div>
   );
 }
+
+// memo:摘要再生 SSE 流式期间父组件(TaskDetail)每次 flush 都整页重渲染;本组件的 props
+// 全部引用稳定(transcript state 引用不变、回调经 useCallback/模块级常量提稳、其余为原始值),
+// 浅比较直接跳过长转写(1700+ 行)的整列 reconcile。内部 currentTime 订阅来自 zustand、
+// 不经 props,memo 不影响——播放高亮照常逐帧驱动,且行级 TranscriptItem 已 memo 收口。
+export const TranscriptList = memo(TranscriptListImpl);

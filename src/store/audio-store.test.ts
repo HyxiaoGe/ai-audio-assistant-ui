@@ -14,8 +14,11 @@ vi.mock("@/lib/media-ticket", () => ({
   getMediaTicket: ticket.getMediaTicket,
 }))
 
+// 仿真实现语义：仅同源代理路径且 token 非空才拼 ?token=；OSS 直链(完整 https)/空 token 原样返回。
+// 直链回落逻辑依赖这一语义(对直链 no-op)判断「换票无意义」，mock 必须保持一致。
 vi.mock("@/lib/media-url", () => ({
-  appendMediaToken: (src: string, token: string | null) => `${src}?token=${token}`,
+  appendMediaToken: (src: string, token: string | null) =>
+    token && src.startsWith("/api/v1/") ? `${src}?token=${token}` : src,
 }))
 
 import { useAudioStore } from "./audio-store"
@@ -191,5 +194,94 @@ describe("audio-store cold-cache token warm-up", () => {
     el.play.mockClear()
     el.emit("loadedmetadata")
     expect(el.play).toHaveBeenCalledTimes(1) // 由 reload 独占续播一次
+  })
+})
+
+// 公开页 OSS 预签名音频直链（绕隧道）：setSource 第 4 参登记 audio_url 代理路径为回落源。
+// 直链播放失败（预签名过期 403 → <audio> error → reloadWithFreshToken）时换票对直链无意义，
+// 应一次性切到回落代理路径、重置重试额度并走既有「取票重建 src + 保留进度续播」链。
+// 私有页从不登记回落源（上方既有用例即回归守卫），行为零变化。
+describe("audio-store 直链回落（公开页 OSS 预签名直链）", () => {
+  const DIRECT = "https://oss.example.com/audio/t1.mp3?Expires=1&Signature=sig"
+  const PROXY = "/api/v1/media/upload/u1/t1.mp3"
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    ticket.getMediaTicketSync.mockReturnValue("old")
+    ticket.getMediaTicket.mockResolvedValue("fresh")
+    useAudioStore.setState({
+      audioEl: null,
+      src: null,
+      taskId: null,
+      title: null,
+      currentTime: 0,
+      duration: 0,
+      isPlaying: false,
+    })
+    // 清掉上一用例可能残留的模块级回落登记（stop() 显式置 fallbackSrc=null；
+    // setSource(null) 在 src 已为 null 时会早退、清不掉）
+    useAudioStore.getState().stop()
+  })
+
+  it("直链源原样写入 <audio>（不拼媒体票），且不触发补票 warm-up 重载", async () => {
+    ticket.getMediaTicketSync.mockReturnValue(null) // 冷缓存也不该对直链 warm-up
+    const el = fakeAudio()
+    useAudioStore.getState().registerAudio(el as unknown as HTMLAudioElement)
+    useAudioStore.getState().setSource(DIRECT, "t1", "标题", PROXY)
+
+    expect(el.src).toBe(DIRECT) // 完整 https 直链原样作 src
+
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(ticket.getMediaTicket).not.toHaveBeenCalled() // 媒体票与直链无关
+    expect(el.load).toHaveBeenCalledTimes(1) // 无第二次 warm-up 重载
+  })
+
+  it("直链 error → 一次性切到登记的代理回落源，换票重载并保留进度续播", async () => {
+    const el = fakeAudio()
+    useAudioStore.getState().registerAudio(el as unknown as HTMLAudioElement)
+    useAudioStore.getState().setSource(DIRECT, "t1", "标题", PROXY)
+    el.currentTime = 30
+    el.paused = false
+    el.load.mockClear()
+
+    await useAudioStore.getState().reloadWithFreshToken() // <audio> error 链路入口
+
+    expect(useAudioStore.getState().src).toBe(PROXY) // 逻辑源已回落为代理路径
+    expect(el.src).toBe(`${PROXY}?token=fresh`) // 代理路径走既有票链
+    expect(el.load).toHaveBeenCalledTimes(1)
+
+    el.currentTime = 0 // 模拟 load 后进度归零
+    el.emit("loadedmetadata")
+    expect(el.currentTime).toBe(30) // 进度保留
+    expect(el.play).toHaveBeenCalled() // 原本在播 → 续播
+  })
+
+  it("回落只发生一次：回落源上的后续失败走既有换票重试链直至 cap，不再切换", async () => {
+    const el = fakeAudio()
+    useAudioStore.getState().registerAudio(el as unknown as HTMLAudioElement)
+    useAudioStore.getState().setSource(DIRECT, "t1", "标题", PROXY)
+
+    await useAudioStore.getState().reloadWithFreshToken() // 回落切换（额度重置后消耗 1）
+    el.emit("error")
+    await useAudioStore.getState().reloadWithFreshToken() // 回落源上重试 #2
+    el.emit("error")
+    expect(useAudioStore.getState().src).toBe(PROXY) // 始终停留在回落源
+    const callsAtCap = ticket.getMediaTicket.mock.calls.length
+
+    await useAudioStore.getState().reloadWithFreshToken() // 超过上限：不再签发新票
+    expect(ticket.getMediaTicket.mock.calls.length).toBe(callsAtCap)
+  })
+
+  it("切换到新源会清掉上一条媒体的回落登记，绝不殃及新媒体", async () => {
+    const el = fakeAudio()
+    useAudioStore.getState().registerAudio(el as unknown as HTMLAudioElement)
+    useAudioStore.getState().setSource(DIRECT, "t1", "标题", PROXY)
+    useAudioStore.getState().setSource("/api/v1/media/other.mp3", "t2", "另一条") // 未登记回落
+
+    await useAudioStore.getState().reloadWithFreshToken()
+
+    expect(useAudioStore.getState().src).toBe("/api/v1/media/other.mp3") // 不被旧回落源劫持
+    expect(el.src).toBe("/api/v1/media/other.mp3?token=fresh")
   })
 })

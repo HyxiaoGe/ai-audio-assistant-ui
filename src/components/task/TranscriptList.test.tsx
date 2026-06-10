@@ -116,6 +116,20 @@ describe("TranscriptList", () => {
     expect(target).toBe(segmentB)
   })
 
+  it("applies content-visibility classes to every row container so off-screen rows skip layout/paint", () => {
+    // jsdom 不做真实布局,这里只锁定样式类存在(真浏览器视觉行为由人工验证):
+    // content-visibility:auto 让视口外行跳过布局/绘制;contain-intrinsic-size 用
+    // auto 100px 记忆真实尺寸,减少滚动锚定修正误触自动滚动暂停。
+    const { container } = renderList()
+
+    const rows = container.querySelectorAll("[data-segment-id]")
+    expect(rows.length).toBe(SEGMENTS.length)
+    for (const row of rows) {
+      expect(row.className).toContain("[content-visibility:auto]")
+      expect(row.className).toContain("[contain-intrinsic-size:auto_100px]")
+    }
+  })
+
   it("does not highlight anything when the audio is not this task's (isActiveAudio=false)", () => {
     const { container } = renderList({ isActiveAudio: false })
 

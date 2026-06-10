@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { useState, useEffect, type ComponentType } from "react"
 
 import { ApiError } from "@/types/api"
+import type { PublicSummaryResponse, PublicTaskDetail as PublicTaskDetailData } from "@/types/api"
 
 const mockClient = vi.hoisted(() => ({
   getPublicTask: vi.fn(),
@@ -58,29 +59,57 @@ vi.mock("next/dynamic", () => ({
     return DynamicStub
   },
 }))
+// 桩在正文旁边把 streamingImages 各项的 url/fallbackUrl 吐成可断言的 DOM,
+// 供「images[].proxy_url → StreamingImage.fallbackUrl」接线用例使用。
 vi.mock("@/components/task/MarkdownContent", () => ({
-  MarkdownContent: ({ content }: { content: string }) => <div>{content}</div>,
+  MarkdownContent: ({
+    content,
+    streamingImages,
+  }: {
+    content: string
+    streamingImages?: Map<string, { url: string | null; fallbackUrl?: string | null }>
+  }) => (
+    <div>
+      {content}
+      {[...(streamingImages ?? new Map())].map(([key, img]) => (
+        <span
+          key={key}
+          data-testid="streaming-image"
+          data-url={img.url ?? ""}
+          data-fallback={img.fallbackUrl ?? ""}
+        />
+      ))}
+    </div>
+  ),
 }))
 // 仅桩掉音频播放条叶子(无关本测试),保留 PlayerBarContainer / YouTubePlayerCard 真渲染以验证封面卡。
-vi.mock("@/components/task/PlayerBar", () => ({ default: () => <div data-testid="player-bar" /> }))
+// 桩上保留 onPlayPause 入口(button),供直链播放接线用例触发 handlePlayPause。
+vi.mock("@/components/task/PlayerBar", () => ({
+  default: ({ onPlayPause }: { onPlayPause?: () => void }) => (
+    <button data-testid="player-bar" onClick={onPlayPause} />
+  ),
+}))
 vi.mock("@/lib/media-url", () => ({ usePublicMediaToken: () => "tok" }))
+// audio-store 桩:共享单例 state,用例可改 src(模拟当前播放源)并断言 setSource/play/toggle 调用。
+const audioStore = vi.hoisted(() => ({
+  state: {
+    isPlaying: false,
+    duration: 0,
+    src: null as string | null,
+    currentTime: 0,
+    setSource: vi.fn(),
+    toggle: vi.fn(),
+    play: vi.fn(),
+    seek: vi.fn(),
+  },
+}))
 vi.mock("@/store/audio-store", () => ({
-  useAudioStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({
-      isPlaying: false,
-      duration: 0,
-      src: null,
-      currentTime: 0,
-      setSource: vi.fn(),
-      toggle: vi.fn(),
-      play: vi.fn(),
-      seek: vi.fn(),
-    }),
+  useAudioStore: (selector: (s: Record<string, unknown>) => unknown) => selector(audioStore.state),
 }))
 
 import PublicTaskDetail from "./PublicTaskDetail"
 
-const DETAIL_YOUTUBE = {
+const DETAIL_YOUTUBE: PublicTaskDetailData = {
   id: "t1",
   title: "公开详情标题",
   source_type: "youtube" as const,
@@ -101,7 +130,7 @@ const TRANSCRIPT_OK = {
   ],
 }
 
-const SUMMARY_OK = {
+const SUMMARY_OK: PublicSummaryResponse = {
   task_id: "t1",
   total: 3,
   items: [
@@ -118,6 +147,9 @@ function mockHappyPath() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  audioStore.state.src = null
+  // jsdom 未实现 scrollIntoView;isActiveAudio=true 时 TranscriptList 的自动滚动副作用会调用它,补桩。
+  Element.prototype.scrollIntoView = vi.fn()
 })
 
 describe("PublicTaskDetail 公开详情页", () => {
@@ -296,5 +328,172 @@ describe("PublicTaskDetail 公开详情页", () => {
     render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
     await waitFor(() => expect(screen.getByText("explore.loadFailed")).toBeInTheDocument())
     expect(screen.getByText("explore.retry")).toBeInTheDocument()
+  })
+
+  // ===== 音频 OSS 预签名直链(audio_direct_url,绕隧道)播放接线 =====
+
+  const DETAIL_UPLOAD_BASE = {
+    id: "t1",
+    title: "上传任务",
+    source_type: "upload" as const,
+    source_url: null,
+    audio_url: "/api/v1/media/upload/u1/t1.mp3",
+    duration_seconds: 60,
+    detected_language: "zh",
+    detected_summary_style: "general",
+    published_at: "2026-06-10T00:00:00Z",
+    created_at: "2026-06-09T00:00:00Z",
+  }
+  const DIRECT_AUDIO = "https://oss.example.com/upload/u1/t1.mp3?Expires=1&Signature=sig"
+
+  it("有 audio_direct_url:点击播放以直链为源,audio_url 代理路径登记为回落", async () => {
+    mockClient.getPublicTask.mockResolvedValue({ ...DETAIL_UPLOAD_BASE, audio_direct_url: DIRECT_AUDIO })
+    mockClient.getPublicTranscript.mockResolvedValue(TRANSCRIPT_OK)
+    mockClient.getPublicSummary.mockResolvedValue(SUMMARY_OK)
+    render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
+    await waitFor(() => expect(screen.getByTestId("player-bar")).toBeInTheDocument(), { timeout: 3000 })
+
+    fireEvent.click(screen.getByTestId("player-bar"))
+
+    expect(audioStore.state.setSource).toHaveBeenCalledWith(
+      DIRECT_AUDIO,
+      "t1",
+      "上传任务",
+      "/api/v1/media/upload/u1/t1.mp3" // 直链失败时 audio-store 据此回落到代理路径(走媒体票/重载链)
+    )
+    expect(audioStore.state.play).toHaveBeenCalledTimes(1)
+    expect(audioStore.state.toggle).not.toHaveBeenCalled()
+  })
+
+  it("无 audio_direct_url(后端未上线/未签出):行为同现状,源=audio_url 且无回落登记", async () => {
+    mockClient.getPublicTask.mockResolvedValue(DETAIL_UPLOAD_BASE)
+    mockClient.getPublicTranscript.mockResolvedValue(TRANSCRIPT_OK)
+    mockClient.getPublicSummary.mockResolvedValue(SUMMARY_OK)
+    render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
+    await waitFor(() => expect(screen.getByTestId("player-bar")).toBeInTheDocument(), { timeout: 3000 })
+
+    fireEvent.click(screen.getByTestId("player-bar"))
+
+    expect(audioStore.state.setSource).toHaveBeenCalledWith(
+      "/api/v1/media/upload/u1/t1.mp3",
+      "t1",
+      "上传任务",
+      null
+    )
+    expect(audioStore.state.play).toHaveBeenCalledTimes(1)
+  })
+
+  it("直链失败已回落(currentSrc=audio_url 代理路径):点击只 toggle,绝不切回直链", async () => {
+    audioStore.state.src = "/api/v1/media/upload/u1/t1.mp3" // audio-store 已把源回落为代理路径
+    mockClient.getPublicTask.mockResolvedValue({ ...DETAIL_UPLOAD_BASE, audio_direct_url: DIRECT_AUDIO })
+    mockClient.getPublicTranscript.mockResolvedValue(TRANSCRIPT_OK)
+    mockClient.getPublicSummary.mockResolvedValue(SUMMARY_OK)
+    render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
+    await waitFor(() => expect(screen.getByTestId("player-bar")).toBeInTheDocument(), { timeout: 3000 })
+
+    fireEvent.click(screen.getByTestId("player-bar"))
+
+    expect(audioStore.state.toggle).toHaveBeenCalledTimes(1)
+    expect(audioStore.state.setSource).not.toHaveBeenCalled() // 回落源即本任务激活源,不重切
+  })
+
+  // ===== 摘要配图 OSS 直链回落通道接线(images[].proxy_url → StreamingImage.fallbackUrl)=====
+
+  it("摘要配图带 proxy_url:转入 streamingImages.fallbackUrl 供直链过期自愈;无 proxy_url 则为空", async () => {
+    mockClient.getPublicTask.mockResolvedValue(DETAIL_YOUTUBE)
+    mockClient.getPublicTranscript.mockResolvedValue(TRANSCRIPT_OK)
+    mockClient.getPublicSummary.mockResolvedValue({
+      task_id: "t1",
+      total: 1,
+      items: [
+        {
+          summary_type: "overview",
+          version: 1,
+          content: "正文 {{IMAGE: 架构图}} {{IMAGE: 流程图}}",
+          image_url: null,
+          images: [
+            {
+              placeholder: "{{IMAGE: 架构图}}",
+              status: "ready",
+              url: "https://oss.example.com/img/arch.webp?Expires=1",
+              alt: "架构图",
+              proxy_url: "/api/v1/summaries/images/arch.webp",
+            },
+            {
+              // url 已是代理回落形态(后端直链签发失败):proxy_url=null,无回落通道
+              placeholder: "{{IMAGE: 流程图}}",
+              status: "ready",
+              url: "/api/v1/summaries/images/flow.webp",
+              alt: "流程图",
+              proxy_url: null,
+            },
+          ],
+          created_at: "2026-06-10T00:00:00Z",
+        },
+      ],
+    })
+    render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId("streaming-image")).toHaveLength(2)
+    }, { timeout: 3000 })
+    const [arch, flow] = screen.getAllByTestId("streaming-image")
+    expect(arch).toHaveAttribute("data-url", "https://oss.example.com/img/arch.webp?Expires=1")
+    expect(arch).toHaveAttribute("data-fallback", "/api/v1/summaries/images/arch.webp")
+    expect(flow).toHaveAttribute("data-url", "/api/v1/summaries/images/flow.webp")
+    expect(flow).toHaveAttribute("data-fallback", "")
+  })
+
+  // ===== 服务端 LAN 预取初值(initialDetail / initialSummary)=====
+
+  it("传 initialDetail/initialSummary:立即渲染标题/摘要,且不发对应客户端请求(转写照常)", async () => {
+    mockClient.getPublicTranscript.mockResolvedValue(TRANSCRIPT_OK)
+    render(
+      <PublicTaskDetail
+        isAuthenticated={false}
+        onOpenLogin={() => {}}
+        initialDetail={DETAIL_YOUTUBE}
+        initialSummary={SUMMARY_OK}
+      />
+    )
+    // detail 有初值:标题同步可见(无整页 spinner 阶段)
+    expect(screen.getByText("公开详情标题")).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText("这是公开摘要正文")).toBeInTheDocument()
+      expect(screen.getByText("转写第一段")).toBeInTheDocument()
+    }, { timeout: 3000 })
+    // 有初值的两路绝不重复发客户端初始请求;转写刻意不内嵌,仍走客户端拉取
+    expect(mockClient.getPublicTask).not.toHaveBeenCalled()
+    expect(mockClient.getPublicSummary).not.toHaveBeenCalled()
+    expect(mockClient.getPublicTranscript).toHaveBeenCalledTimes(1)
+  })
+
+  it("只传 initialDetail:summary 照常客户端拉取", async () => {
+    mockClient.getPublicTranscript.mockResolvedValue(TRANSCRIPT_OK)
+    mockClient.getPublicSummary.mockResolvedValue(SUMMARY_OK)
+    render(
+      <PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} initialDetail={DETAIL_YOUTUBE} />
+    )
+    expect(screen.getByText("公开详情标题")).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText("这是公开摘要正文")).toBeInTheDocument()
+    }, { timeout: 3000 })
+    expect(mockClient.getPublicTask).not.toHaveBeenCalled()
+    expect(mockClient.getPublicSummary).toHaveBeenCalledTimes(1)
+  })
+
+  it("initialSummary 摘要失败路独立:有初值时右栏不可能进错误态,局部重试仍走客户端", async () => {
+    // 初值即数据,右栏直接渲染;此用例兼回归「summaryLoading 初值 false」不闪 spinner
+    mockClient.getPublicTask.mockResolvedValue(DETAIL_YOUTUBE)
+    mockClient.getPublicTranscript.mockResolvedValue(TRANSCRIPT_OK)
+    render(
+      <PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} initialSummary={SUMMARY_OK} />
+    )
+    await waitFor(() => {
+      expect(screen.getByText("这是公开摘要正文")).toBeInTheDocument()
+    }, { timeout: 3000 })
+    expect(mockClient.getPublicSummary).not.toHaveBeenCalled()
+    expect(mockClient.getPublicTask).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText("explore.summaryLoadFailed")).not.toBeInTheDocument()
   })
 })
