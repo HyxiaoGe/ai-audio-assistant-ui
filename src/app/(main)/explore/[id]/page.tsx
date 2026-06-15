@@ -32,8 +32,14 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { id } = await params;
   const [detail, summary] = await Promise.all([fetchPublicTaskDetail(id), fetchPublicSummary(id)]);
-  if (detail.status !== "ok") {
+  // 内容已撤回/非公开(not_found):noindex,不让进搜索引擎。
+  if (detail.status === "not_found") {
     return { robots: { index: false, follow: false } };
+  }
+  // 内网预取临时失败(unavailable:DNS/超时/5xx/非0):页面主体仍客户端兜底渲染,
+  // 不等于内容撤回——返回通用 metadata(不 noindex),正常公开页在抓取期临时失败时仍可收录。
+  if (detail.status !== "ok") {
+    return { description: META_FALLBACK_DESC };
   }
   const task = detail.data;
   const description = metaDescription(summary);
