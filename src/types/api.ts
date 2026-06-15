@@ -1130,6 +1130,8 @@ export interface PublicTaskListItem {
   detected_language: string | null
   detected_summary_style: string | null
   published_at: string | null
+  cover_url: string | null   // 首张 ready 摘要配图 OSS 直链;无则 null
+  excerpt: string | null     // 摘要正文摘录(剥 markdown);无则 null
 }
 
 export interface PublicTaskListResponse {
