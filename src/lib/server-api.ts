@@ -20,7 +20,7 @@ import "server-only"
  *   网络,容器名解析失败是常态,永远走回落属预期。
  */
 
-import type { PublicSummaryResponse, PublicTaskDetail } from "@/types/api"
+import type { PublicSummaryResponse, PublicTaskDetail, PublicTaskListResponse } from "@/types/api"
 
 /** 内网 base:默认值=容器 DNS(已实测可达);env 留覆盖口。每次调用读取,便于测试与运行时覆盖。 */
 function internalApiBase(): string {
@@ -89,6 +89,24 @@ export async function fetchPublicSummary(id: string): Promise<PublicSummaryRespo
   const result = await fetchPublicEnvelope<PublicSummaryResponse>(
     `/public/tasks/${encodeURIComponent(id)}/summaries`
   )
+  if (!result || result.code !== 0) return undefined
+  return result.data
+}
+
+/**
+ * 服务端预取公开任务列表(GET /public/tasks)。
+ * 列表无 40401 语义(集合恒存在),镜像 fetchPublicSummary 的二态:任何失败返回 undefined,
+ * 由客户端 <PublicTaskList> 既有 loader 兜底拉取。
+ */
+export async function fetchPublicTaskList(
+  page: number,
+  pageSize: number,
+): Promise<PublicTaskListResponse | undefined> {
+  const params = new URLSearchParams()
+  if (page) params.set("page", String(page))
+  if (pageSize) params.set("page_size", String(pageSize))
+  const qs = params.toString()
+  const result = await fetchPublicEnvelope<PublicTaskListResponse>(`/public/tasks${qs ? `?${qs}` : ""}`)
   if (!result || result.code !== 0) return undefined
   return result.data
 }

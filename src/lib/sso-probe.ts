@@ -129,8 +129,12 @@ export function maybeSilentLogin(currentPath: string): boolean {
   if (!s) return false // 无 sessionStorage → 保守放弃，绝不死循环
   if (currentPath.startsWith(CALLBACK_PATH)) return false // 换码进行中，勿探测
 
-  // 公开探索路由:匿名浏览是产品功能本身,绝不在这里发起静默 SSO 跳转打断浏览
-  if (PUBLIC_PATH_PREFIXES.some((prefix) => currentPath.startsWith(prefix))) return false
+  // 公开路由豁免静默 SSO 探测:匿名浏览是产品功能本身,绝不在这里发起静默 SSO 跳转打断浏览。
+  // 先剥掉 query 串再匹配,保证 "/?callbackUrl=..."、"/explore?page=2" 这类带 query 的路径也豁免。
+  // /explore* 用前缀匹配;首页 "/" 必须精确匹配——用前缀 "/" 会匹配所有路径、等于全局关掉探针
+  // (/settings、/tasks 等都不再探测,安全回归),故首页单独走 pathOnly === "/" 精确判断。
+  const pathOnly = currentPath.split("?")[0]
+  if (pathOnly === "/" || PUBLIC_PATH_PREFIXES.some((prefix) => pathOnly.startsWith(prefix))) return false
 
   let loggedOut: string | null
   let probed: string | null

@@ -1,6 +1,55 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { fetchPublicSummary, fetchPublicTaskDetail } from "@/lib/server-api";
+import type { PublicSummaryResponse } from "@/types/api";
 import PublicTaskDetailPageClient from "./page-client";
+
+const META_FALLBACK_DESC = "公开分享的音视频转写与智能摘要";
+
+/** 从摘要正文派生 ≤120 字纯文本描述(轻量剥围栏/占位/markdown 标记);无则回落通用文案。 */
+function metaDescription(summary: PublicSummaryResponse | undefined): string {
+  const content = summary?.items?.[0]?.content;
+  if (!content) return META_FALLBACK_DESC;
+  const text = content
+    .replace(/```[a-z]*\n?/gi, "")
+    .replace(/\{\{?IMAGE:[^{}]*\}\}?/g, "")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/[#*`>_~]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text ? text.slice(0, 120) : META_FALLBACK_DESC;
+}
+
+/**
+ * 版权姿态 B:canonical 指回原视频(source_url),突出摘要作为 description;
+ * 非公开/已收回(not_found)输出 noindex,不让其进搜索引擎。
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const [detail, summary] = await Promise.all([fetchPublicTaskDetail(id), fetchPublicSummary(id)]);
+  // 内容已撤回/非公开(not_found):noindex,不让进搜索引擎。
+  if (detail.status === "not_found") {
+    return { robots: { index: false, follow: false } };
+  }
+  // 内网预取临时失败(unavailable:DNS/超时/5xx/非0):页面主体仍客户端兜底渲染,
+  // 不等于内容撤回——返回通用 metadata(不 noindex),正常公开页在抓取期临时失败时仍可收录。
+  if (detail.status !== "ok") {
+    return { description: META_FALLBACK_DESC };
+  }
+  const task = detail.data;
+  const description = metaDescription(summary);
+  return {
+    title: task.title ? `${task.title} · AI 音视频助手` : "AI 音视频助手",
+    description,
+    alternates: task.source_url ? { canonical: task.source_url } : undefined,
+    openGraph: { title: task.title ?? "AI 音视频助手", description },
+  };
+}
 
 /**
  * 公开详情页(async 服务器组件):服务端经容器内网 LAN 并发预取 detail/summary 两个公开接口

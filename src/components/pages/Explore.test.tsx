@@ -22,6 +22,12 @@ vi.mock("next/link", () => ({
 }))
 vi.mock("@/components/layout/Header", () => ({ default: () => null }))
 vi.mock("@/components/layout/Sidebar", () => ({ default: () => null }))
+// PublicTaskList 挂载时 fire-and-forget 预取详情页重 chunk(prod 暖 chunk 优化)。测试里这些
+// 动态 import 会拖入 media-ticket→api-client→auth-token→auth-store 链,用例毫秒级结束后 worker
+// 关闭时该 fetch 仍 pending →「Closing rpc while fetch was pending」未处理拒绝(偶发 exit 1)。
+// 预取对测试无意义,stub 成空模块,import() 即刻命中 mock,不再发起 worker RPC fetch。
+vi.mock("@/components/task/MarkdownContent", () => ({ default: () => null }))
+vi.mock("@/components/pages/PublicTaskDetail", () => ({ default: () => null }))
 
 import Explore from "./Explore"
 

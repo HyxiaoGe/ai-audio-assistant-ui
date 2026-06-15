@@ -117,7 +117,9 @@
     "prevPage": "Previous",
     "nextPage": "Next",
     "viewSource": "View original video",
-    "summaryLoadFailed": "Failed to load summary"
+    "summaryLoadFailed": "Failed to load summary",
+    "sourceFile": "File",
+    "newBadge": "NEW"
   },
   "stats": {
     "title": "Stats",
@@ -277,7 +279,8 @@
     "createTask": "+ Create task",
     "loginToViewTitle": "Log in to see recent tasks",
     "loginToViewDescription": "Your task data will appear here",
-    "goLogin": "Log in"
+    "goLogin": "Log in",
+    "exploreHint": "No tasks yet — browse what others have shared publicly ↓"
   },
   "tasks": {
     "pageTitle": "All tasks",

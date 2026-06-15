@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { useAuthStore } from "@/store/auth-store";
 import { useTheme } from "next-themes";
 import Dashboard from "@/components/pages/Dashboard";
+import Explore from "@/components/pages/Explore";
 import NewTaskModal from "@/components/task/NewTaskModal";
 import LoginModal from "@/components/auth/LoginModal";
 import { useSettingsActions } from "@/lib/settings-context";
@@ -31,10 +32,20 @@ export default function DashboardPage() {
     return <FullPageLoader />;
   }
 
+  // 未登录：首页即探索广场（公开内容做门面），不触发登录墙；顶部仍保留登录入口（Header 内）。
+  if (!authUser) {
+    return (
+      <>
+        <Explore isAuthenticated={false} onOpenLogin={openLoginModal} onToggleTheme={toggleTheme} />
+        <LoginModal isOpen={showLoginModal} onClose={closeLoginModal} callbackUrl="/" />
+      </>
+    );
+  }
+
   return (
     <>
       <Dashboard
-        isAuthenticated={!!authUser}
+        isAuthenticated
         onOpenLogin={openLoginModal}
         onOpenNewTask={openNewTaskModal}
         userName={authUser?.name}

@@ -74,4 +74,23 @@ describe("YouTubePlayerCard a11y", () => {
     const link = screen.getByText("task.youtubeInfo.openOnYouTube").closest("a")
     expect(link).toHaveAttribute("aria-label", "task.youtubeInfo.openOnYouTube")
   })
+
+  it("频道名为空(公开侧)时隐藏整个频道块,不出现「未知」,保留在 YouTube 观看外链", () => {
+    const publicInfo = {
+      video_id: "vid-pub",
+      title: "公开视频",
+      thumbnail_url: null,
+      duration_seconds: 100,
+      channel_id: null,
+      channel_title: null,
+    } as unknown as YouTubeVideoInfo
+
+    render(<YouTubePlayerCard youtubeInfo={publicInfo} duration={100} />)
+
+    // 频道块隐藏:无「未知」占位、无「?」头像首字母
+    expect(screen.queryByText("common.unknown")).not.toBeInTheDocument()
+    expect(screen.queryByText("?")).not.toBeInTheDocument()
+    // 「在 YouTube 观看」外链仍在
+    expect(screen.getByText("task.youtubeInfo.openOnYouTube").closest("a")).toBeInTheDocument()
+  })
 })

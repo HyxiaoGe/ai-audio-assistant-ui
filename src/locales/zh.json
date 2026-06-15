@@ -117,7 +117,9 @@
     "prevPage": "上一页",
     "nextPage": "下一页",
     "viewSource": "查看原视频",
-    "summaryLoadFailed": "摘要加载失败"
+    "summaryLoadFailed": "摘要加载失败",
+    "sourceFile": "文件",
+    "newBadge": "NEW"
   },
   "stats": {
     "title": "统计",
@@ -277,7 +279,8 @@
     "createTask": "+ 创建任务",
     "loginToViewTitle": "登录后查看最近任务",
     "loginToViewDescription": "你的任务数据将会显示在这里",
-    "goLogin": "去登录"
+    "goLogin": "去登录",
+    "exploreHint": "还没有任务,先逛逛大家公开分享的内容 ↓"
   },
   "tasks": {
     "pageTitle": "所有任务",
