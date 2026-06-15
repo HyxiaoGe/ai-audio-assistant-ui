@@ -152,6 +152,9 @@ export function YouTubePlayerCard({
   const channelUrl = youtubeInfo.channel_id
     ? `https://www.youtube.com/channel/${youtubeInfo.channel_id}`
     : null;
+  // 公开侧 channel_title 为 null(后端物理隔离不抓用户作用域频道):隐藏整个频道块,
+  // 不再渲染假「未知」/「?」占位;在 YouTube 观看外链不受影响。
+  const hasChannel = Boolean(youtubeInfo.channel_title);
 
   // 富字段仅私有 YouTubeVideoInfo 才有,公开侧没有。窄化为带这些 optional 字段的形状统一读取,
   // 缺失即 undefined → 各处已有 optional 守卫,不渲染对应行/降级。
@@ -247,19 +250,20 @@ export function YouTubePlayerCard({
           {/* Top: Channel info and stats */}
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              {/* Channel:有 channel_id 走外链 <a>,公开侧无 channel_id 退化为非交互容器(不渲染 /channel/null) */}
-              {channelUrl ? (
-                <a
-                  href={channelUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-                >
-                  {channelInner}
-                </a>
-              ) : (
-                <div className="flex items-center gap-2">{channelInner}</div>
-              )}
+              {/* Channel:无频道名(公开侧)整块隐藏;有名时——有 channel_id 走外链,否则非交互容器(不渲染 /channel/null) */}
+              {hasChannel &&
+                (channelUrl ? (
+                  <a
+                    href={channelUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                  >
+                    {channelInner}
+                  </a>
+                ) : (
+                  <div className="flex items-center gap-2">{channelInner}</div>
+                ))}
 
               {/* Stats row */}
               <div
