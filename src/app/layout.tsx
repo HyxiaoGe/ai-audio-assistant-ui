@@ -4,6 +4,7 @@ import { Providers } from "./providers"
 import { Toaster } from "@/components/ui/sonner"
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
   title: "AI 音视频助手",
   description: "智能音视频内容理解助手",
 }
