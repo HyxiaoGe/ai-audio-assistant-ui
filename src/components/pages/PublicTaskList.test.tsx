@@ -1,5 +1,5 @@
 import React from "react"
-import { render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor, fireEvent } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const mockClient = vi.hoisted(() => ({ getPublicTasks: vi.fn() }))
@@ -81,5 +81,42 @@ describe("PublicTaskList", () => {
     render(<PublicTaskList initialItems={[makeItem({ published_at: "2020-01-01T00:00:00Z" })]} initialTotal={1} />)
     await screen.findByText("公开任务一")
     expect(screen.queryByText("explore.newBadge")).not.toBeInTheDocument()
+  })
+
+  it("点击下一页拉取第 2 页,首页 prev 禁用", async () => {
+    mockClient.getPublicTasks.mockResolvedValue({
+      items: [makeItem({ id: "t2", title: "第二页任务" })],
+      total: 40,
+      page: 2,
+      page_size: 20,
+    })
+    render(<PublicTaskList initialItems={[makeItem({ title: "第一页任务" })]} initialTotal={40} />)
+    // seeded:首屏即第 1 页,挂载不拉取
+    expect(await screen.findByText("第一页任务")).toBeInTheDocument()
+    expect(mockClient.getPublicTasks).not.toHaveBeenCalled()
+    // 第 1 页 prev 禁用
+    expect(screen.getByRole("button", { name: "explore.prevPage" })).toBeDisabled()
+    // 点下一页 → 拉第 2 页
+    fireEvent.click(screen.getByRole("button", { name: "explore.nextPage" }))
+    await waitFor(() => expect(screen.getByText("第二页任务")).toBeInTheDocument())
+    expect(mockClient.getPublicTasks).toHaveBeenCalledWith({ page: 2, page_size: 20 })
+  })
+
+  it("拉取失败渲染错误态,重试成功后渲染列表", async () => {
+    mockClient.getPublicTasks.mockRejectedValueOnce(new Error("boom"))
+    render(<PublicTaskList />)
+    // 错误态 + 重试按钮
+    expect(await screen.findByText("explore.loadFailed")).toBeInTheDocument()
+    const retry = screen.getByRole("button", { name: "explore.retry" })
+    // 重试成功
+    mockClient.getPublicTasks.mockResolvedValueOnce({
+      items: [makeItem({ title: "重试成功任务" })],
+      total: 1,
+      page: 1,
+      page_size: 20,
+    })
+    fireEvent.click(retry)
+    await waitFor(() => expect(screen.getByText("重试成功任务")).toBeInTheDocument())
+    expect(screen.queryByText("explore.loadFailed")).not.toBeInTheDocument()
   })
 })
