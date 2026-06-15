@@ -7,6 +7,7 @@ import Sidebar from '@/components/layout/Sidebar';
 import NewTaskCard from '@/components/task/NewTaskCard';
 import TaskCard from '@/components/task/TaskCard';
 import EmptyState from '@/components/common/EmptyState';
+import PublicTaskList from '@/components/pages/PublicTaskList';
 import { useAPIClient } from '@/lib/use-api-client';
 import { useDateFormatter } from '@/lib/use-date-formatter';
 import { ApiError } from '@/types/api';
@@ -223,16 +224,22 @@ export default function Dashboard({
                   {error}
                 </div>
               ) : hasNoTasks ? (
-                <EmptyState 
-                  variant="default"
-                  title={t("dashboard.emptyTitle")}
-                  description={t("dashboard.emptyDescription")}
-                  action={{
-                    label: t("dashboard.createTask"),
-                    onClick: handleNewTask,
-                    variant: 'primary'
-                  }}
-                />
+                <div className="space-y-4">
+                  <EmptyState
+                    variant="default"
+                    title={t("dashboard.emptyTitle")}
+                    description={t("dashboard.emptyDescription")}
+                    action={{
+                      label: t("dashboard.createTask"),
+                      onClick: handleNewTask,
+                      variant: 'primary'
+                    }}
+                  />
+                  <p className="text-sm" style={{ color: "var(--app-text-muted)" }}>
+                    {t("dashboard.exploreHint")}
+                  </p>
+                  <PublicTaskList />
+                </div>
               ) : (
                 displayTasks.map((task) => (
                   <TaskCard
