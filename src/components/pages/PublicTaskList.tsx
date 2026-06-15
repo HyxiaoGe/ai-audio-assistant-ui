@@ -33,11 +33,15 @@ export default function PublicTaskList({ initialItems, initialTotal }: PublicTas
   const [items, setItems] = useState<PublicTaskListItem[]>(initialItems ?? []);
   const [total, setTotal] = useState(initialTotal ?? 0);
   const [page, setPage] = useState(1);
+  // 最近一次发起请求的目标页(成功/失败都更新);page 仅在成功后更新,供分页禁用态计算。
+  // 二者分离:翻页失败后「重试」要重试那个失败的目标页,而不是回到上一个成功页。
+  const [pendingPage, setPendingPage] = useState(1);
   const [loading, setLoading] = useState(!seeded);
   const [error, setError] = useState(false);
 
   const load = useCallback(
     async (targetPage: number) => {
+      setPendingPage(targetPage);
       setLoading(true);
       setError(false);
       try {
@@ -86,7 +90,7 @@ export default function PublicTaskList({ initialItems, initialTotal }: PublicTas
       <div className="text-center py-16 space-y-3">
         <p className="text-sm" style={{ color: "var(--app-danger)" }}>{t("explore.loadFailed")}</p>
         <button
-          onClick={() => void load(page)}
+          onClick={() => void load(pendingPage)}
           className="px-4 py-2 text-sm border rounded-lg hover:bg-[var(--app-glass-bg-strong)] transition-colors"
           style={{ borderColor: "var(--app-border)", color: "var(--app-text)" }}
         >

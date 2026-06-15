@@ -119,4 +119,25 @@ describe("PublicTaskList", () => {
     await waitFor(() => expect(screen.getByText("重试成功任务")).toBeInTheDocument())
     expect(screen.queryByText("explore.loadFailed")).not.toBeInTheDocument()
   })
+
+  it("翻页失败后「重试」拉的是失败的目标页(第2页),而非回到第1页", async () => {
+    // seeded 第 1 页(total=40 → 2 页),挂载不拉取
+    render(<PublicTaskList initialItems={[makeItem({ title: "第一页任务" })]} initialTotal={40} />)
+    expect(await screen.findByText("第一页任务")).toBeInTheDocument()
+    // 点下一页 → load(2) 失败 → 错误态
+    mockClient.getPublicTasks.mockRejectedValueOnce(new Error("boom"))
+    fireEvent.click(screen.getByRole("button", { name: "explore.nextPage" }))
+    expect(await screen.findByText("explore.loadFailed")).toBeInTheDocument()
+    // 重试 → 必须重试第 2 页(失败的目标页),成功后渲染第 2 页
+    mockClient.getPublicTasks.mockResolvedValueOnce({
+      items: [makeItem({ id: "t2", title: "第二页任务" })],
+      total: 40,
+      page: 2,
+      page_size: 20,
+    })
+    fireEvent.click(screen.getByRole("button", { name: "explore.retry" }))
+    await waitFor(() => expect(screen.getByText("第二页任务")).toBeInTheDocument())
+    // 关键断言:重试调用的是 page:2,不是 page:1(旧 bug 会回到第 1 页)
+    expect(mockClient.getPublicTasks).toHaveBeenLastCalledWith({ page: 2, page_size: 20 })
+  })
 })
