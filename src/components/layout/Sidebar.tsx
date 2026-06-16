@@ -5,6 +5,7 @@ import { BarChart3, Settings, List, LineChart, Youtube, Shield, Compass } from '
 import { useRouter, usePathname } from 'next/navigation';
 import { useI18n } from '@/lib/i18n-context';
 import { useUserStore } from '@/store/user-store';
+import { useAuthStore } from '@/store/auth-store';
 
 interface SidebarItemProps {
   icon: React.ReactNode;
@@ -34,7 +35,12 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { t } = useI18n();
   const isAdmin = useUserStore((state) => state.isAdmin);
+  // 登录态：未登录时侧栏只保留「探索」这一公开入口，其余项点了都会被弹去登录、属噪音。
+  // 仅订阅 user（真相源），status 的 loading 态按「尚未确知登录」处理——见下方过滤。
+  const authUser = useAuthStore((s) => s.user);
+  const isAuthenticated = !!authUser;
 
+  // public:true 的项在未登录时仍展示（当前仅「探索」）。已登录展示全部项。
   const menuItems = [
     {
       icon: <BarChart3 className="w-5 h-5" />,
@@ -49,7 +55,8 @@ export default function Sidebar() {
     {
       icon: <Compass className="w-5 h-5" />,
       label: t("nav.explore"),
-      path: '/explore'
+      path: '/explore',
+      public: true
     },
     {
       icon: <Youtube className="w-5 h-5" />,
@@ -67,6 +74,10 @@ export default function Sidebar() {
       path: '/settings'
     }
   ];
+
+  // 未登录（含登录态尚未解析、user 仍为 null 的瞬间）只保留公开项。
+  // 这样首屏即按最小集渲染，登录解析完成后一次性补齐全量，不会出现「先全量→塌缩成单项」的难看回退。
+  const visibleItems = isAuthenticated ? menuItems : menuItems.filter((item) => item.public);
 
   // 判断当前路径应该高亮哪个菜单项
   const isActive = (itemPath: string) => {
@@ -112,7 +123,7 @@ export default function Sidebar() {
       }}
     >
       <div className="space-y-1 flex-1">
-        {menuItems.map((item) => (
+        {visibleItems.map((item) => (
           <SidebarItem
             key={item.path}
             icon={item.icon}
@@ -124,8 +135,8 @@ export default function Sidebar() {
         ))}
       </div>
 
-      {/* Admin section at bottom */}
-      {isAdmin && (
+      {/* Admin section at bottom（仅已登录的管理员） */}
+      {isAuthenticated && isAdmin && (
         <div className="pt-4 border-t" style={{ borderColor: 'var(--app-glass-border)' }}>
           <SidebarItem
             icon={<Shield className="w-5 h-5" />}
