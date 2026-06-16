@@ -181,7 +181,11 @@ export default function GlobalAudioPlayer() {
     <audio
       ref={audioRef}
       preload="metadata"
-      crossOrigin="anonymous"
+      // 切勿设 crossOrigin：媒体端点对音频走 307 重定向到 OSS 预签名直链（绕隧道，见后端
+      // media.py `_oss_direct_redirect`），OSS 桶刻意未配 CORS。设 crossOrigin="anonymous"
+      // 会让请求进 CORS 模式，严格浏览器（Chrome/Edge）拦截重定向后的跨域 OSS 请求 → 无法播放
+      // （Safari 宽松，曾表现为「Mac 能播 / Win 不能」）。本播放器不读音频字节（无 WebAudio/canvas），
+      // 无需 CORS。保持 no-cors 才能跟随 307 直拉 OSS。回归测试见 GlobalAudioPlayer.test.tsx。
       onLoadedMetadata={handleLoadedMetadata}
       onTimeUpdate={handleTimeUpdate}
       onPlay={() => setIsPlaying(true)}

@@ -110,3 +110,17 @@ describe("GlobalAudioPlayer keyboard targets the viewed task", () => {
     expect(useAudioStore.getState().src).toBe("/api/v1/media/taskA")
   })
 })
+
+// 回归：<audio> 绝不能设 crossOrigin。媒体端点对音频走 307 重定向到 OSS 预签名直链（绕隧道、
+// 性能考量，见后端 media.py `_oss_direct_redirect`），而 OSS 桶刻意未配 CORS。一旦设
+// crossOrigin="anonymous"，请求进 CORS 模式，严格浏览器（Chrome/Edge）会拦截重定向后的跨域
+// OSS 请求（无 ACAO 头）导致无法播放；Safari 宽松才能播（曾表现为「Mac 能播 / Win 不能」）。
+// 播放器不读音频字节（无 WebAudio/canvas），CORS 模式纯属多余。必须保持 no-cors。
+describe("GlobalAudioPlayer 不设 crossOrigin（CORS 模式会打挂 307→OSS 播放）", () => {
+  it("audio 元素不带 crossorigin 属性（no-cors，跟随 307 直拉 OSS 不校验 CORS）", () => {
+    const { container } = render(<GlobalAudioPlayer />)
+    const audio = container.querySelector("audio")
+    expect(audio).not.toBeNull()
+    expect(audio?.getAttribute("crossorigin")).toBeNull()
+  })
+})
