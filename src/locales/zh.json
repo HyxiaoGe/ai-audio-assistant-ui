@@ -346,6 +346,12 @@
     "unknown": "未知",
     "summaryModelLabel": "模型：",
     "summaryModelAuto": "自动选择",
+    "transcribedByLabel": "转写引擎：",
+    "asrProviderNames": {
+      "tencent": "腾讯云",
+      "aliyun": "阿里云",
+      "volcengine": "火山引擎"
+    },
     "summaryModelAutoOption": "自动选择（推荐）",
     "summaryModelRecommended": "推荐",
     "summaryModelUnavailable": "不可用",
