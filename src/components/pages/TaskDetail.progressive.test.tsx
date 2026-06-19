@@ -383,6 +383,32 @@ describe("TaskDetail — progressive disclosure", () => {
     })
   })
 
+  it("ASR 溯源徽章随转写阶段补拉即显示——无需等 completed", async () => {
+    // 回归（用户报告）：转写内容出来了,但「哪个平台转写的」徽章要等摘要(completed)才刷新出来。
+    // 根因=asr_provider/engine/variant 写在 transcribe 阶段、不进 WS,只有 loadTask 取得到,而 loadTask
+    // 只在 mount/completed 触发。进入转写可见阶段(polishing/summarizing)时 ASR 必已完成,应补拉一次 task
+    // 把溯源就位(与 audio_url 补拉同理)。首拉(mount)无 asr_provider→无徽章;补拉返回 aliyun→徽章出现
+    // (测试 i18n 不翻译,formatAsrProvenance 的 label 回退为原始 provider "aliyun")。
+    apiMock.getTask
+      .mockResolvedValueOnce(
+        task({ status: "summarizing", asr_provider: null, asr_engine: null, asr_variant: null })
+      )
+      .mockResolvedValue(
+        task({ status: "summarizing", asr_provider: "aliyun", asr_engine: null, asr_variant: "file" })
+      )
+    const { ApiError } = await import("@/types/api")
+    apiMock.getSummary.mockRejectedValue(new ApiError(40401, "not found", "tr"))
+
+    render(<TaskDetail />)
+    await waitFor(() => {
+      expect(screen.getByText("这是一段转写文本")).toBeInTheDocument()
+    })
+    // 徽章随补拉出现:转写可见阶段 task 被补拉到 asr_provider,formatAsrProvenance 产出可见 label
+    await waitFor(() => {
+      expect(screen.getAllByText("aliyun").length).toBeGreaterThan(0)
+    })
+  })
+
   it("completed 后配图对账兜底：WS 漏收时靠轮询从 DB 拉到 ready 并显示", async () => {
     // 回归：配图在 completed 之后才异步生成，前端只在 completed 拉过一次摘要（那时图还 pending）。
     // 若 WS image_ready 漏收，旧逻辑会停在占位直到 90s 兜底翻 failed；新增的对账轮询应每隔数秒重拉
