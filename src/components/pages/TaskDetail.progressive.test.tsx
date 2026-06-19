@@ -409,6 +409,29 @@ describe("TaskDetail — progressive disclosure", () => {
     })
   })
 
+  it("识别风格标签随转写阶段补拉即显示——无需等 completed", async () => {
+    // detected_summary_style 在 summarizing(82%)即落库(auto 风格任务),但不进 WS、进度白名单不并入、
+    // 补拉 effect 原先不补。进入转写可见阶段(polishing/summarizing)补拉时一并就位。首拉(mount)无
+    // detected_summary_style→无标签;补拉返回 deep_dive→「识别风格」标签出现。
+    apiMock.getSummaryStyles.mockResolvedValue({
+      styles: [{ id: "deep_dive", name: "深度解析" }],
+    } as unknown as Awaited<ReturnType<typeof apiMock.getSummaryStyles>>)
+    apiMock.getTask
+      .mockResolvedValueOnce(task({ status: "summarizing", detected_summary_style: null }))
+      .mockResolvedValue(task({ status: "summarizing", detected_summary_style: "deep_dive" }))
+    const { ApiError } = await import("@/types/api")
+    apiMock.getSummary.mockRejectedValue(new ApiError(40401, "not found", "tr"))
+
+    render(<TaskDetail />)
+    await waitFor(() => {
+      expect(screen.getByText("这是一段转写文本")).toBeInTheDocument()
+    })
+    // i18n 回显 key:识别风格标签文案 t("task.detectedStyle") 出现 = detected_summary_style 已补拉就位
+    await waitFor(() => {
+      expect(screen.getByText("task.detectedStyle")).toBeInTheDocument()
+    })
+  })
+
   it("completed 后配图对账兜底：WS 漏收时靠轮询从 DB 拉到 ready 并显示", async () => {
     // 回归：配图在 completed 之后才异步生成，前端只在 completed 拉过一次摘要（那时图还 pending）。
     // 若 WS image_ready 漏收，旧逻辑会停在占位直到 90s 兜底翻 failed；新增的对账轮询应每隔数秒重拉
