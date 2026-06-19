@@ -346,6 +346,12 @@
     "unknown": "Unknown",
     "summaryModelLabel": "Model:",
     "summaryModelAuto": "Auto",
+    "transcribedByLabel": "ASR engine: ",
+    "asrProviderNames": {
+      "tencent": "Tencent Cloud",
+      "aliyun": "Alibaba Cloud",
+      "volcengine": "Volcengine"
+    },
     "summaryModelAutoOption": "Auto (recommended)",
     "summaryModelRecommended": "Recommended",
     "summaryModelUnavailable": "Unavailable",

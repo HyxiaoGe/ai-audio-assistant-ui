@@ -29,6 +29,8 @@ import { resolveSummaryStreamBaseUrl, attachSseServerErrorListener, createSummar
 import { createStreamThrottle } from '@/lib/stream-throttle';
 import ProcessingState from '@/components/common/ProcessingState';
 import ErrorState from '@/components/common/ErrorState';
+import { ProvenanceBadge } from '@/components/common/ProvenanceBadge';
+import { formatAsrProvenance } from '@/lib/provenance';
 import LoginModal from '@/components/auth/LoginModal';
 import RetryCleanupToast from '@/components/task/RetryCleanupToast';
 import { SummaryModelSelect } from '@/components/task/SummaryModelSelect';
@@ -1613,6 +1615,44 @@ export default function TaskDetail({
     },
     [modelNameMap, t]
   );
+  // 摘要模型溯源徽章:有记录→胶囊徽章(可见短名=displayName,悬浮明细=displayName / modelId);
+  // 未记录(null)→沿用「自动选择」纯文本(非溯源场景,不显示徽章)。
+  const renderModelProvenance = useCallback(
+    (provider?: string | null) => {
+      if (!provider) {
+        return (
+          <span className="text-xs" style={{ color: 'var(--app-text-subtle)' }}>
+            {t("task.summaryModelAuto")}
+          </span>
+        );
+      }
+      const modelMeta = modelNameMap.get(provider);
+      const label = modelMeta?.displayName || provider;
+      return <ProvenanceBadge label={label} tooltip={getModelLabel(provider)} />;
+    },
+    [modelNameMap, getModelLabel, t]
+  );
+  // ASR 转写引擎溯源:据 task.asr_provider/asr_engine/asr_variant 派生徽章;旧任务字段为 NULL→不渲染。
+  const asrProvenance = useMemo(() => {
+    if (!task) return null;
+    const parts = formatAsrProvenance(
+      {
+        provider: task.asr_provider,
+        engine: task.asr_engine,
+        variant: task.asr_variant,
+      },
+      (provider) => {
+        const key = `task.asrProviderNames.${provider}`;
+        const name = t(key);
+        return name === key ? undefined : name;
+      }
+    );
+    if (!parts) return null;
+    return {
+      label: parts.label,
+      tooltip: `${t("task.transcribedByLabel")}${parts.detail}`,
+    };
+  }, [task, t]);
   const getModelKey = useCallback(
     (modelValue: string) => {
       const matched = llmModels.find(
@@ -2100,6 +2140,13 @@ export default function TaskDetail({
                 <h2 className="text-base" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
                   {t("task.transcriptTitle")}
                 </h2>
+                {asrProvenance && (
+                  <ProvenanceBadge
+                    label={asrProvenance.label}
+                    tooltip={asrProvenance.tooltip}
+                    variant="secondary"
+                  />
+                )}
               </div>
 
               {/* Transcript List - currentTime 逐帧订阅 + 高亮派生 + 自动滚动均封装在 TranscriptList 内，配合行级 memo 把逐帧重渲染限制在高亮行 */}
@@ -2145,8 +2192,9 @@ export default function TaskDetail({
                             {t("task.summaryOverview")}
                           </h3>
                           <div className="flex items-center gap-2 mt-1">
-                            <p className="text-xs" style={{ color: 'var(--app-text-subtle)' }}>
-                              {t("task.summaryModelLabel")} {getModelLabel(summaryModelUsed.overview)}
+                            <p className="text-xs flex items-center gap-1.5" style={{ color: 'var(--app-text-subtle)' }}>
+                              {t("task.summaryModelLabel")}
+                              {renderModelProvenance(summaryModelUsed.overview)}
                             </p>
                             <button
                               onClick={openCompareDialog}
@@ -2226,8 +2274,9 @@ export default function TaskDetail({
                           {t("task.keyPointsTitle")}
                         </h3>
                         <div className="flex items-center gap-2 mt-1">
-                          <p className="text-xs" style={{ color: 'var(--app-text-subtle)' }}>
-                            {t("task.summaryModelLabel")} {getModelLabel(summaryModelUsed.key_points)}
+                          <p className="text-xs flex items-center gap-1.5" style={{ color: 'var(--app-text-subtle)' }}>
+                            {t("task.summaryModelLabel")}
+                            {renderModelProvenance(summaryModelUsed.key_points)}
                           </p>
                           <button
                             onClick={openCompareDialog}
@@ -2311,8 +2360,9 @@ export default function TaskDetail({
                           {t("task.tabs.actions")}
                         </h3>
                         <div className="flex items-center gap-2 mt-1">
-                          <p className="text-xs" style={{ color: 'var(--app-text-subtle)' }}>
-                            {t("task.summaryModelLabel")} {getModelLabel(summaryModelUsed.action_items)}
+                          <p className="text-xs flex items-center gap-1.5" style={{ color: 'var(--app-text-subtle)' }}>
+                            {t("task.summaryModelLabel")}
+                            {renderModelProvenance(summaryModelUsed.action_items)}
                           </p>
                           <button
                             onClick={openCompareDialog}

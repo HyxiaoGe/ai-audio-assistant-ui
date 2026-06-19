@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import type { StreamingImage } from "@/types/api";
 import { ImagePlaceholder } from "@/components/task/ImagePlaceholder";
+import { ProvenanceBadge } from "@/components/common/ProvenanceBadge";
 import { formatModelName } from "@/lib/model-name";
 import {
   extractImagePlaceholder,
@@ -106,8 +107,12 @@ function MarkdownImg({ src, alt }: { src?: string; alt?: string }) {
       >
         {alt}
         {imageModel && (
-          <span style={{ marginLeft: "8px", opacity: 0.7 }}>
-            · {t("summary.imageGeneratedBy", { model: formatModelName(imageModel) })}
+          <span style={{ marginLeft: "8px", display: "inline-flex", verticalAlign: "middle" }}>
+            <ProvenanceBadge
+              label={formatModelName(imageModel)}
+              tooltip={t("summary.imageGeneratedBy", { model: imageModel })}
+              variant="secondary"
+            />
           </span>
         )}
       </figcaption>

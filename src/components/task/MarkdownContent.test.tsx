@@ -44,7 +44,7 @@ describe("MarkdownContent", () => {
     expect(screen.getByText("正在生成图片...")).toBeInTheDocument()
   })
 
-  it("appends the media token to proxy image URLs and shows the model in the caption", () => {
+  it("appends the media token to proxy image URLs and shows the model as a provenance badge in the caption", () => {
     render(
       <MarkdownContent
         content={"![diagram](/api/v1/summaries/images/x.png)"}
@@ -58,7 +58,9 @@ describe("MarkdownContent", () => {
 
     const caption = img.closest("figure")?.querySelector("figcaption")
     expect(caption?.textContent).toContain("diagram")
-    expect(caption?.textContent).toContain("summary.imageGeneratedBy:")
+    // 徽章可见文本=友好短名(formatModelName)；完整溯源明细(原始 model id)进无障碍标签/悬浮提示。
+    expect(caption?.textContent).toContain("Gpt Image 1")
+    expect(screen.getByLabelText("summary.imageGeneratedBy:gpt-image-1")).toBeInTheDocument()
   })
 
   it("renders a READY ImagePlaceholder image when streamingImages carries a ready url", () => {
