@@ -440,26 +440,42 @@ export default function TaskDetail({
     };
   }, [id, transcriptStageReached, transcript.length, transcriptLoading, transcriptError, client, mapApiTranscript]);
 
-  // audio_url 与转写同理：audio_url 仅由 loadTask（mount/completed 触发）经 setTask 写入，
-  // 而 WS 推送只带 status/progress，不带 audio_url。YouTube 任务 mount 时（仍在下载、
-  // source_key 未生成）audio_url 为 null，整个 polishing/summarizing 阶段都不会刷新，
-  // 导致点播放因 handlePlayPause 的 !audio_url 早返回而毫无反应，要到 completed 重拉才能播。
-  // 进入「转写可见阶段」时音频必已落库，这里补拉一次 task 把 audio_url 就位，无需等 completed。
+  // audio_url 与 ASR 溯源同理：都写在处理中途（audio_url 在 upload_storage、asr_provider/engine/variant
+  // 在 transcribe），但 WS 推送只带 status/progress，不带它们，且 loadTask 只在 mount/completed 触发——
+  // live 观看的任务在 polishing/summarizing 阶段不会自动取到。表现：YouTube 任务 mount 时 audio_url 为 null
+  // 点播放无反应（要到 completed 才能播）；ASR「由X转写」徽章要等摘要(completed)才显示。进入「转写可见阶段」
+  // 时音频与 ASR 必已落库，这里补拉一次 task 把这些中途字段一并就位，无需等 completed。
   useEffect(() => {
     if (!id || !transcriptStageReached) return;
-    if (task?.audio_url) return; // 已就位则不补拉
+    if (task?.audio_url && task?.asr_provider) return; // 都就位则不补拉
     let cancelled = false;
     void (async () => {
       const refreshed = await client.getTask(id).catch(() => null);
-      if (cancelled || !refreshed?.audio_url) return;
-      const audioUrl = refreshed.audio_url;
-      // 仅补 audio_url，不整体覆盖（status 由上面的 sync effect 维持为 WS 最新值）。
-      setTask((prev) => (prev && !prev.audio_url ? { ...prev, audio_url: audioUrl } : prev));
+      if (cancelled || !refreshed) return;
+      const needAudio = !task?.audio_url && !!refreshed.audio_url;
+      const needAsr = !task?.asr_provider && !!refreshed.asr_provider;
+      if (!needAudio && !needAsr) return;
+      // 仅补这些中途字段，不整体覆盖（status 由上面的 sync effect 维持为 WS 最新值）。
+      setTask((prev) =>
+        prev
+          ? {
+              ...prev,
+              ...(needAudio ? { audio_url: refreshed.audio_url } : {}),
+              ...(needAsr
+                ? {
+                    asr_provider: refreshed.asr_provider,
+                    asr_engine: refreshed.asr_engine,
+                    asr_variant: refreshed.asr_variant,
+                  }
+                : {}),
+            }
+          : prev
+      );
     })();
     return () => {
       cancelled = true;
     };
-  }, [id, transcriptStageReached, task?.audio_url, client]);
+  }, [id, transcriptStageReached, task?.audio_url, task?.asr_provider, client]);
 
   useEffect(() => {
     const summaryStreams = summaryStreamRef.current;
