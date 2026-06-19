@@ -1667,26 +1667,20 @@ export default function TaskDetail({
     },
     [modelNameMap, getModelLabel, t]
   );
-  // ASR 转写引擎溯源:据 task.asr_provider/asr_engine/asr_variant 派生徽章;旧任务字段为 NULL→不渲染。
-  const asrProvenance = useMemo(() => {
+  // ASR 转写来源:据 task.asr_provider 派生 provider 本地化显示名,用于「本次内容转写能力由 X 提供」
+  // 一句淡色文案(非徽章、无 hover);旧任务 asr_provider 为 NULL→不渲染。engine/variant 这类技术明细
+  // 对普通用户无意义,不再展示。
+  const asrProviderName = useMemo(() => {
     if (!task) return null;
     const parts = formatAsrProvenance(
-      {
-        provider: task.asr_provider,
-        engine: task.asr_engine,
-        variant: task.asr_variant,
-      },
+      { provider: task.asr_provider },
       (provider) => {
         const key = `task.asrProviderNames.${provider}`;
         const name = t(key);
         return name === key ? undefined : name;
       }
     );
-    if (!parts) return null;
-    return {
-      label: parts.label,
-      tooltip: `${t("task.transcribedByLabel")}${parts.detail}`,
-    };
+    return parts?.label ?? null;
   }, [task, t]);
   const getModelKey = useCallback(
     (modelValue: string) => {
@@ -2175,12 +2169,10 @@ export default function TaskDetail({
                 <h2 className="text-base" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
                   {t("task.transcriptTitle")}
                 </h2>
-                {asrProvenance && (
-                  <ProvenanceBadge
-                    label={asrProvenance.label}
-                    tooltip={asrProvenance.tooltip}
-                    variant="secondary"
-                  />
+                {asrProviderName && (
+                  <span className="text-xs" style={{ color: 'var(--app-text-subtle)' }}>
+                    {t("task.transcribedByCaption", { provider: asrProviderName })}
+                  </span>
                 )}
               </div>
 
