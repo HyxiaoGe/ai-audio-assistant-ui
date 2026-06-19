@@ -368,6 +368,12 @@ export interface TaskDetail {
   // 公开可见性(探索广场;后端 feature/public-explore 起返回)
   is_public?: boolean
   published_at?: string | null
+  // 全链路溯源:本次转写/摘要由哪个 provider/引擎/变体支持(后端 provenance PR 起返回)。
+  // null/缺省 = 旧任务未捕获,前端不显示徽章。
+  asr_provider?: string | null
+  asr_engine?: string | null
+  asr_variant?: string | null
+  llm_provider?: string | null
 }
 
 export type TaskRetryResponse =
@@ -459,6 +465,10 @@ export interface SummaryItem {
   model_used: string | null
   prompt_version: string | null
   token_count: number | null
+  // 溯源(非敏感):命中的 PromptHub slug 与转写质量分级;null 不显示徽章。
+  // 注意:真实 input/output_tokens 不在此返回(成本/token 仅管理员端点)。
+  prompt_slug?: string | null
+  quality_tier?: string | null
   created_at: string
 
   // v1.3 新增可视化字段
@@ -1098,6 +1108,7 @@ export interface SummaryImage {
   url: string | null
   alt: string
   model_id: string | null
+  provider?: string | null  // 生图 provider(如 image_service);后端 provenance PR 起返回(默认值,可缺省)
   error: string | null
 }
 
