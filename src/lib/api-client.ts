@@ -581,18 +581,37 @@ export class APIClient {
   // 跳过 getAuthToken,登录用户 token 临期时不被同一次经隧道的 refresh 集体闸住)
   // ==========================================================================
 
-  /** 公开任务分页列表(仅 is_public+completed,出参为白名单裁剪字段)。 */
-  async getPublicTasks(params?: { page?: number; page_size?: number }): Promise<PublicTaskListResponse> {
+  /**
+   * 公开任务分页列表(仅 is_public+completed,出参为白名单裁剪字段)。
+   *
+   * 默认走 publicRequest 免 token 通道(快、可边缘缓存)。{ authenticated: true } 时改走带
+   * Authorization 的通道:后端据 token 算 is_owner(本人公开内容前端跳私有详情)。登录用户的
+   * 二次「带 token 刷新」用它,首屏匿名拉取仍免 token。
+   */
+  async getPublicTasks(
+    params?: { page?: number; page_size?: number },
+    opts?: { authenticated?: boolean },
+  ): Promise<PublicTaskListResponse> {
     const searchParams = new URLSearchParams()
     if (params?.page) searchParams.set("page", String(params.page))
     if (params?.page_size) searchParams.set("page_size", String(params.page_size))
     const qs = searchParams.toString()
-    return publicRequest(`/public/tasks${qs ? `?${qs}` : ""}`, { method: "GET" })
+    const path = `/public/tasks${qs ? `?${qs}` : ""}`
+    return opts?.authenticated
+      ? request(path, { method: "GET" }, this.token)
+      : publicRequest(path, { method: "GET" })
   }
 
-  /** 公开任务详情(非公开/不存在一律 40401)。 */
-  async getPublicTask(taskId: string): Promise<PublicTaskDetail> {
-    return publicRequest(`/public/tasks/${taskId}`, { method: "GET" })
+  /**
+   * 公开任务详情(非公开/不存在一律 40401)。
+   *
+   * { authenticated: true } 时带 token,供后端算 is_owner(直达链接/书签命中本人内容时跳私有详情)。
+   */
+  async getPublicTask(taskId: string, opts?: { authenticated?: boolean }): Promise<PublicTaskDetail> {
+    const path = `/public/tasks/${taskId}`
+    return opts?.authenticated
+      ? request(path, { method: "GET" }, this.token)
+      : publicRequest(path, { method: "GET" })
   }
 
   /** 公开任务转写列表(仅返回白名单字段,不含用户信息)。 */

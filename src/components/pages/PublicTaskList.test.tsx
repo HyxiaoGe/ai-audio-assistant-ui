@@ -20,6 +20,11 @@ vi.mock("next/link", () => ({
 vi.mock("@/components/task/MarkdownContent", () => ({ default: () => null }))
 vi.mock("@/components/pages/PublicTaskDetail", () => ({ default: () => null }))
 
+const authState = vi.hoisted(() => ({ status: "unauthenticated" as string }))
+vi.mock("@/store/auth-store", () => ({
+  useAuthStore: (selector: (s: { status: string }) => unknown) => selector({ status: authState.status }),
+}))
+
 import PublicTaskList from "./PublicTaskList"
 import type { PublicTaskListItem } from "@/types/api"
 
@@ -40,6 +45,7 @@ function makeItem(overrides: Partial<PublicTaskListItem> = {}): PublicTaskListIt
 
 beforeEach(() => {
   vi.clearAllMocks()
+  authState.status = "unauthenticated"
 })
 
 describe("PublicTaskList", () => {
@@ -124,6 +130,62 @@ describe("PublicTaskList", () => {
     fireEvent.click(retry)
     await waitFor(() => expect(screen.getByText("重试成功任务")).toBeInTheDocument())
     expect(screen.queryByText("explore.loadFailed")).not.toBeInTheDocument()
+  })
+
+  it("发布者已捕获时渲染头像 + 名称(头像走同源代理)", async () => {
+    render(
+      <PublicTaskList
+        initialItems={[makeItem({ owner: { name: "发布者甲", avatar_url: "https://lh3.googleusercontent.com/a/x" } })]}
+        initialTotal={1}
+      />,
+    )
+    expect(await screen.findByText("发布者甲")).toBeInTheDocument()
+    const avatar = screen.getByAltText("发布者甲")
+    expect(avatar.getAttribute("src")).toContain("/api/v1/users/avatar")
+  })
+
+  it("无发布者(owner=null)不渲染名称", async () => {
+    render(<PublicTaskList initialItems={[makeItem({ owner: null })]} initialTotal={1} />)
+    await screen.findByText("公开任务一")
+    expect(screen.queryByText("发布者甲")).not.toBeInTheDocument()
+  })
+
+  it("is_owner 卡片直链私有详情 /tasks/[id]", async () => {
+    render(<PublicTaskList initialItems={[makeItem({ id: "t9", is_owner: true })]} initialTotal={1} />)
+    const link = (await screen.findByText("公开任务一")).closest("a")
+    expect(link).toHaveAttribute("href", "/tasks/t9")
+  })
+
+  it("非 is_owner 卡片走公开详情 /explore/[id]", async () => {
+    render(<PublicTaskList initialItems={[makeItem({ id: "t9", is_owner: false })]} initialTotal={1} />)
+    const link = (await screen.findByText("公开任务一")).closest("a")
+    expect(link).toHaveAttribute("href", "/explore/t9")
+  })
+
+  it("登录用户挂载后带 token 二次刷新,合并 is_owner 使本人卡片改直链私有详情", async () => {
+    authState.status = "authenticated"
+    mockClient.getPublicTasks.mockImplementation(
+      (_params: unknown, opts?: { authenticated?: boolean }) =>
+        Promise.resolve({
+          items: [makeItem({ id: "t9", is_owner: !!opts?.authenticated })],
+          total: 1,
+          page: 1,
+          page_size: 20,
+        }),
+    )
+    render(<PublicTaskList initialItems={[makeItem({ id: "t9", is_owner: false })]} initialTotal={1} />)
+    // 初始 seeded is_owner=false → /explore/t9;二次带 token 刷新合并后 → /tasks/t9
+    await waitFor(() => {
+      const link = screen.getByText("公开任务一").closest("a")
+      expect(link).toHaveAttribute("href", "/tasks/t9")
+    })
+    expect(mockClient.getPublicTasks).toHaveBeenCalledWith({ page: 1, page_size: 20 }, { authenticated: true })
+  })
+
+  it("匿名用户不发起带 token 的二次刷新", async () => {
+    render(<PublicTaskList initialItems={[makeItem()]} initialTotal={1} />)
+    await screen.findByText("公开任务一")
+    expect(mockClient.getPublicTasks).not.toHaveBeenCalled()
   })
 
   it("翻页失败后「重试」拉的是失败的目标页(第2页),而非回到第1页", async () => {
