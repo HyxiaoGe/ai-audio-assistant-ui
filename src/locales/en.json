@@ -347,7 +347,7 @@
     "unknown": "Unknown",
     "summaryModelLabel": "Model:",
     "summaryModelAuto": "Auto",
-    "transcribedByLabel": "ASR engine: ",
+    "transcribedByCaption": "Transcription powered by {provider}",
     "asrProviderNames": {
       "tencent": "Tencent Cloud",
       "aliyun": "Alibaba Cloud",

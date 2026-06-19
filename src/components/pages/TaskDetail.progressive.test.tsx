@@ -14,7 +14,9 @@ import type {
 // 致 effect 每帧重跑 → loadTask 每帧 setState → 无限 render 循环 → 堆溢出 OOM。
 // 真实 Zustand/i18n 返回稳定引用，故仅测试 mock 需显式稳定（实测：三者必须同时稳定才不崩）。
 const mocks = vi.hoisted(() => {
-  const t = (key: string) => key
+  // 带 vars 时把插值拼到 key 后(便于断言转写来源里的 provider);无 vars 返回原 key。
+  const t = (key: string, vars?: Record<string, string | number>) =>
+    vars ? `${key} ${Object.values(vars).join(" ")}` : key
   return {
     i18n: { locale: "zh", t },
     dateFormatter: { formatRelativeTime: () => "刚刚" },
@@ -383,12 +385,13 @@ describe("TaskDetail — progressive disclosure", () => {
     })
   })
 
-  it("ASR 溯源徽章随转写阶段补拉即显示——无需等 completed", async () => {
-    // 回归（用户报告）：转写内容出来了,但「哪个平台转写的」徽章要等摘要(completed)才刷新出来。
+  it("ASR 溯源提示随转写阶段补拉即显示——无需等 completed", async () => {
+    // 回归（用户报告）：转写内容出来了,但「哪个平台转写的」提示要等摘要(completed)才刷新出来。
     // 根因=asr_provider/engine/variant 写在 transcribe 阶段、不进 WS,只有 loadTask 取得到,而 loadTask
     // 只在 mount/completed 触发。进入转写可见阶段(polishing/summarizing)时 ASR 必已完成,应补拉一次 task
-    // 把溯源就位(与 audio_url 补拉同理)。首拉(mount)无 asr_provider→无徽章;补拉返回 aliyun→徽章出现
-    // (测试 i18n 不翻译,formatAsrProvenance 的 label 回退为原始 provider "aliyun")。
+    // 把溯源就位(与 audio_url 补拉同理)。首拉(mount)无 asr_provider→无提示;补拉返回 aliyun→提示出现。
+    // 溯源以一句淡色文案「本次内容转写能力由 {provider} 提供」呈现(非徽章、无 hover);测试 i18n 不翻译,
+    // provider 回退为原始 "aliyun",t 桩把插值拼到 key 后 → 文案含 "aliyun"。
     apiMock.getTask
       .mockResolvedValueOnce(
         task({ status: "summarizing", asr_provider: null, asr_engine: null, asr_variant: null })
@@ -403,9 +406,9 @@ describe("TaskDetail — progressive disclosure", () => {
     await waitFor(() => {
       expect(screen.getByText("这是一段转写文本")).toBeInTheDocument()
     })
-    // 徽章随补拉出现:转写可见阶段 task 被补拉到 asr_provider,formatAsrProvenance 产出可见 label
+    // 溯源提示随补拉出现:转写可见阶段 task 被补拉到 asr_provider,产出含 provider 的淡色文案。
     await waitFor(() => {
-      expect(screen.getAllByText("aliyun").length).toBeGreaterThan(0)
+      expect(screen.getByText(/task\.transcribedByCaption aliyun/)).toBeInTheDocument()
     })
   })
 
@@ -428,7 +431,7 @@ describe("TaskDetail — progressive disclosure", () => {
     })
     // i18n 回显 key:识别风格标签文案 t("task.detectedStyle") 出现 = detected_summary_style 已补拉就位
     await waitFor(() => {
-      expect(screen.getByText("task.detectedStyle")).toBeInTheDocument()
+      expect(screen.getByText(/task\.detectedStyle/)).toBeInTheDocument()
     })
   })
 
@@ -558,7 +561,7 @@ describe("TaskDetail — detected summary style", () => {
     render(<TaskDetail />)
 
     await waitFor(() => {
-      expect(screen.getByText("task.detectedStyle")).toBeInTheDocument()
+      expect(screen.getByText(/task\.detectedStyle/)).toBeInTheDocument()
     })
   })
 

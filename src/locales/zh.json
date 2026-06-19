@@ -347,7 +347,7 @@
     "unknown": "未知",
     "summaryModelLabel": "模型：",
     "summaryModelAuto": "自动选择",
-    "transcribedByLabel": "转写引擎：",
+    "transcribedByCaption": "本次内容转写能力由 {provider} 提供",
     "asrProviderNames": {
       "tencent": "腾讯云",
       "aliyun": "阿里云",
