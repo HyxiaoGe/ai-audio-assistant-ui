@@ -3,6 +3,7 @@
 // 这是「角标不更新/刷新才更新」竞态的根因）；task_progress 维持任务 map 更新。
 
 import type { WsImageReadyData } from "@/types/api"
+import type { TaskProgress } from "@/store/global-store"
 
 export interface WsNotificationData {
   id: string
@@ -33,7 +34,8 @@ export interface WsEnvelope {
 
 export interface WsRouterDeps {
   addNotificationFromWebSocket: (data: WsNotificationData) => void
-  updateTask: (taskId: string, data: WsTaskProgressData) => void
+  // 领域口径（与 store 的 updateTask 对齐）：router 在下面把 wire 字段 task_title 翻译成 title 后再传入。
+  updateTask: (taskId: string, data: Partial<TaskProgress>) => void
   loadNotifications: () => void
   refreshUnread: () => void
   showNotificationToast: (data: WsNotificationData) => void
@@ -60,7 +62,14 @@ export function routeWebSocketMessage(
       if (!data || !data.task_id) {
         return
       }
-      deps.updateTask(data.task_id, data)
+      // wire→domain：WS 用 task_title、store/领域用 title。此处是唯一翻译点——不映射则
+      // TaskProgress.title 永远 undefined，标题只能等 completed 全量重拉才刷新（用户报告的根因）。
+      // 无 task_title 时不写 title 键，避免用 undefined 覆盖已有标题。
+      const { task_title, ...rest } = data
+      deps.updateTask(data.task_id, {
+        ...(rest as Partial<TaskProgress>),
+        ...(task_title !== undefined ? { title: task_title } : {}),
+      })
       return
     }
     case "image_ready": {

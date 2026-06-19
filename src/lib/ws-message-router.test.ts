@@ -65,7 +65,7 @@ describe("routeWebSocketMessage — notification", () => {
 })
 
 describe("routeWebSocketMessage — task_progress", () => {
-  it("updates the task map and does NOT touch notifications", () => {
+  it("maps the wire field task_title → store field title and does NOT touch notifications", () => {
     const deps = makeDeps()
     const data = {
       task_id: "t9",
@@ -78,9 +78,31 @@ describe("routeWebSocketMessage — task_progress", () => {
     routeWebSocketMessage({ kind: "task_progress", data, traceId: "tr9" }, deps)
 
     expect(deps.updateTask).toHaveBeenCalledTimes(1)
-    expect(deps.updateTask).toHaveBeenCalledWith("t9", data)
+    // WS 用 task_title、store/领域用 title；router 是唯一翻译点。不映射则 TaskProgress.title
+    // 永远 undefined（用户报告的「标题等 completed 才刷新」根因之一）。
+    expect(deps.updateTask).toHaveBeenCalledWith("t9", {
+      task_id: "t9",
+      status: "processing",
+      stage: "transcribing",
+      progress: 42,
+      title: "Lecture",
+    })
     expect(deps.addNotificationFromWebSocket).not.toHaveBeenCalled()
     expect(deps.showNotificationToast).not.toHaveBeenCalled()
+  })
+
+  it("omits the title key when no task_title is present (never clobbers an existing title with undefined)", () => {
+    const deps = makeDeps()
+    const data = { task_id: "t9", status: "processing", progress: 30 }
+
+    routeWebSocketMessage({ kind: "task_progress", data, traceId: "tr9" }, deps)
+
+    expect(deps.updateTask).toHaveBeenCalledTimes(1)
+    expect(deps.updateTask).toHaveBeenCalledWith("t9", {
+      task_id: "t9",
+      status: "processing",
+      progress: 30,
+    })
   })
 
   it("ignores a task_progress envelope missing task_id without throwing", () => {
