@@ -15,6 +15,7 @@ import { ApiError } from '@/types/api';
 import type { TaskListItem, TaskStatus } from '@/types/api';
 import { useI18n } from '@/lib/i18n-context';
 import { notifyError, notifySuccess } from '@/lib/notify';
+import { useGlobalStore } from '@/store/global-store';
 
 interface TaskListProps {
   isAuthenticated: boolean;
@@ -50,6 +51,18 @@ export default function TaskList({
   // 自增计数：重试成功后 +1，触发列表与状态计数重新拉取，避免卡片停留在 failed 态。
   const [reloadKey, setReloadKey] = useState(0);
   const tasksPerPage = 10;
+
+  // 订阅全局 WS 任务态：列表此前纯 refetch（仅 mount/翻页/切筛选/重试时拉取），处理中卡片
+  // 的标题/状态徽章全程停在 mount 快照，连 completed 通知都不刷新列表。这里对齐 Dashboard
+  // 的正确范式，让卡片随 WS 进度即时刷新、状态计数在任务进入终态时重拉后端权威数。
+  const globalTasks = useGlobalStore((state) => state.tasks);
+
+  // 「已知任务进入终态(completed/failed)的次数」信号：仅在状态迁移到终态时变化（进度滴答
+  // 不改变它），用作状态计数 effect 的依赖，触发一次后端权威 GROUP BY 重拉，避免本地 delta
+  // 在分页外/跨筛选条目上错算。
+  const terminalTaskSignal = Object.values(globalTasks).filter(
+    (t) => t.status === 'completed' || t.status === 'failed'
+  ).length;
 
   // 保存最新的 onOpenLogin / t，但不让它们进入下方拉取 effect 的依赖——
   // 否则父组件每次重渲染（如开关弹窗）重建 onOpenLogin 身份，就会触发列表与
@@ -110,6 +123,25 @@ export default function TaskList({
     };
   }, [client, currentPage, filterStatus, isAuthenticated, reloadKey]);
 
+  // 把 WS 实时态合并进当前页卡片：标题用 ?? 守卫避免 WS 未携带标题时以 undefined 覆盖本地值。
+  // deps 用 tasks.length（非 tasks）避免本 effect 自身 setTasks 造成的回环。
+  useEffect(() => {
+    if (tasks.length === 0) return;
+    setTasks((prevTasks) =>
+      prevTasks.map((task) => {
+        const globalTask = globalTasks[task.id];
+        if (!globalTask) return task;
+        return {
+          ...task,
+          status: globalTask.status,
+          progress: globalTask.progress,
+          error_message: globalTask.error_message,
+          title: globalTask.title ?? task.title,
+        };
+      })
+    );
+  }, [globalTasks, tasks.length]);
+
   useEffect(() => {
     if (!isAuthenticated) {
       setStatusCounts({ all: 0, processing: 0, completed: 0, failed: 0 });
@@ -142,7 +174,7 @@ export default function TaskList({
     return () => {
       isMounted = false;
     };
-  }, [client, isAuthenticated, reloadKey]);
+  }, [client, isAuthenticated, reloadKey, terminalTaskSignal]);
 
   const formatDurationLabel = (seconds?: number) => {
     if (!seconds || seconds <= 0) return '--';
