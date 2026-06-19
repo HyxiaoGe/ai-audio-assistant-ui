@@ -1018,6 +1018,9 @@ export default function TaskDetail({
               status: globalTaskState.status,
               progress: globalTaskState.progress,
               error_message: globalTaskState.error_message,
+              // 标题随进度实时刷新：后端在下载阶段即经 task_progress.task_title 早早广播真实标题，
+              // 当场并入即可，无需等 completed 全量重拉。仅在 store 带到标题时覆盖，否则保留已有标题。
+              title: globalTaskState.title ?? prev.title,
             }
           : prev
       );

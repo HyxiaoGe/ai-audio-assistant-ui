@@ -353,6 +353,36 @@ describe("TaskDetail — progressive disclosure", () => {
     })
   })
 
+  it("标题随 WS 进度实时刷新——无需等 completed 全量重拉", async () => {
+    // 回归（用户报告）：标题要等摘要生成 + 完成通知后才刷新。根因 = 进度同步 effect 只并入
+    // status/progress/error_message，标题仅靠 completed 触发的 loadTask 全量重拉才更新。后端在
+    // 下载阶段即经 task_progress.task_title 早早广播真实标题，详情页应当场并入。
+    // getTask 恒返回旧标题「未命名任务」→ 若新标题出现，必来自 store 当场并入而非重拉。
+    apiMock.getTask.mockResolvedValue(task({ status: "summarizing", title: "未命名任务" }))
+    const { ApiError } = await import("@/types/api")
+    apiMock.getSummary.mockRejectedValue(new ApiError(40401, "not found", "tr"))
+
+    render(<TaskDetail />)
+    await waitFor(() => {
+      expect(screen.getAllByText("未命名任务").length).toBeGreaterThan(0)
+    })
+
+    // 模拟 WS 进度事件携带真实标题（经 router 映射后 store 字段即 title），状态仍非 completed
+    act(() => {
+      useGlobalStore.getState().updateTask("task-1", {
+        task_id: "task-1",
+        status: "summarizing",
+        progress: 85,
+        title: "真实视频标题",
+        updated_at: 2,
+      })
+    })
+
+    await waitFor(() => {
+      expect(screen.getAllByText("真实视频标题").length).toBeGreaterThan(0)
+    })
+  })
+
   it("completed 后配图对账兜底：WS 漏收时靠轮询从 DB 拉到 ready 并显示", async () => {
     // 回归：配图在 completed 之后才异步生成，前端只在 completed 拉过一次摘要（那时图还 pending）。
     // 若 WS image_ready 漏收，旧逻辑会停在占位直到 90s 兜底翻 failed；新增的对账轮询应每隔数秒重拉

@@ -70,10 +70,8 @@ interface WsRouterStoreActions {
 export function buildWsRouterDeps(actions: WsRouterStoreActions): WsRouterDeps {
   return {
     addNotificationFromWebSocket: actions.addNotificationFromWebSocket,
-    // WsTaskProgressData 与 Partial<TaskProgress> 字段重叠但不互相可赋（status: string vs TaskStatus、
-    // task_id 必填 vs 可选），经 unknown 桥接；运行时同一对象，仅编译期断言。
-    updateTask: (taskId, data) =>
-      actions.updateTask(taskId, data as unknown as Partial<TaskProgress>),
+    // router 已统一为领域口径 Partial<TaskProgress>（task_title→title 在 router 内翻译），直接透传。
+    updateTask: actions.updateTask,
     loadNotifications: actions.loadNotifications,
     refreshUnread: actions.refreshUnread,
     showNotificationToast: actions.showNotificationToast,
