@@ -119,7 +119,8 @@
     "viewSource": "View original video",
     "summaryLoadFailed": "Failed to load summary",
     "sourceFile": "File",
-    "newBadge": "NEW"
+    "newBadge": "NEW",
+    "publishedBy": "by {name}"
   },
   "stats": {
     "title": "Stats",

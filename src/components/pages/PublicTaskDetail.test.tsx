@@ -11,7 +11,11 @@ const mockClient = vi.hoisted(() => ({
   getPublicSummary: vi.fn(),
 }))
 
-const i18n = vi.hoisted(() => ({ t: (key: string) => key }))
+// t 桩:带 vars 时把插值拼到 key 后(便于断言 publishedBy 里的名字);无 vars 返回原 key。
+const i18n = vi.hoisted(() => ({
+  t: (key: string, vars?: Record<string, string | number>) =>
+    vars ? `${key} ${Object.values(vars).join(" ")}` : key,
+}))
 
 vi.mock("@/lib/use-api-client", () => ({ useAPIClient: () => mockClient }))
 vi.mock("@/lib/i18n-context", () => ({ useI18n: () => ({ locale: "zh", t: i18n.t }) }))
@@ -166,23 +170,28 @@ describe("PublicTaskDetail 公开详情页", () => {
     }, { timeout: 3000 })
   })
 
-  it("详情含发布者(owner)时渲染名称 + 头像(同源代理)", async () => {
+  it("详情含发布者(owner)时署名:头像 + publishedBy(名称) + 发布时间(同源代理)", async () => {
     mockClient.getPublicTask.mockResolvedValue({
       ...DETAIL_YOUTUBE,
       owner: { name: "发布者甲", avatar_url: "https://lh3.googleusercontent.com/a/x" },
+      published_at: "2026-06-10T00:00:00Z",
     })
     mockClient.getPublicTranscript.mockResolvedValue(TRANSCRIPT_OK)
     mockClient.getPublicSummary.mockResolvedValue(SUMMARY_OK)
     render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
-    expect(await screen.findByText("发布者甲")).toBeInTheDocument()
+    // 名称经 publishedBy 署名;头像走同源代理;时间与署名同条
+    expect(await screen.findByText(/发布者甲/)).toBeInTheDocument()
     expect(screen.getByAltText("发布者甲").getAttribute("src")).toContain("/api/v1/users/avatar")
+    expect(screen.getByText(/2026-06-10/)).toBeInTheDocument()
   })
 
-  it("详情无发布者(owner 缺失)不渲染名称", async () => {
+  it("详情无发布者(owner 缺失)只回退「发布于 时间」,不渲染名称", async () => {
     mockHappyPath()
     render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
     await screen.findByText("公开详情标题")
-    expect(screen.queryByText("发布者甲")).not.toBeInTheDocument()
+    expect(screen.queryByText(/发布者甲/)).not.toBeInTheDocument()
+    // 退回普通发布署名(explore.publishedAt 前缀 + 日期)
+    expect(screen.getByText(/explore\.publishedAt/)).toBeInTheDocument()
   })
 
   it("detail 回来即渲染骨架:转写仍 pending 时标题/页签可见", async () => {

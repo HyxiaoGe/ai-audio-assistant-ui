@@ -13,6 +13,7 @@ import { TranscriptList } from '@/components/task/TranscriptList';
 import { useAPIClient } from '@/lib/use-api-client';
 import { useI18n } from '@/lib/i18n-context';
 import { proxiedAvatar } from '@/lib/avatar-url';
+import { useDateFormatter } from '@/lib/use-date-formatter';
 import { usePublicMediaToken } from '@/lib/media-url';
 import { useAudioStore } from '@/store/audio-store';
 import { extractPlaceholderDescription } from '@/lib/image-placeholder';
@@ -113,6 +114,7 @@ export default function PublicTaskDetail({
   initialSummary,
 }: PublicTaskDetailProps) {
   const { t } = useI18n();
+  const { formatDate } = useDateFormatter();
   const router = useRouter();
   const params = useParams();
   const id = typeof params?.id === 'string' ? params.id : '';
@@ -402,19 +404,30 @@ export default function PublicTaskDetail({
         </span>
       </div>
 
-      {/* 发布者展示身份(name + 头像);未捕获(owner=null/无 name)则不渲染。头像走同源代理。 */}
-      {task.owner?.name && (
-        <div className="flex items-center justify-center gap-2 pt-3" style={{ color: 'var(--app-text-muted)' }}>
-          {task.owner.avatar_url && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={proxiedAvatar(task.owner.avatar_url)}
-              alt={task.owner.name}
-              loading="lazy"
-              className="w-5 h-5 rounded-full object-cover"
-            />
+      {/* 署名行:发布者(头像 + 名称)与发布时间合成一条,与列表卡署名风格一致。未捕获
+          发布者时退回普通「发布于 时间」;两者皆无则不渲染。头像走同源代理。 */}
+      {(task.owner?.name || task.published_at) && (
+        <div
+          className="flex items-center justify-center gap-2 pt-3 text-xs"
+          style={{ color: 'var(--app-text-muted)' }}
+        >
+          {task.owner?.name ? (
+            <>
+              {task.owner.avatar_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={proxiedAvatar(task.owner.avatar_url)}
+                  alt={task.owner.name}
+                  loading="lazy"
+                  className="w-5 h-5 rounded-full object-cover shrink-0"
+                />
+              )}
+              <span className="truncate">{t('explore.publishedBy', { name: task.owner.name })}</span>
+              {task.published_at && <span className="shrink-0">· {formatDate(task.published_at)}</span>}
+            </>
+          ) : (
+            <span>{t('explore.publishedAt')} {formatDate(task.published_at!)}</span>
           )}
-          <span className="text-xs">{task.owner.name}</span>
         </div>
       )}
 

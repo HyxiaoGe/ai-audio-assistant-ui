@@ -195,23 +195,31 @@ export default function PublicTaskList({ initialItems, initialTotal }: PublicTas
                     {formatDuration(item.duration_seconds)}
                   </span>
                 )}
-                {item.published_at && (
-                  <span>{t("explore.publishedAt")} {formatDate(item.published_at)}</span>
-                )}
               </div>
-              {/* 发布者展示身份(name + 头像);未捕获(owner=null/无 name)则整块不渲染。 */}
-              {item.owner?.name && (
-                <div className="flex items-center gap-1.5 mt-2" style={{ color: "var(--app-text-muted)" }}>
-                  {item.owner.avatar_url && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={proxiedAvatar(item.owner.avatar_url)}
-                      alt={item.owner.name}
-                      loading="lazy"
-                      className="w-4 h-4 rounded-full object-cover"
-                    />
+              {/* 署名行:发布者(头像 + 名称)与发布时间合成一条融入信息区。未捕获发布者时
+                  退回普通「发布于 时间」;两者皆无则整块不渲染。 */}
+              {(item.owner?.name || item.published_at) && (
+                <div
+                  className="flex items-center gap-1.5 mt-2 text-[11px]"
+                  style={{ color: "var(--app-text-muted)" }}
+                >
+                  {item.owner?.name ? (
+                    <>
+                      {item.owner.avatar_url && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={proxiedAvatar(item.owner.avatar_url)}
+                          alt={item.owner.name}
+                          loading="lazy"
+                          className="w-4 h-4 rounded-full object-cover shrink-0"
+                        />
+                      )}
+                      <span className="truncate">{t("explore.publishedBy", { name: item.owner.name })}</span>
+                      {item.published_at && <span className="shrink-0">· {formatDate(item.published_at)}</span>}
+                    </>
+                  ) : (
+                    <span>{t("explore.publishedAt")} {formatDate(item.published_at!)}</span>
                   )}
-                  <span className="text-[11px] truncate">{item.owner.name}</span>
                 </div>
               )}
             </div>
