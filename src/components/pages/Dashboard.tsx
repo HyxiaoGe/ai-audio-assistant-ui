@@ -102,11 +102,14 @@ export default function Dashboard({
         const globalTask = globalTasks[task.id];
         if (globalTask) {
           // Update task with WebSocket data
+          // title 用 ?? 守卫:WS 未携带标题时不以 undefined 覆盖本地已有标题。
+          // 与 TaskDetail PR#83 对称——YouTube 任务初值空标题,download(~15%)才出真标题。
           return {
             ...task,
             status: globalTask.status,
             progress: globalTask.progress,
             error_message: globalTask.error_message,
+            title: globalTask.title ?? task.title,
           };
         }
         return task;
