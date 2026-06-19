@@ -119,7 +119,8 @@
     "viewSource": "查看原视频",
     "summaryLoadFailed": "摘要加载失败",
     "sourceFile": "文件",
-    "newBadge": "NEW"
+    "newBadge": "NEW",
+    "publishedBy": "{name} 发布"
   },
   "stats": {
     "title": "统计",

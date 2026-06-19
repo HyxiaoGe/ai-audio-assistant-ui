@@ -3,7 +3,11 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const mockClient = vi.hoisted(() => ({ getPublicTasks: vi.fn() }))
-const i18n = vi.hoisted(() => ({ t: (key: string) => key }))
+// t 桩:带 vars 时把插值拼到 key 后(便于断言 publishedBy 里的名字);无 vars 返回原 key。
+const i18n = vi.hoisted(() => ({
+  t: (key: string, vars?: Record<string, string | number>) =>
+    vars ? `${key} ${Object.values(vars).join(" ")}` : key,
+}))
 
 vi.mock("@/lib/use-api-client", () => ({ useAPIClient: () => mockClient }))
 vi.mock("@/lib/i18n-context", () => ({ useI18n: () => ({ locale: "zh", t: i18n.t }) }))
@@ -132,22 +136,33 @@ describe("PublicTaskList", () => {
     expect(screen.queryByText("explore.loadFailed")).not.toBeInTheDocument()
   })
 
-  it("发布者已捕获时渲染头像 + 名称(头像走同源代理)", async () => {
+  it("发布者署名:头像 + 名称 + 发布时间合成一条(融入信息行)", async () => {
     render(
       <PublicTaskList
-        initialItems={[makeItem({ owner: { name: "发布者甲", avatar_url: "https://lh3.googleusercontent.com/a/x" } })]}
+        initialItems={[
+          makeItem({
+            owner: { name: "发布者甲", avatar_url: "https://lh3.googleusercontent.com/a/x" },
+            published_at: "2026-06-10T00:00:00Z",
+          }),
+        ]}
         initialTotal={1}
       />,
     )
-    expect(await screen.findByText("发布者甲")).toBeInTheDocument()
-    const avatar = screen.getByAltText("发布者甲")
-    expect(avatar.getAttribute("src")).toContain("/api/v1/users/avatar")
+    // 名称经 publishedBy 署名(t 桩把 {name} 拼到 key 后)
+    expect(await screen.findByText(/发布者甲/)).toBeInTheDocument()
+    // 头像走同源代理
+    expect(screen.getByAltText("发布者甲").getAttribute("src")).toContain("/api/v1/users/avatar")
+    // 时间与署名同条出现(不再单独占 chips)
+    expect(screen.getByText(/2026-06-10/)).toBeInTheDocument()
   })
 
-  it("无发布者(owner=null)不渲染名称", async () => {
-    render(<PublicTaskList initialItems={[makeItem({ owner: null })]} initialTotal={1} />)
+  it("无发布者(owner=null)只回退普通「发布于 时间」,不渲染名称", async () => {
+    render(<PublicTaskList initialItems={[makeItem({ owner: null, published_at: "2026-06-10T00:00:00Z" })]} initialTotal={1} />)
     await screen.findByText("公开任务一")
-    expect(screen.queryByText("发布者甲")).not.toBeInTheDocument()
+    expect(screen.queryByText(/发布者甲/)).not.toBeInTheDocument()
+    // 仍展示发布时间(走 explore.publishedAt 前缀 + 日期)
+    expect(screen.getByText(/2026-06-10/)).toBeInTheDocument()
+    expect(screen.getByText(/explore\.publishedAt/)).toBeInTheDocument()
   })
 
   it("is_owner 卡片直链私有详情 /tasks/[id]", async () => {
