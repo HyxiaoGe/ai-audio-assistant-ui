@@ -445,16 +445,22 @@ export default function TaskDetail({
   // live 观看的任务在 polishing/summarizing 阶段不会自动取到。表现：YouTube 任务 mount 时 audio_url 为 null
   // 点播放无反应（要到 completed 才能播）；ASR「由X转写」徽章要等摘要(completed)才显示。进入「转写可见阶段」
   // 时音频与 ASR 必已落库，这里补拉一次 task 把这些中途字段一并就位，无需等 completed。
+  // 同理还有 detected_summary_style（summarizing 即落库,auto 风格任务的「识别风格」标签）：它写在
+  // completed 之前、不进 WS 信封、进度白名单不并入，原先要等 completed 全量重拉才显示。一并在
+  // 此补拉就位。detected_summary_style 仅 auto 任务有,非 auto 任务它恒缺；但 deps 只引用具体
+  // 字段（各自只发生一次 undefined→值 的迁移）,无新值时不再 setTask、deps 不变 → effect 自然收敛,
+  // 不会反复重跑。
   useEffect(() => {
     if (!id || !transcriptStageReached) return;
-    if (task?.audio_url && task?.asr_provider) return; // 都就位则不补拉
+    if (task?.audio_url && task?.asr_provider && task?.detected_summary_style) return; // 全部就位则不补拉
     let cancelled = false;
     void (async () => {
       const refreshed = await client.getTask(id).catch(() => null);
       if (cancelled || !refreshed) return;
       const needAudio = !task?.audio_url && !!refreshed.audio_url;
       const needAsr = !task?.asr_provider && !!refreshed.asr_provider;
-      if (!needAudio && !needAsr) return;
+      const needStyle = !task?.detected_summary_style && !!refreshed.detected_summary_style;
+      if (!needAudio && !needAsr && !needStyle) return;
       // 仅补这些中途字段，不整体覆盖（status 由上面的 sync effect 维持为 WS 最新值）。
       setTask((prev) =>
         prev
@@ -468,6 +474,9 @@ export default function TaskDetail({
                     asr_variant: refreshed.asr_variant,
                   }
                 : {}),
+              ...(needStyle
+                ? { detected_summary_style: refreshed.detected_summary_style }
+                : {}),
             }
           : prev
       );
@@ -475,7 +484,14 @@ export default function TaskDetail({
     return () => {
       cancelled = true;
     };
-  }, [id, transcriptStageReached, task?.audio_url, task?.asr_provider, client]);
+  }, [
+    id,
+    transcriptStageReached,
+    task?.audio_url,
+    task?.asr_provider,
+    task?.detected_summary_style,
+    client,
+  ]);
 
   useEffect(() => {
     const summaryStreams = summaryStreamRef.current;
