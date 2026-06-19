@@ -6,6 +6,7 @@ import { useTheme } from "next-themes";
 import PublicTaskDetail from "@/components/pages/PublicTaskDetail";
 import LoginModal from "@/components/auth/LoginModal";
 import { useSettingsActions } from "@/lib/settings-context";
+import { usePublicOwnerRedirect } from "@/lib/use-public-owner-redirect";
 import type { PublicSummaryResponse, PublicTaskDetail as PublicTaskDetailData } from "@/types/api";
 
 interface PublicTaskDetailPageClientProps {
@@ -25,6 +26,8 @@ export default function PublicTaskDetailPageClient({
   initialSummary,
 }: PublicTaskDetailPageClientProps) {
   const authUser = useAuthStore((s) => s.user);
+  // 直达/书签命中本人公开内容 → 跳私有详情(/tasks/[id]);匿名/他人内容留在公开详情。
+  usePublicOwnerRedirect(id, !!authUser);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const { setTheme } = useSettingsActions();
   const { resolvedTheme } = useTheme();

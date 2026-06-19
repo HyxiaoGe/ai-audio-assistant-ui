@@ -74,6 +74,34 @@ describe("api-client public methods skip the auth-token gate", () => {
     }
   })
 
+  it("getPublicTasks({authenticated:true}) attaches Authorization (is_owner 需要 token)", async () => {
+    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
+      async () => envelope({ items: [], total: 0, page: 1, page_size: 20 })
+    )
+    vi.stubGlobal("fetch", fetchMock)
+
+    const client = createAPIClient("logged-in-token")
+    await client.getPublicTasks({ page: 1 }, { authenticated: true })
+
+    const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>
+    expect(headers["Authorization"]).toBe("Bearer logged-in-token")
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/public\/tasks\?page=1$/)
+  })
+
+  it("getPublicTask(id,{authenticated:true}) attaches Authorization", async () => {
+    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
+      async () => envelope({})
+    )
+    vi.stubGlobal("fetch", fetchMock)
+
+    const client = createAPIClient("logged-in-token")
+    await client.getPublicTask("t1", { authenticated: true })
+
+    const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>
+    expect(headers["Authorization"]).toBe("Bearer logged-in-token")
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/public\/tasks\/t1$/)
+  })
+
   it("keeps attaching Authorization on private methods (the variant does not leak)", async () => {
     const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
       async () => envelope({ items: [], total: 0, page: 1, page_size: 10 })

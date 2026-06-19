@@ -12,6 +12,7 @@ import { PlayerBarContainer } from '@/components/task/PlayerBarContainer';
 import { TranscriptList } from '@/components/task/TranscriptList';
 import { useAPIClient } from '@/lib/use-api-client';
 import { useI18n } from '@/lib/i18n-context';
+import { proxiedAvatar } from '@/lib/avatar-url';
 import { usePublicMediaToken } from '@/lib/media-url';
 import { useAudioStore } from '@/store/audio-store';
 import { extractPlaceholderDescription } from '@/lib/image-placeholder';
@@ -400,6 +401,22 @@ export default function PublicTaskDetail({
           {t('task.visibilityPublic')}
         </span>
       </div>
+
+      {/* 发布者展示身份(name + 头像);未捕获(owner=null/无 name)则不渲染。头像走同源代理。 */}
+      {task.owner?.name && (
+        <div className="flex items-center justify-center gap-2 pt-3" style={{ color: 'var(--app-text-muted)' }}>
+          {task.owner.avatar_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={proxiedAvatar(task.owner.avatar_url)}
+              alt={task.owner.name}
+              loading="lazy"
+              className="w-5 h-5 rounded-full object-cover"
+            />
+          )}
+          <span className="text-xs">{task.owner.name}</span>
+        </div>
+      )}
 
       {/* 来源归属:有 youtube_info(封面卡已含视频信息)时不重复;无 youtube_info 但 source_url 在(提取回退)时保留 */}
       {task.source_type === 'youtube' && task.source_url && !task.youtube_info && (

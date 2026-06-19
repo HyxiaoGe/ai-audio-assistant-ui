@@ -166,6 +166,25 @@ describe("PublicTaskDetail 公开详情页", () => {
     }, { timeout: 3000 })
   })
 
+  it("详情含发布者(owner)时渲染名称 + 头像(同源代理)", async () => {
+    mockClient.getPublicTask.mockResolvedValue({
+      ...DETAIL_YOUTUBE,
+      owner: { name: "发布者甲", avatar_url: "https://lh3.googleusercontent.com/a/x" },
+    })
+    mockClient.getPublicTranscript.mockResolvedValue(TRANSCRIPT_OK)
+    mockClient.getPublicSummary.mockResolvedValue(SUMMARY_OK)
+    render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
+    expect(await screen.findByText("发布者甲")).toBeInTheDocument()
+    expect(screen.getByAltText("发布者甲").getAttribute("src")).toContain("/api/v1/users/avatar")
+  })
+
+  it("详情无发布者(owner 缺失)不渲染名称", async () => {
+    mockHappyPath()
+    render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
+    await screen.findByText("公开详情标题")
+    expect(screen.queryByText("发布者甲")).not.toBeInTheDocument()
+  })
+
   it("detail 回来即渲染骨架:转写仍 pending 时标题/页签可见", async () => {
     mockClient.getPublicTask.mockResolvedValue(DETAIL_YOUTUBE)
     // 转写永不 resolve → 左栏停在 loading;骨架(标题/页签)必须已可见,不被转写拖住。

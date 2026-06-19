@@ -2,12 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Clock, Play } from "lucide-react";
+import { Clock } from "lucide-react";
 import EmptyState from "@/components/common/EmptyState";
+import PublicTaskCover from "@/components/pages/PublicTaskCover";
+import { proxiedAvatar } from "@/lib/avatar-url";
 import { useAPIClient } from "@/lib/use-api-client";
 import { useI18n } from "@/lib/i18n-context";
 import { useDateFormatter } from "@/lib/use-date-formatter";
 import { formatDuration } from "@/lib/utils";
+import { useAuthStore } from "@/store/auth-store";
 import type { PublicTaskListItem } from "@/types/api";
 
 const PAGE_SIZE = 20;
@@ -28,6 +31,7 @@ export default function PublicTaskList({ initialItems, initialTotal }: PublicTas
   const { t } = useI18n();
   const { formatDate } = useDateFormatter();
   const client = useAPIClient();
+  const authStatus = useAuthStore((s) => s.status);
 
   const seeded = initialItems != null;
   const [items, setItems] = useState<PublicTaskListItem[]>(initialItems ?? []);
@@ -72,6 +76,28 @@ export default function PublicTaskList({ initialItems, initialTotal }: PublicTas
     void import("@/components/pages/PublicTaskDetail");
   }, []);
 
+  // is_owner 二次刷新:首屏匿名拉取(快、可边缘缓存)不带 token,is_owner 全 false。登录用户在
+  // 此带 token 再拉一次当前页,按 id 把 is_owner 合并进现有 items——本人公开内容卡片据此直链私有
+  // 详情(免去先进 /explore/[id] 再被重定向的闪烁)。失败静默降级:卡片照常走 /explore/[id],
+  // 详情页仍会兜底重定向本人内容,归属跳转不丢。匿名用户不触发(authStatus 守卫)。
+  useEffect(() => {
+    if (authStatus !== "authenticated") return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const data = await client.getPublicTasks({ page, page_size: PAGE_SIZE }, { authenticated: true });
+        if (cancelled) return;
+        const ownerMap = new Map(data.items.map((it) => [it.id, it.is_owner]));
+        setItems((prev) => prev.map((it) => ({ ...it, is_owner: ownerMap.get(it.id) ?? it.is_owner })));
+      } catch {
+        // 无害降级:详情页兜底重定向覆盖归属跳转。
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authStatus, page, client]);
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   if (loading) {
@@ -115,14 +141,15 @@ export default function PublicTaskList({ initialItems, initialTotal }: PublicTas
       <div className="flex flex-col gap-3">
         {items.map((item) => (
           // Link 对视口内自动 prefetch(RSC payload + 路由 chunk),消灭慢隧道下「点了没反应」。
+          // is_owner(本人公开内容)直链私有详情 /tasks/[id];其余走公开详情 /explore/[id]。
           <Link
             key={item.id}
-            href={`/explore/${item.id}`}
+            href={item.is_owner ? `/tasks/${item.id}` : `/explore/${item.id}`}
             prefetch={true}
             className="flex gap-3 p-3 border rounded-xl hover:bg-[var(--app-glass-bg-strong)] transition-colors"
             style={{ borderColor: "var(--app-border)", background: "var(--app-glass-bg)" }}
           >
-            {/* 封面:摘要配图(境内 OSS 直链);无图→渐变占位 + 播放角标。别改回 YouTube 缩略图(Google 图床国内慢/被墙)。 */}
+            {/* 封面:YouTube=同源代理缩略图(后端代抓,绕开国内直连慢/被墙),AI 配图回落;上传=AI 配图。无图→渐变占位。 */}
             <div
               className="relative flex-shrink-0 w-28 md:w-40 rounded-lg overflow-hidden flex items-center justify-center"
               style={{
@@ -130,17 +157,11 @@ export default function PublicTaskList({ initialItems, initialTotal }: PublicTas
                 background: "linear-gradient(135deg, var(--app-glass-bg-strong), var(--app-glass-bg))",
               }}
             >
-              {item.cover_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={item.cover_url}
-                  alt={item.title || t("audio.untitled")}
-                  loading="lazy"
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <Play className="w-6 h-6" style={{ color: "var(--app-text-muted)" }} />
-              )}
+              <PublicTaskCover
+                coverUrl={item.cover_url}
+                fallbackUrl={item.cover_fallback_url}
+                alt={item.title || t("audio.untitled")}
+              />
               {isNew(item.published_at) && (
                 <span
                   className="absolute left-1.5 top-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded"
@@ -178,6 +199,21 @@ export default function PublicTaskList({ initialItems, initialTotal }: PublicTas
                   <span>{t("explore.publishedAt")} {formatDate(item.published_at)}</span>
                 )}
               </div>
+              {/* 发布者展示身份(name + 头像);未捕获(owner=null/无 name)则整块不渲染。 */}
+              {item.owner?.name && (
+                <div className="flex items-center gap-1.5 mt-2" style={{ color: "var(--app-text-muted)" }}>
+                  {item.owner.avatar_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={proxiedAvatar(item.owner.avatar_url)}
+                      alt={item.owner.name}
+                      loading="lazy"
+                      className="w-4 h-4 rounded-full object-cover"
+                    />
+                  )}
+                  <span className="text-[11px] truncate">{item.owner.name}</span>
+                </div>
+              )}
             </div>
           </Link>
         ))}

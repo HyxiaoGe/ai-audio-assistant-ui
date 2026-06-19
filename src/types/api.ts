@@ -1133,6 +1133,18 @@ export interface StreamingImage {
 // 公开探索(/api/v1/public/*,匿名只读;对应后端 app/schemas/public.py 白名单裁剪字段)
 // ============================================================================
 
+/**
+ * 公开内容的发布者展示身份(仅 name + avatar_url 两个展示字段)。
+ *
+ * 绝不含 user_id 等内部标识(归属判断用 is_owner 布尔)。数据来自发布时后端本地捕获的
+ * UserProfile 快照;未捕获则后端整体给 null,前端不渲染发布者。avatar_url 是图床原始 URL,
+ * 前端经同源头像代理(proxiedAvatar)加载。后端 feature 上线前可能整体缺失(undefined=null 同义)。
+ */
+export interface PublicOwner {
+  name: string | null
+  avatar_url: string | null
+}
+
 export interface PublicTaskListItem {
   id: string
   title: string | null
@@ -1141,8 +1153,11 @@ export interface PublicTaskListItem {
   detected_language: string | null
   detected_summary_style: string | null
   published_at: string | null
-  cover_url: string | null   // 首张 ready 摘要配图 OSS 直链;无则 null
+  cover_url: string | null   // 封面:YouTube=同源代理缩略图直链,上传=首张 ready 配图 OSS 直链;无则 null
+  cover_fallback_url?: string | null  // 封面回落(YouTube 任务的 AI 配图);主封面加载失败时切它。无则 null
   excerpt: string | null     // 摘要正文摘录(剥 markdown);无则 null
+  owner?: PublicOwner | null // 发布者展示身份;未捕获则 null,前端不渲染
+  is_owner?: boolean         // 当前请求者(带 token 时)是否为本任务 owner;匿名/未刷新恒 false
 }
 
 export interface PublicTaskListResponse {
@@ -1186,6 +1201,8 @@ export interface PublicTaskDetail {
   created_at: string
   // YouTube 视频封面卡元数据(仅 YouTube 来源任务;后端 feature 分支上线前可能整体缺失=null 同义)。
   youtube_info?: PublicYouTubeInfo | null
+  owner?: PublicOwner | null // 发布者展示身份;未捕获则 null
+  is_owner?: boolean         // 当前请求者是否为本任务 owner;匿名/未刷新恒 false。前端据此跳私有详情
 }
 
 export interface PublicTranscriptItem {
