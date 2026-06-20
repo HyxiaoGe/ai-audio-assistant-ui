@@ -65,10 +65,12 @@ function SummaryImagePlaceholder({ placeholder }: { placeholder: string }) {
   const { streamingImages, mediaToken, imageModel } = useContext(MarkdownImageContext);
   const description = extractPlaceholderDescription(placeholder);
   const imageState = streamingImages.get(placeholder);
-  // 配图溯源:在此(有 i18n + 生成模型)算好可直接渲染的淡色文案,下发给展示型 ImagePlaceholder,
-  // 让它保持纯展示、不依赖 i18n。旧数据无 image_model→null→图注不显示溯源。
-  const provenanceLabel = imageModel
-    ? t("summary.imageGeneratedBy", { model: formatModelName(imageModel) })
+  // 配图溯源:优先用这张图自己的 model_id(images[].model_id / WS 事件,Seedream 也有值),
+  // 回退到摘要级 imageModel(老 Gemini 任务才有)。在此(有 i18n)算好可直接渲染的淡色文案,
+  // 下发给展示型 ImagePlaceholder,让它保持纯展示、不依赖 i18n。两者皆缺→null→不显示溯源。
+  const provenanceModel = imageState?.model_id ?? imageModel;
+  const provenanceLabel = provenanceModel
+    ? t("summary.imageGeneratedBy", { model: formatModelName(provenanceModel) })
     : null;
   return (
     <ImagePlaceholder

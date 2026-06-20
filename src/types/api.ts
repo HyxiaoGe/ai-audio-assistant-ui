@@ -1122,6 +1122,12 @@ export interface StreamingImage {
   url: string | null
   status: "pending" | "generating" | "ready" | "failed"
   /**
+   * 这张图的生图模型 id(如 doubao-seedream-4-5),溯源源头:来自持久 images[].model_id 或
+   * WS image_ready 事件。缺省 null(旧数据/占位 seed 未知)→ 图注不显示溯源文案。
+   * 注意:不要用摘要级 image_model_used——切 Seedream 后那个字段恒 NULL。
+   */
+  model_id?: string | null
+  /**
    * 代理回落 URL(前端内部字段,仅公开页使用):url 为 OSS 预签名直链(600s)时,
    * 这里带上 /api/v1/summaries/images/.. 代理路径。直链过期(长开页面)加载失败时,
    * ImagePlaceholder 切到该回落 URL 重试(走既有媒体票 + 401 换票链)。私有页不设置。
