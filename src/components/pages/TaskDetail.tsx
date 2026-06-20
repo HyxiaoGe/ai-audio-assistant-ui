@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useAuthStore } from '@/store/auth-store';
 import { notifyError, notifySuccess } from '@/lib/notify';
@@ -116,6 +116,7 @@ export default function TaskDetail({
 }: TaskDetailProps) {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const authUser = useAuthStore((s) => s.user);
   const sessionStatus = useAuthStore((s) => s.status);
   const client = useAPIClient();
@@ -1222,6 +1223,21 @@ export default function TaskDetail({
     const totalSeconds = mins * 60 + secs;
     handleSeek(totalSeconds);
   }, [handleSeek]);
+
+  // 从转写全文搜索命中跳转过来时 URL 带 ?t=<秒>：媒体就绪后跳播到该时刻一次。store.seek 即便
+  // 音频元素尚未就绪也会落 currentTime，进而驱动 TranscriptList 滚动/高亮到对应句子。只触发一次
+  // （ref 守卫），避免用户在页面内手动 seek 后被深链反复拉回。
+  const deepLinkSeekedRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkSeekedRef.current) return;
+    if (!task?.audio_url) return;
+    const raw = searchParams?.get('t');
+    if (raw == null) return;
+    const seconds = Number(raw);
+    if (!Number.isFinite(seconds) || seconds < 0) return;
+    deepLinkSeekedRef.current = true;
+    handleSeek(seconds);
+  }, [task?.audio_url, searchParams, handleSeek]);
 
   const handleEditTranscript = useCallback((segmentId: string, newContent: string) => {
     setTranscript(prev =>

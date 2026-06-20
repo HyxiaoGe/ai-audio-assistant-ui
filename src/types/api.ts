@@ -328,6 +328,24 @@ export interface TaskStatusCounts {
 }
 
 /**
+ * 转写全文搜索命中（GET /tasks/search）。
+ * 后端经 pg_jieba 中文分词在转写正文上做 FTS：snippet 是 ts_headline 高亮片段（命中词包在
+ * <mark>…</mark> 内，前端需安全渲染、不可 dangerouslySetInnerHTML），start_time 供跳播。
+ */
+export interface TaskSearchHit {
+  task_id: string
+  title: string | null
+  snippet: string
+  start_time: number
+  rank: number
+}
+
+export interface TaskSearchResponse {
+  query: string
+  hits: TaskSearchHit[]
+}
+
+/**
  * YouTube 视频信息
  * 当任务来源是 YouTube 时返回
  */

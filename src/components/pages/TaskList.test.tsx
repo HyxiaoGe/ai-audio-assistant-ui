@@ -10,10 +10,14 @@ const mockClient = vi.hoisted(() => ({
   getTasks: vi.fn(),
   getTaskStatusCounts: vi.fn(),
   retryTask: vi.fn(),
+  searchTranscripts: vi.fn(),
 }))
 
 // t 必须跨渲染稳定，否则会成为加载 effect 的不稳定依赖导致无限重拉。
 const i18n = vi.hoisted(() => ({ t: (key: string) => key }))
+
+// 稳定的 push mock：用于断言搜索命中点击后的深链跳转（带时间戳）。
+const routerMock = vi.hoisted(() => ({ push: vi.fn() }))
 
 vi.mock("@/lib/use-api-client", () => ({
   useAPIClient: () => mockClient,
@@ -28,7 +32,7 @@ vi.mock("@/lib/use-date-formatter", () => ({
 }))
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => routerMock,
 }))
 
 vi.mock("@/lib/notify", () => ({
@@ -188,5 +192,98 @@ describe("TaskList 实时订阅 store——处理中卡片随 WS 刷新", () => 
     await waitFor(() => {
       expect(screen.getByTestId("task-p1")).toHaveTextContent("处理中任务")
     })
+  })
+})
+
+// 旧搜索框只对「当前页已加载」的任务按标题做客户端 includes 过滤(P1-6):翻页之外的命中被漏,
+// 且完全搜不到转写正文。这里锁定新行为:输入查询 → 防抖后打 GET /tasks/search(后端 pg_jieba
+// 中文分词全文检索)→ 渲染带高亮片段的命中,点击深链到 /tasks/{id}?t={start_time} 跳播;
+// 空查询不打服务端、回落正常列表。
+describe("TaskList 服务端转写搜索（替换纯客户端标题过滤）", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.clear()
+    act(() => useGlobalStore.setState({ tasks: {} }))
+    mockClient.getTasks.mockResolvedValue({
+      items: [
+        {
+          id: "list-1",
+          title: "列表里的任务",
+          status: "completed",
+          source_type: "file",
+          duration_seconds: 0,
+          created_at: "2026-06-18T00:00:00Z",
+        },
+      ],
+      total: 1,
+    })
+    mockClient.getTaskStatusCounts.mockResolvedValue({
+      all: 1,
+      processing: 0,
+      completed: 1,
+      failed: 0,
+    })
+    mockClient.searchTranscripts.mockResolvedValue({
+      query: "谷歌",
+      hits: [
+        {
+          task_id: "task-1",
+          title: "AI 周报",
+          snippet: "这期聊到<mark>谷歌</mark>的新模型",
+          start_time: 12.5,
+          rank: 0.08,
+        },
+      ],
+    })
+  })
+
+  it("输入查询后向服务端发起转写搜索并渲染带高亮片段的命中", async () => {
+    render(<TaskList isAuthenticated onOpenLogin={vi.fn()} />)
+    await screen.findByTestId("task-list-1")
+
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "谷歌" } })
+
+    await waitFor(() => expect(mockClient.searchTranscripts).toHaveBeenCalledWith("谷歌"))
+
+    const hit = await screen.findByTestId("search-hit-task-1")
+    expect(hit).toHaveTextContent("AI 周报")
+    expect(hit).toHaveTextContent("这期聊到谷歌的新模型")
+    // 搜索激活时用结果替换常规列表，避免「当前页过滤」的旧语义
+    expect(screen.queryByTestId("task-list-1")).toBeNull()
+  })
+
+  it("点击命中深链到 /tasks/{id}?t={start_time} 以便跳播", async () => {
+    render(<TaskList isAuthenticated onOpenLogin={vi.fn()} />)
+    await screen.findByTestId("task-list-1")
+
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "谷歌" } })
+    const hit = await screen.findByTestId("search-hit-task-1")
+
+    fireEvent.click(hit)
+    expect(routerMock.push).toHaveBeenCalledWith("/tasks/task-1?t=12.5")
+  })
+
+  it("空白查询不打服务端，回落正常任务列表", async () => {
+    render(<TaskList isAuthenticated onOpenLogin={vi.fn()} />)
+    await screen.findByTestId("task-list-1")
+
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "   " } })
+
+    // 给防抖留出时间，确认未触发服务端搜索
+    await new Promise((r) => setTimeout(r, 400))
+    expect(mockClient.searchTranscripts).not.toHaveBeenCalled()
+    expect(screen.getByTestId("task-list-1")).toBeInTheDocument()
+  })
+
+  it("查询无命中时显示空状态，不渲染任何命中卡片", async () => {
+    mockClient.searchTranscripts.mockResolvedValue({ query: "不存在", hits: [] })
+    render(<TaskList isAuthenticated onOpenLogin={vi.fn()} />)
+    await screen.findByTestId("task-list-1")
+
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "不存在" } })
+
+    await waitFor(() => expect(mockClient.searchTranscripts).toHaveBeenCalledWith("不存在"))
+    await waitFor(() => expect(screen.queryByTestId("search-hit-task-1")).toBeNull())
+    expect(screen.queryByTestId("task-list-1")).toBeNull()
   })
 })

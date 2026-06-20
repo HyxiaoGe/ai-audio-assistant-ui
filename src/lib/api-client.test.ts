@@ -249,3 +249,65 @@ describe("api-client media/stream ticket minting", () => {
     expect(String(url)).toContain("summary_type=visual_mind%20map")
   })
 })
+
+// 转写全文搜索：GET /tasks/search?q=&limit=。后端经 pg_jieba 中文分词返回带 <mark> 高亮片段
+// 与 start_time 的命中。锁定：查询串必须 URL 编码（中文/符号），limit 透传，信封 data 原样返回。
+describe("api-client searchTranscripts", () => {
+  function envelope(data: unknown): Response {
+    return new Response(JSON.stringify({ code: 0, message: "ok", data, traceId: "t" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })
+  }
+
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it("GETs /tasks/search with the url-encoded query and limit, returning the parsed hits", async () => {
+    const payload = {
+      query: "谷歌",
+      hits: [
+        {
+          task_id: "task-1",
+          title: "AI 周报",
+          snippet: "这期聊到<mark>谷歌</mark>的新模型",
+          start_time: 12.5,
+          rank: 0.0827,
+        },
+      ],
+    }
+    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
+      async () => envelope(payload)
+    )
+    vi.stubGlobal("fetch", fetchMock)
+
+    const client = createAPIClient("test-token")
+    const res = await client.searchTranscripts("谷歌", 20)
+
+    expect(res).toEqual(payload)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain("/tasks/search?")
+    expect(String(url)).toContain("q=%E8%B0%B7%E6%AD%8C") // “谷歌” url-encoded
+    expect(String(url)).toContain("limit=20")
+    expect(init?.method).toBe("GET")
+  })
+
+  it("defaults limit to 20 when not supplied", async () => {
+    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
+      async () => envelope({ query: "x", hits: [] })
+    )
+    vi.stubGlobal("fetch", fetchMock)
+
+    const client = createAPIClient("test-token")
+    await client.searchTranscripts("x")
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain("limit=20")
+  })
+})
