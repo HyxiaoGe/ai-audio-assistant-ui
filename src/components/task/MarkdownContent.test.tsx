@@ -44,7 +44,7 @@ describe("MarkdownContent", () => {
     expect(screen.getByText("正在生成图片...")).toBeInTheDocument()
   })
 
-  it("appends the media token to proxy image URLs and shows the model as a provenance badge in the caption", () => {
+  it("appends the media token to proxy image URLs and shows the model as a light provenance caption", () => {
     render(
       <MarkdownContent
         content={"![diagram](/api/v1/summaries/images/x.png)"}
@@ -58,9 +58,8 @@ describe("MarkdownContent", () => {
 
     const caption = img.closest("figure")?.querySelector("figcaption")
     expect(caption?.textContent).toContain("diagram")
-    // 徽章可见文本=友好短名(formatModelName)；完整溯源明细(原始 model id)进无障碍标签/悬浮提示。
-    expect(caption?.textContent).toContain("Gpt Image 1")
-    expect(screen.getByLabelText("summary.imageGeneratedBy:gpt-image-1")).toBeInTheDocument()
+    // 溯源为一句淡色文案(非徽章、无 hover),与占位符图、转写溯源风格一致;模型用友好短名。
+    expect(caption?.textContent).toContain("summary.imageGeneratedBy:Gpt Image 1")
   })
 
   it("renders a READY ImagePlaceholder image when streamingImages carries a ready url", () => {
@@ -76,6 +75,44 @@ describe("MarkdownContent", () => {
     const img = screen.getByRole("img", { name: "时间轴" })
     // ImagePlaceholder 的 ready 分支直出 imageUrl（已被 appendMediaToken 注入 token）
     expect(img).toHaveAttribute("src", "/api/v1/summaries/images/t.png?token=tok")
+  })
+
+  it("shows the generation-model provenance caption on a READY {{IMAGE}} placeholder image", () => {
+    // 回归(用户报告):当前配图走 {{IMAGE}} 占位符 → ImagePlaceholder,溯源原先只接进了旧版内联
+    // ![](url) 图,占位符路径漏了 → 生成图无溯源。READY 图注应在描述下补一行淡色「由 X 生成」。
+    const images = new Map<string, StreamingImage>([
+      [
+        "{{IMAGE: 时间轴}}",
+        { placeholder: "{{IMAGE: 时间轴}}", description: "时间轴", url: "/api/v1/summaries/images/t.png", status: "ready" },
+      ],
+    ])
+    render(
+      <MarkdownContent
+        content={"{{IMAGE: 时间轴}}"}
+        streamingImages={images}
+        mediaToken={"tok"}
+        imageModel={"gpt-image-1"}
+      />
+    )
+    const img = screen.getByRole("img", { name: "时间轴" })
+    const caption = img.closest("figure")?.querySelector("figcaption")
+    expect(caption?.textContent).toContain("时间轴")
+    // 文案=t("summary.imageGeneratedBy",{model: 友好短名});mock t 回显 `${key}:${model}`。
+    expect(caption?.textContent).toContain("summary.imageGeneratedBy:Gpt Image 1")
+  })
+
+  it("renders no provenance caption on a READY image when imageModel is absent (old data)", () => {
+    const images = new Map<string, StreamingImage>([
+      [
+        "{{IMAGE: 时间轴}}",
+        { placeholder: "{{IMAGE: 时间轴}}", description: "时间轴", url: "/api/v1/summaries/images/t.png", status: "ready" },
+      ],
+    ])
+    render(<MarkdownContent content={"{{IMAGE: 时间轴}}"} streamingImages={images} mediaToken={"tok"} />)
+    const img = screen.getByRole("img", { name: "时间轴" })
+    const caption = img.closest("figure")?.querySelector("figcaption")
+    expect(caption?.textContent).toContain("时间轴")
+    expect(caption?.textContent).not.toContain("summary.imageGeneratedBy")
   })
 
   it("threads StreamingImage.fallbackUrl to ImagePlaceholder: direct-url error falls back to the proxy url (public OSS presigned links)", async () => {
