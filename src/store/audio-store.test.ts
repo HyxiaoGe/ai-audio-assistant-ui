@@ -179,6 +179,42 @@ describe("audio-store cold-cache token warm-up", () => {
   // error→reloadWithFreshToken 同时发生。锁定：reloadWithFreshToken 先置 recovering，warm-up
   // 让步，一次冷启动只产生一轮 load()/play()（setSource 的无 token src + reload 的带 token src），
   // 而非两三轮互相 abort、白耗重试额度。
+  // 深链跳播「定位两遍」根因：冷缓存下 setSource 的 warm-up 会做第二次 src=…;load() 补票重载，
+  // load() 把元素 currentTime 归零。reloadWithFreshToken 会保留并恢复进度，但 warm-up 此前不会——
+  // 于是深链 seek 设定的逻辑位置在补票重载后丢失（播放从头、且恢复期瞬时 0 经 timeupdate 泄漏成
+  // 第二次自动滚动）。锁定：warm-up 也须以 store 的逻辑位置为权威，在元数据就绪后把元素重新落位。
+  it("warm-up 补票重载后恢复深链 seek 设定的逻辑播放位置（不丢位、不二次定位）", async () => {
+    ticket.getMediaTicketSync.mockReturnValue(null) // 冷缓存 → 触发 warm-up 补票重载
+    const el = fakeAudio()
+    useAudioStore.getState().registerAudio(el as unknown as HTMLAudioElement)
+    useAudioStore.getState().setSource("/api/v1/media/clip", "task-1") // load() #1：无 token
+    useAudioStore.getState().seek(42.5) // 深链跳播：逻辑位置 = 42.5
+    expect(useAudioStore.getState().currentTime).toBe(42.5)
+
+    await Promise.resolve()
+    await Promise.resolve() // warm-up 取票 → load() #2 补票重载
+
+    el.currentTime = 0 // 模拟 load() 后元素进度归零
+    el.emit("loadedmetadata")
+
+    expect(el.currentTime).toBe(42.5) // 元素被恢复到逻辑位置（当前代码：仍为 0）
+  })
+
+  // 第二次定位的直接来源：补票/换票重载在途时，元素被 load() 瞬时归零并触发 timeupdate(0)，
+  // 经 GlobalAudioPlayer.handleTimeUpdate → setCurrentTime 写进 store → 驱动转写列表二次自动滚动。
+  // 锁定：重载在途（recovering）期间，setCurrentTime 忽略元素驱动的瞬时位置，store 维持逻辑位置。
+  it("重载在途时忽略元素 currentTime 瞬时归零，store 维持逻辑位置（杜绝二次滚动）", async () => {
+    const el = fakeAudio()
+    useAudioStore.getState().registerAudio(el as unknown as HTMLAudioElement)
+    useAudioStore.getState().setSource("/api/v1/media/clip", "task-1")
+    useAudioStore.getState().seek(42.5) // 逻辑位置 = 42.5
+
+    await useAudioStore.getState().reloadWithFreshToken() // recovering=true（未 emit loadedmetadata）
+    useAudioStore.getState().setCurrentTime(0) // 模拟重载期 handleTimeUpdate(0)
+
+    expect(useAudioStore.getState().currentTime).toBe(42.5) // 不被瞬时 0 污染（当前代码：变 0）
+  })
+
   it("defers the warm-up to an in-flight reloadWithFreshToken so a cold-start 401 rebuilds once", async () => {
     ticket.getMediaTicketSync.mockReturnValue(null) // 冷缓存 → setSource 触发异步 warm-up
     const el = fakeAudio()
