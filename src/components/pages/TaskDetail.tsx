@@ -37,7 +37,6 @@ import { SummaryModelSelect } from '@/components/task/SummaryModelSelect';
 import { useAPIClient } from '@/lib/use-api-client';
 import { useGlobalStore } from '@/store/global-store';
 import { setEnsureCurrentMedia, useAudioStore } from '@/store/audio-store';
-import { adbg } from '@/lib/adbg';
 import { resolveStreamToken } from '@/lib/stream-ticket';
 import { useMediaToken } from '@/lib/media-url';
 import { ApiError } from '@/types/api';
@@ -1179,12 +1178,6 @@ export default function TaskDetail({
   }, [task?.audio_url, task?.id, task?.title, currentSrc, setSource, play, togglePlayback]);
 
   const handleSeek = useCallback((time: number) => {
-    adbg("TD.handleSeek", {
-      time,
-      willSetSource: !!(task?.audio_url && currentSrc !== task.audio_url),
-      currentSrc,
-      taskAudioUrl: task?.audio_url,
-    });
     if (task?.audio_url && currentSrc !== task.audio_url) {
       setSource(task.audio_url, task.id, task.title);
     }
@@ -1218,12 +1211,6 @@ export default function TaskDetail({
     } catch {
       // Ignore storage errors
     }
-    adbg("TD.playbackEffect", {
-      behavior,
-      currentSrc,
-      branch: behavior === "keep" ? (currentSrc ? "keep-noop" : "keep-setsrc") : "setsrc",
-      taskId: task?.id,
-    });
     if (behavior === "keep") {
       if (!currentSrc) {
         setSource(task.audio_url, task.id, task.title);
@@ -1249,12 +1236,6 @@ export default function TaskDetail({
   // （ref 守卫），避免用户在页面内手动 seek 后被深链反复拉回。
   const deepLinkSeekedRef = useRef(false);
   useEffect(() => {
-    adbg("TD.deeplink.enter", {
-      guardAlready: deepLinkSeekedRef.current,
-      rawT: searchParams?.get('t'),
-      taskId: task?.id,
-      hasAudioUrl: !!task?.audio_url,
-    });
     if (deepLinkSeekedRef.current) return;
     if (!task?.audio_url) return;
     const raw = searchParams?.get('t');
@@ -1262,7 +1243,6 @@ export default function TaskDetail({
     const seconds = Number(raw);
     if (!Number.isFinite(seconds) || seconds < 0) return;
     deepLinkSeekedRef.current = true;
-    adbg("TD.deeplink.seek", { seconds });
     // 深链「跳到这一句」是显式意图，须压过 localStorage 保存的播放进度：先删掉本任务的进度缓存，
     // 让 GlobalAudioPlayer 的进度恢复 effect 读到空缓存即早返回、不写 currentTime；否则它会先把
     // 进度恢复到上次位置(滚动一次到错位置)，深链 seek 再写一次(滚动到目标)——双重滚动。删缓存后

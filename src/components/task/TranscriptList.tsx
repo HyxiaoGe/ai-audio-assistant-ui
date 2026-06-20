@@ -1,7 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAudioStore } from '@/store/audio-store';
 import { useI18n } from '@/lib/i18n-context';
-import { adbg } from '@/lib/adbg';
 import TranscriptItem from '@/components/task/TranscriptItem';
 import ErrorState from '@/components/common/ErrorState';
 import type { DisplayTranscriptSegment } from '@/lib/transcript-mapping';
@@ -145,8 +144,6 @@ function TranscriptListImpl({
   const convergeRafRef = useRef<number | null>(null);
   const resumeScrollTimerRef = useRef<number | null>(null);
   const activeSegmentIdRef = useRef<string | null>(null);
-  // 诊断用：把每帧 currentTime 存进 ref，供 activeSegmentId 变化 effect 读取而不入 deps。
-  const currentTimeRef = useRef(currentTime);
 
   // 统一拆卸程序化滚动：清标志 + 取消在途 rAF 收敛 + 取消 backstop。是唯一的「收尾/中止」入口，
   // 保证三者原子地一起归零（收敛完成、用户手势中止、重入、卸载、兜底均经此处）。
@@ -162,22 +159,13 @@ function TranscriptListImpl({
     }
   }, []);
 
-  const scrollToTranscriptItem = useCallback((segmentId: string, reason: string) => {
+  const scrollToTranscriptItem = useCallback((segmentId: string) => {
     const container = transcriptScrollRef.current;
     if (!container) return;
     // 用 data-segment-id 在容器内定位行节点，而非给每行挂 ref——避免本组件每帧重渲染时
     // 整列 ref 反复 detach/reattach 的开销，也绕开「渲染期读取 ref.current」的 lint 限制。
     const node = container.querySelector(`[data-segment-id="${CSS.escape(segmentId)}"]`);
-    if (!node) {
-      adbg("TL.scroll.miss", { segmentId, reason });
-      return;
-    }
-    adbg("TL.scroll", {
-      segmentId,
-      reason,
-      targetTop: Math.round(node.getBoundingClientRect().top),
-      scrollTop: Math.round(container.scrollTop),
-    });
+    if (!node) return;
 
     // 重入幂等:先拆掉任何在途的收敛循环/兜底,再重新武装。绝不让两个循环同时争用 scrollTop
     // (新深链或播放推进改变活动段时,旧循环必须先死)。
@@ -210,7 +198,6 @@ function TranscriptListImpl({
       const absDrift = Math.abs(drift);
       const tol = Math.max(PROGRAMMATIC_SCROLL_TOL_PX, Math.round(nRect.height * 0.02));
       if (absDrift <= tol || iters >= PROGRAMMATIC_SCROLL_MAX_FRAMES) {
-        adbg("TL.converge.done", { iters, drift: Math.round(drift), why: absDrift <= tol ? "tol" : "max" });
         clearProgrammaticScroll();
         return;
       }
@@ -221,7 +208,6 @@ function TranscriptListImpl({
         stall = 0;
       }
       if (stall >= 2) {
-        adbg("TL.converge.done", { iters, drift: Math.round(drift), why: "stall" });
         clearProgrammaticScroll();
         return;
       }
@@ -239,13 +225,9 @@ function TranscriptListImpl({
     }
     resumeScrollTimerRef.current = window.setTimeout(() => {
       const segmentId = activeSegmentIdRef.current;
-      adbg("TL.resumeTimer.fire", {
-        segmentId,
-        pausedNow: Date.now() < autoScrollPauseUntilRef.current,
-      });
       if (!segmentId) return;
       if (Date.now() < autoScrollPauseUntilRef.current) return;
-      scrollToTranscriptItem(segmentId, "resume-timer");
+      scrollToTranscriptItem(segmentId);
     }, 3000);
   }, [scrollToTranscriptItem]);
 
@@ -253,24 +235,10 @@ function TranscriptListImpl({
     activeSegmentIdRef.current = activeSegmentId;
   }, [activeSegmentId]);
 
-  // 诊断：声明在「activeSegmentId 变化滚动 effect」之前——同一 commit 内 effect 按声明序执行，
-  // 故此处先把 currentTimeRef 更新到最新，再让下方滚动 effect 读到当帧的 currentTime。
   useEffect(() => {
-    currentTimeRef.current = currentTime;
-  }, [currentTime]);
-
-  useEffect(() => {
-    // 诊断：读组件内已订阅的 currentTime（effect 仅在 activeSegmentId 变化时跑，闭包里的
-    // currentTime 正是产生该 activeSegmentId 的值）。不加进 deps：否则每帧 timeupdate 都重跑
-    // 滚动 → 既污染日志又制造额外滚动。
-    adbg("TL.activeSegmentId.change", {
-      activeSegmentId,
-      currentTime: currentTimeRef.current,
-      paused: Date.now() < autoScrollPauseUntilRef.current,
-    });
     if (!activeSegmentId) return;
     if (Date.now() < autoScrollPauseUntilRef.current) return;
-    scrollToTranscriptItem(activeSegmentId, "effect");
+    scrollToTranscriptItem(activeSegmentId);
   }, [activeSegmentId, scrollToTranscriptItem]);
 
   useEffect(() => {
@@ -281,21 +249,12 @@ function TranscriptListImpl({
       // 用户真实手势/滚动:若有程序化收敛在途,立即中止它(原生 smooth 会被用户输入打断,手写 rAF
       // 须显式接线),用户优先。注:handleScroll 在程序化在途时已 early-return,故经它进来时标志必为假;
       // 只有 wheel/touchmove/pointerdown 才可能在收敛途中触发中止。
-      const wasProgrammatic = programmaticScrollRef.current;
-      if (wasProgrammatic) clearProgrammaticScroll();
-      adbg("TL.pauseAutoScroll", {
-        abortedConverge: wasProgrammatic,
-        activeRef: activeSegmentIdRef.current,
-      });
+      if (programmaticScrollRef.current) clearProgrammaticScroll();
       autoScrollPauseUntilRef.current = Date.now() + 3000;
       scheduleAutoScrollResume();
     };
 
     const handleScroll = () => {
-      adbg("TL.scrollEvent", {
-        programmatic: programmaticScrollRef.current,
-        scrollTop: Math.round(container.scrollTop),
-      });
       // 程序化滚动在途:本帧是我们自己的 scrollIntoView 产生的,绝不当成用户滚动。
       // 标志由 rAF 收敛循环(或 backstop)清掉,绝不在此处续命/计时。
       if (programmaticScrollRef.current) return;
@@ -316,9 +275,6 @@ function TranscriptListImpl({
   }, [scheduleAutoScrollResume, clearProgrammaticScroll]);
 
   useEffect(() => {
-    adbg("TL.boot", {
-      scrollRestoration: typeof history !== "undefined" ? history.scrollRestoration : "n/a",
-    });
     return () => {
       if (resumeScrollTimerRef.current) {
         window.clearTimeout(resumeScrollTimerRef.current);
