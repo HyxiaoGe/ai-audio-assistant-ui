@@ -137,6 +137,54 @@ describe("TranscriptList", () => {
     expect(container.querySelector(".transcript-word-active")).toBeNull()
   })
 
+  // 转写段连续(prev.end == next.start，如 a[0,2] 与 b[2,4])。currentTime 正好落在边界 2 时，
+  // 须归属"以它为起点"的那段(b)，而非"以它为终点"的那段(a)。否则从搜索命中深链跳播到段 start
+  // 会停在上一段(实测:点「会接替库克」停在上一句)。这是边界判定的 off-by-one 回归守卫。
+  it("activates the segment that STARTS at an exact contiguous boundary, not the one that ends there", () => {
+    const { container } = renderList()
+
+    act(() => useAudioStore.setState({ currentTime: 2 }))
+
+    // 段 b 的首词 foo([2,3]) 应高亮，而非段 a 的末词 world([1,2])
+    const active = container.querySelector(".transcript-word-active")
+    expect(active?.textContent?.trim()).toBe("foo")
+  })
+
+  it("scrolls to the segment that STARTS at an exact contiguous boundary (deep-link to segment start)", () => {
+    const scrollSpy = vi.fn()
+    Element.prototype.scrollIntoView = scrollSpy
+    const { container } = renderList()
+
+    act(() => useAudioStore.setState({ currentTime: 2 }))
+
+    const target = scrollSpy.mock.contexts[scrollSpy.mock.contexts.length - 1]
+    expect(target).toBe(container.querySelector('[data-segment-id="b"]'))
+  })
+
+  // 不变量守卫:currentTime 落在段间空隙(prev.end < next.start)时,保持高亮上一段,不前跳到下一段。
+  it("keeps the previous segment active when currentTime is in a gap before the next segment", () => {
+    const gapped: DisplayTranscriptSegment[] = [
+      seg({ id: "g0", startSeconds: 0, endSeconds: 2, words: [{ word: "x", start_time: 0, end_time: 2, confidence: null }] }),
+      seg({ id: "g1", startSeconds: 4, endSeconds: 6, words: [{ word: "y", start_time: 4, end_time: 6, confidence: null }] }),
+    ]
+    const { container } = renderList({ transcript: gapped })
+
+    act(() => useAudioStore.setState({ currentTime: 3 })) // 落在 [2,4) 空隙
+    expect(container.querySelector(".transcript-word-active")?.textContent?.trim()).toBe("x")
+  })
+
+  // 重叠段(diarization 可能产生 prev.end > next.start):语义钉死为"以最新开始的段为准"(后段)。
+  it("activates the later-starting segment in an overlap region", () => {
+    const overlap: DisplayTranscriptSegment[] = [
+      seg({ id: "o0", startSeconds: 0, endSeconds: 3, words: [{ word: "early", start_time: 0, end_time: 3, confidence: null }] }),
+      seg({ id: "o1", startSeconds: 2, endSeconds: 5, words: [{ word: "late", start_time: 2, end_time: 5, confidence: null }] }),
+    ]
+    const { container } = renderList({ transcript: overlap })
+
+    act(() => useAudioStore.setState({ currentTime: 2.5 })) // 落在 [2,3] 重叠区
+    expect(container.querySelector(".transcript-word-active")?.textContent?.trim()).toBe("late")
+  })
+
   it("calls onTimeClick with the segment start time when its timestamp is clicked", () => {
     const onTimeClick = vi.fn()
     renderList({ onTimeClick })

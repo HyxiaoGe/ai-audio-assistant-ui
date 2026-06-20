@@ -76,15 +76,17 @@ function TranscriptListImpl({
     if (!isActiveAudio || transcript.length === 0) {
       return empty;
     }
+    // 活动段 = 最后一个 startSeconds <= currentTime 的段。不再在 `currentTime <= endSeconds`
+    // 处提前 break:转写段通常连续(prev.end == next.start),若在 prev 处因 `<= prev.end` 命中
+    // 而 break,恰好落在边界的时刻会归属上一段——从搜索命中深链跳播到段 start 时就会停在上一句
+    // (实测:点「会接替库克」停到上一句)。改成"以它为起点的那段优先",边界时刻正确归属下一段。
+    // gap 场景不变(currentTime 落在空隙时,下一段 start > currentTime 会先 break,仍保留上一段)。
     let nextSegment: DisplayTranscriptSegment | null = null;
     for (const segment of transcript) {
       if (currentTime < segment.startSeconds) {
         break;
       }
       nextSegment = segment;
-      if (currentTime <= segment.endSeconds) {
-        break;
-      }
     }
     const nextId = nextSegment?.id ?? null;
     let nextWordIndex: number | null = null;
