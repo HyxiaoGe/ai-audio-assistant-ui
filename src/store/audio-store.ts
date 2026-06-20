@@ -1,6 +1,7 @@
 import { create } from "zustand"
 import { getMediaTicket, getMediaTicketSync } from "@/lib/media-ticket"
 import { appendMediaToken } from "@/lib/media-url"
+import { adbg } from "@/lib/adbg"
 
 // 媒体鉴权恢复的重试上限：token 过期/缺失导致代理 401 时刷新并重载，但限制次数，避免非
 // 鉴权错误（解码失败、资源不存在）下无限重载。单例 store，模块级计数即可；新 src 时重置。
@@ -22,6 +23,11 @@ let fallbackSrc: string | null = null
 // src，后到者让步，保证一次冷启动只产生一轮 load()/play()，而非两三轮互相 abort、白耗重试额度。
 // 媒体重新就绪或再次失败（loadedmetadata|error）后释放。
 let recovering = false
+
+// 临时诊断：把模块私有的 recovering 暴露给 GlobalAudioPlayer 的 timeupdate 日志读取（非 React 订阅）。
+export function getRecovering(): boolean {
+  return recovering
+}
 
 // 「正在查看的任务」上下文：全局键盘快捷键（空格切播放、方向键 seek）默认作用于 store 当前载入
 // 的音频（即顶部播放条）。但用户停留在某个任务详情页时，期望快捷键作用于正在看的任务，而非播放条
@@ -70,8 +76,10 @@ export const useAudioStore = create<AudioStore>((set, get) => {
   // 标记一轮 token 刷新重建开始，并在媒体重新就绪/失败后释放互斥标志（once 监听用完即摘）。
   const beginRecovery = (audioEl: HTMLAudioElement) => {
     recovering = true
+    adbg("STORE.recovering.begin", { src: get().src, readyState: audioEl.readyState })
     const release = () => {
       recovering = false
+      adbg("STORE.recovering.release", { src: get().src })
     }
     audioEl.addEventListener("loadedmetadata", release, { once: true })
     audioEl.addEventListener("error", release, { once: true })
@@ -104,12 +112,18 @@ export const useAudioStore = create<AudioStore>((set, get) => {
       audioEl.addEventListener(
         "loadedmetadata",
         () => {
+          adbg("STORE.warmup.loadedmetadata", {
+            resumeAt,
+            elBefore: audioEl.currentTime,
+            willAssign: resumeAt > 0 && Number.isFinite(resumeAt),
+          })
           if (resumeAt > 0 && Number.isFinite(resumeAt)) {
             audioEl.currentTime = resumeAt
           }
         },
         { once: true }
       )
+      adbg("STORE.warmup.reload", { resumeAt, mediaAuthRetries, intendToPlay })
       audioEl.src = appendMediaToken(src, token)
       audioEl.load()
       if (intendToPlay) cur.play()
@@ -134,6 +148,13 @@ export const useAudioStore = create<AudioStore>((set, get) => {
     },
     setSource: (src, taskId, title, fallback) => {
       const { audioEl, src: previous } = get()
+      adbg("STORE.setSource", {
+        src,
+        prevSrc: previous,
+        taskId,
+        willResetCurrentTime: src !== previous,
+        prevCurrentTime: get().currentTime,
+      })
       if (src === previous) {
         if (taskId !== undefined || title !== undefined) {
           set((state) => ({
@@ -199,6 +220,12 @@ export const useAudioStore = create<AudioStore>((set, get) => {
     },
     seek: (time) => {
       const { audioEl } = get()
+      adbg("STORE.seek", {
+        time,
+        recovering,
+        elBefore: audioEl?.currentTime ?? null,
+        storeBefore: get().currentTime,
+      })
       if (audioEl) {
         audioEl.currentTime = time
       }
@@ -210,6 +237,12 @@ export const useAudioStore = create<AudioStore>((set, get) => {
     // 驱动转写列表二次自动滚动（深链跳播「定位两遍」）。重载在途一律忽略元素驱动的 currentTime，
     // 落位交由重载完成后按权威逻辑位置恢复。seek() 直接 set（不走此路），深链定位不受影响。
     setCurrentTime: (currentTime) => {
+      adbg("STORE.setCurrentTime", {
+        arg: currentTime,
+        recovering,
+        prev: get().currentTime,
+        swallowed: recovering,
+      })
       if (recovering) return
       set({ currentTime })
     },
@@ -243,6 +276,7 @@ export const useAudioStore = create<AudioStore>((set, get) => {
       const logicalTime = get().currentTime
       const resumeAt = logicalTime > 0 ? logicalTime : audioEl.currentTime
       const wasPlaying = !audioEl.paused
+      adbg("STORE.reload.start", { resumeAt, logicalTime, wasPlaying, target, src })
 
       const token = await getMediaTicket()
       audioEl.src = appendMediaToken(target, token)
@@ -256,6 +290,11 @@ export const useAudioStore = create<AudioStore>((set, get) => {
         settled = true
         recovering = false
         mediaAuthRetries = 0
+        adbg("STORE.reload.ready", {
+          resumeAt,
+          elBefore: audioEl.currentTime,
+          willAssign: resumeAt > 0 && Number.isFinite(resumeAt),
+        })
         if (resumeAt > 0 && Number.isFinite(resumeAt)) {
           audioEl.currentTime = resumeAt
         }

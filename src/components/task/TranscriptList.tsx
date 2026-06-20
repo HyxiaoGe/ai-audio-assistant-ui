@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAudioStore } from '@/store/audio-store';
 import { useI18n } from '@/lib/i18n-context';
+import { adbg } from '@/lib/adbg';
 import TranscriptItem from '@/components/task/TranscriptItem';
 import ErrorState from '@/components/common/ErrorState';
 import type { DisplayTranscriptSegment } from '@/lib/transcript-mapping';
@@ -122,14 +123,25 @@ function TranscriptListImpl({
   const programmaticScrollRef = useRef(false);
   const resumeScrollTimerRef = useRef<number | null>(null);
   const activeSegmentIdRef = useRef<string | null>(null);
+  // 诊断用：把每帧 currentTime 存进 ref，供 activeSegmentId 变化 effect 读取而不入 deps。
+  const currentTimeRef = useRef(currentTime);
 
-  const scrollToTranscriptItem = useCallback((segmentId: string) => {
+  const scrollToTranscriptItem = useCallback((segmentId: string, reason: string) => {
     const container = transcriptScrollRef.current;
     if (!container) return;
     // 用 data-segment-id 在容器内定位行节点，而非给每行挂 ref——避免本组件每帧重渲染时
     // 整列 ref 反复 detach/reattach 的开销，也绕开「渲染期读取 ref.current」的 lint 限制。
     const node = container.querySelector(`[data-segment-id="${CSS.escape(segmentId)}"]`);
-    if (!node) return;
+    if (!node) {
+      adbg("TL.scroll.miss", { segmentId, reason });
+      return;
+    }
+    adbg("TL.scroll", {
+      segmentId,
+      reason,
+      targetTop: Math.round(node.getBoundingClientRect().top),
+      scrollTop: Math.round(container.scrollTop),
+    });
     programmaticScrollRef.current = true;
     node.scrollIntoView({ behavior: "smooth", block: "center" });
     window.setTimeout(() => {
@@ -143,9 +155,13 @@ function TranscriptListImpl({
     }
     resumeScrollTimerRef.current = window.setTimeout(() => {
       const segmentId = activeSegmentIdRef.current;
+      adbg("TL.resumeTimer.fire", {
+        segmentId,
+        pausedNow: Date.now() < autoScrollPauseUntilRef.current,
+      });
       if (!segmentId) return;
       if (Date.now() < autoScrollPauseUntilRef.current) return;
-      scrollToTranscriptItem(segmentId);
+      scrollToTranscriptItem(segmentId, "resume-timer");
     }, 3000);
   }, [scrollToTranscriptItem]);
 
@@ -153,10 +169,24 @@ function TranscriptListImpl({
     activeSegmentIdRef.current = activeSegmentId;
   }, [activeSegmentId]);
 
+  // 诊断：声明在「activeSegmentId 变化滚动 effect」之前——同一 commit 内 effect 按声明序执行，
+  // 故此处先把 currentTimeRef 更新到最新，再让下方滚动 effect 读到当帧的 currentTime。
   useEffect(() => {
+    currentTimeRef.current = currentTime;
+  }, [currentTime]);
+
+  useEffect(() => {
+    // 诊断：读组件内已订阅的 currentTime（effect 仅在 activeSegmentId 变化时跑，闭包里的
+    // currentTime 正是产生该 activeSegmentId 的值）。不加进 deps：否则每帧 timeupdate 都重跑
+    // 滚动 → 既污染日志又制造额外滚动。
+    adbg("TL.activeSegmentId.change", {
+      activeSegmentId,
+      currentTime: currentTimeRef.current,
+      paused: Date.now() < autoScrollPauseUntilRef.current,
+    });
     if (!activeSegmentId) return;
     if (Date.now() < autoScrollPauseUntilRef.current) return;
-    scrollToTranscriptItem(activeSegmentId);
+    scrollToTranscriptItem(activeSegmentId, "effect");
   }, [activeSegmentId, scrollToTranscriptItem]);
 
   useEffect(() => {
@@ -164,11 +194,19 @@ function TranscriptListImpl({
     if (!container) return;
 
     const pauseAutoScroll = () => {
+      adbg("TL.pauseAutoScroll", {
+        programmatic: programmaticScrollRef.current,
+        activeRef: activeSegmentIdRef.current,
+      });
       autoScrollPauseUntilRef.current = Date.now() + 3000;
       scheduleAutoScrollResume();
     };
 
     const handleScroll = () => {
+      adbg("TL.scrollEvent", {
+        programmatic: programmaticScrollRef.current,
+        scrollTop: Math.round(container.scrollTop),
+      });
       if (programmaticScrollRef.current) return;
       pauseAutoScroll();
     };
@@ -187,6 +225,9 @@ function TranscriptListImpl({
   }, [scheduleAutoScrollResume]);
 
   useEffect(() => {
+    adbg("TL.boot", {
+      scrollRestoration: typeof history !== "undefined" ? history.scrollRestoration : "n/a",
+    });
     return () => {
       if (resumeScrollTimerRef.current) {
         window.clearTimeout(resumeScrollTimerRef.current);
