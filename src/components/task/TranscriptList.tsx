@@ -25,6 +25,13 @@ interface TranscriptListProps {
   readOnly?: boolean;
 }
 
+// 程序化(自动)滚动结束的「兜底」清旗时限。正常路径由权威的 `scrollend` 事件清旗（动画真正
+// 停下时浏览器派发，不受帧间隔/主线程卡顿影响）；本兜底仅用于 scrollend 不触发的少数情形：
+// 旧浏览器（Safari < 18.2 等无 scrollend）、或 0 距离 scrollIntoView（目标已在视口、根本没滚动，
+// 故无 scrollend）。取一个宽松上界（远大于任何合理的 smooth 动画时长），它不是精度参数——
+// 真实浏览器上 scrollend 先清旗，此值几乎用不到，故无「调小一点就复发」的脆弱性。
+const PROGRAMMATIC_SCROLL_BACKSTOP_MS = 4000;
+
 /** 居中 spinner + 文案占位：转写「加载中」与「生成中」复用同一视觉，仅文案不同（均无失败语义、无重试）。 */
 function TranscriptSpinner({ label }: { label: string }) {
   return (
@@ -120,11 +127,23 @@ function TranscriptListImpl({
 
   const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
   const autoScrollPauseUntilRef = useRef(0);
+  // 程序化(自动)滚动在途标志。置真期间，容器自身派发的 scroll 事件一律视为「我们自己的动画帧」
+  // 而非用户滚动，绝不触发「3s 暂停 + 恢复」。由 scrollend 事件（权威）清旗，backstop 仅兜底。
   const programmaticScrollRef = useRef(false);
+  const programmaticBackstopRef = useRef<number | null>(null);
   const resumeScrollTimerRef = useRef<number | null>(null);
   const activeSegmentIdRef = useRef<string | null>(null);
   // 诊断用：把每帧 currentTime 存进 ref，供 activeSegmentId 变化 effect 读取而不入 deps。
   const currentTimeRef = useRef(currentTime);
+
+  // 清掉程序化滚动标志（由 scrollend 事件或 backstop 兜底调用）。同时取消 backstop 定时器。
+  const clearProgrammaticScroll = useCallback(() => {
+    programmaticScrollRef.current = false;
+    if (programmaticBackstopRef.current) {
+      window.clearTimeout(programmaticBackstopRef.current);
+      programmaticBackstopRef.current = null;
+    }
+  }, []);
 
   const scrollToTranscriptItem = useCallback((segmentId: string, reason: string) => {
     const container = transcriptScrollRef.current;
@@ -142,11 +161,21 @@ function TranscriptListImpl({
       targetTop: Math.round(node.getBoundingClientRect().top),
       scrollTop: Math.round(container.scrollTop),
     });
+    // 大跨度 smooth scrollIntoView（深链跳播到长转写深处）动画可达 ~1.5s。整段动画期间标志须保持，
+    // 否则动画自身的 scroll 帧会被 handleScroll 误判为用户滚动 → 触发「3s 暂停 + 恢复」对同一段二次
+    // 定位（用户报告的「滑到位后等一会又滑一次」，ADBG 实测第二次滚动 reason='resume-timer'）。
+    // 关键：清旗用权威的 `scrollend` 事件（见下方 effect），它在动画真正停下时由浏览器派发，
+    // 不受帧间隔/卡顿影响——这正是修掉旧「固定 300ms 计时器太短」根因的要害。
     programmaticScrollRef.current = true;
     node.scrollIntoView({ behavior: "smooth", block: "center" });
-    window.setTimeout(() => {
+    // backstop：仅在 scrollend 不触发时（旧浏览器无 scrollend、或 0 距离滚动无 scrollend）兜底清旗。
+    if (programmaticBackstopRef.current) {
+      window.clearTimeout(programmaticBackstopRef.current);
+    }
+    programmaticBackstopRef.current = window.setTimeout(() => {
       programmaticScrollRef.current = false;
-    }, 300);
+      programmaticBackstopRef.current = null;
+    }, PROGRAMMATIC_SCROLL_BACKSTOP_MS);
   }, []);
 
   const scheduleAutoScrollResume = useCallback(() => {
@@ -207,22 +236,34 @@ function TranscriptListImpl({
         programmatic: programmaticScrollRef.current,
         scrollTop: Math.round(container.scrollTop),
       });
+      // 程序化滚动动画在途：本帧是我们自己的 scrollIntoView 产生的，绝不当成用户滚动。
+      // 不做任何续命/计时——标志由权威的 scrollend 事件清掉（见 handleScrollEnd）。
       if (programmaticScrollRef.current) return;
       pauseAutoScroll();
     };
 
+    // scrollend：滚动（含 smooth 动画）真正停下时浏览器派发一次。用它权威地结束程序化滚动窗口，
+    // 替代「固定计时器」——因此整段动画期间标志稳定保持，与帧间隔/主线程卡顿无关，根治二次定位。
+    const handleScrollEnd = () => {
+      adbg("TL.scrollEnd", { programmatic: programmaticScrollRef.current });
+      if (!programmaticScrollRef.current) return;
+      clearProgrammaticScroll();
+    };
+
     container.addEventListener("scroll", handleScroll, { passive: true });
+    container.addEventListener("scrollend", handleScrollEnd, { passive: true });
     container.addEventListener("wheel", pauseAutoScroll, { passive: true });
     container.addEventListener("touchmove", pauseAutoScroll, { passive: true });
     container.addEventListener("pointerdown", pauseAutoScroll, { passive: true });
 
     return () => {
       container.removeEventListener("scroll", handleScroll);
+      container.removeEventListener("scrollend", handleScrollEnd);
       container.removeEventListener("wheel", pauseAutoScroll);
       container.removeEventListener("touchmove", pauseAutoScroll);
       container.removeEventListener("pointerdown", pauseAutoScroll);
     };
-  }, [scheduleAutoScrollResume]);
+  }, [scheduleAutoScrollResume, clearProgrammaticScroll]);
 
   useEffect(() => {
     adbg("TL.boot", {
@@ -231,6 +272,9 @@ function TranscriptListImpl({
     return () => {
       if (resumeScrollTimerRef.current) {
         window.clearTimeout(resumeScrollTimerRef.current);
+      }
+      if (programmaticBackstopRef.current) {
+        window.clearTimeout(programmaticBackstopRef.current);
       }
     };
   }, []);

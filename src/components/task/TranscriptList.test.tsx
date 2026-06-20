@@ -116,6 +116,120 @@ describe("TranscriptList", () => {
     expect(target).toBe(segmentB)
   })
 
+  // 复用:深链跳播测试用「从 100s 起」的段,使挂载时 currentTime=0 落在所有段之前 →
+  // activeSegment=null → 挂载不滚动,干净隔离「深链跳入某段」这一次滚动(与真实 ADBG 一致)。
+  function farSegments(): DisplayTranscriptSegment[] {
+    return [
+      seg({ id: "p", startSeconds: 100, endSeconds: 102, words: [{ word: "p", start_time: 100, end_time: 102, confidence: null }] }),
+      seg({ id: "q", startSeconds: 102, endSeconds: 104, words: [{ word: "q", start_time: 102, end_time: 104, confidence: null }] }),
+    ]
+  }
+
+  // 回归核心(深链跳播「二次定位」根因):大跨度 smooth scrollIntoView 动画时长可达 ~1.5s,整段动画
+  // 持续派发 scroll 事件。旧代码用「固定 300ms 计时器」清程序化标志,远短于动画时长,尾帧被误判为
+  // 用户滚动 → 触发「3s 暂停 + 恢复」对同一活动段二次 scrollIntoView(用户看到「滑到位后等一会又滑
+  // 一次」,ADBG 实测第二次滚动 reason='resume-timer')。修复改用权威的 scrollend 事件清旗:整段动画
+  // 期间标志稳定保持,无第二次滚动。currentTime/activeSegment 全程未变。
+  it("does not re-scroll when a long programmatic smooth scroll keeps emitting scroll frames (cleared by scrollend, not a timer)", () => {
+    vi.useFakeTimers()
+    const scrollSpy = vi.fn()
+    Element.prototype.scrollIntoView = scrollSpy
+    const { container } = renderList({ transcript: farSegments() })
+    expect(scrollSpy).toHaveBeenCalledTimes(0) // 挂载不滚动
+
+    // 深链落入段 p → 触发一次合法的自动滚动(effect)
+    act(() => useAudioStore.setState({ currentTime: 101 }))
+    expect(scrollSpy).toHaveBeenCalledTimes(1)
+
+    const sc = container.querySelector(".overflow-y-auto") as HTMLElement
+    expect(sc).not.toBeNull()
+
+    // 平滑动画:~1.2s 内每 50ms 一帧 scroll。整段动画期间标志保持,这些帧不得被当成用户滚动。
+    act(() => {
+      for (let i = 0; i < 24; i += 1) {
+        vi.advanceTimersByTime(50)
+        sc.dispatchEvent(new Event("scroll"))
+      }
+    })
+    // 动画真正停下 → 浏览器派发 scrollend,权威清旗。
+    act(() => {
+      sc.dispatchEvent(new Event("scrollend"))
+    })
+    // 再静默推进 >3s,给任何被(错误)安排的恢复定时器充分触发机会。
+    act(() => {
+      vi.advanceTimersByTime(3500)
+    })
+
+    expect(scrollSpy).toHaveBeenCalledTimes(1) // 不得二次定位
+    vi.useRealTimers()
+  })
+
+  // 关键鲁棒性守卫(对抗审查发现的「帧间隔脆弱性」+ 防止退回任何短计时器方案):
+  // 慢机/主线程卡顿时 smooth 动画两帧之间可能停顿很久(实测已见 230ms,卡顿更大)。只要 scrollend 未到、
+  // 动画未结束,程序化标志就不能被某个短计时器提前清掉,否则下一帧会被误判为用户滚动 → 二次定位。
+  // 本用例插入 1500ms 的「帧间停顿」——远超旧的固定 300ms 与曾试的 400ms 静默窗——只有 scrollend/宽松
+  // 兜底方案能通过;任何 <1500ms 的计时阈值都会让它 FAIL。
+  it("keeps the programmatic flag through a long inter-frame stall (immune to frame-gap timing; no second scroll)", () => {
+    vi.useFakeTimers()
+    const scrollSpy = vi.fn()
+    Element.prototype.scrollIntoView = scrollSpy
+    const { container } = renderList({ transcript: farSegments() })
+
+    act(() => useAudioStore.setState({ currentTime: 101 }))
+    expect(scrollSpy).toHaveBeenCalledTimes(1)
+
+    const sc = container.querySelector(".overflow-y-auto") as HTMLElement
+    // 动画中途主线程卡顿 1500ms(无帧、无 scrollend)——远超任何合理的短计时窗口。
+    act(() => {
+      vi.advanceTimersByTime(1500)
+    })
+    // 卡顿后动画恢复又来一帧:此刻标志必须仍为真,否则该帧会被误判为用户滚动 → 二次定位。
+    act(() => {
+      sc.dispatchEvent(new Event("scroll"))
+    })
+    // 动画结束 scrollend 清旗,再推进给恢复定时器机会。
+    act(() => {
+      sc.dispatchEvent(new Event("scrollend"))
+      vi.advanceTimersByTime(3500)
+    })
+
+    expect(scrollSpy).toHaveBeenCalledTimes(1) // 帧间隔再大也不二次定位
+    vi.useRealTimers()
+  })
+
+  // 不变量守卫 + scrollend 接线证明:scrollend 清旗后(程序化滚动已结束),真实用户滚动仍要
+  // 「暂停自动跟随 → 3s 后恢复」。若 scrollend 未正确接线,标志会一直为真、用户滚动被吞,则下面
+  // currentTime=103 会立刻滚到 q 使断言提前变 2 而失败——故本用例同时锁定 scrollend 必须清旗。
+  it("clears the flag on scrollend so a genuine user scroll still pauses auto-follow and resumes after 3s", () => {
+    vi.useFakeTimers()
+    const scrollSpy = vi.fn()
+    Element.prototype.scrollIntoView = scrollSpy
+    const { container } = renderList({ transcript: farSegments() })
+
+    act(() => useAudioStore.setState({ currentTime: 101 })) // effect 滚动 #1,flag=true
+    expect(scrollSpy).toHaveBeenCalledTimes(1)
+
+    const sc = container.querySelector(".overflow-y-auto") as HTMLElement
+    // 程序化滚动结束 → scrollend 清旗
+    act(() => {
+      sc.dispatchEvent(new Event("scrollend"))
+    })
+    // 用户真实滚动(此刻 flag 已清)→ 暂停自动跟随
+    act(() => {
+      sc.dispatchEvent(new Event("scroll"))
+    })
+    // 播放推进到段 q:处于暂停窗口内,不应立即滚动(若 scrollend 没清旗,这里会变成 2 → 失败)
+    act(() => useAudioStore.setState({ currentTime: 103 }))
+    expect(scrollSpy).toHaveBeenCalledTimes(1)
+
+    // 3s 后自动恢复,把当前活动段 q 滚入视图
+    act(() => {
+      vi.advanceTimersByTime(3000)
+    })
+    expect(scrollSpy).toHaveBeenCalledTimes(2)
+    vi.useRealTimers()
+  })
+
   it("applies content-visibility classes to every row container so off-screen rows skip layout/paint", () => {
     // jsdom 不做真实布局,这里只锁定样式类存在(真浏览器视觉行为由人工验证):
     // content-visibility:auto 让视口外行跳过布局/绘制;contain-intrinsic-size 用
