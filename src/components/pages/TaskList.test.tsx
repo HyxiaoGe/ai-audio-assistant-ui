@@ -17,7 +17,11 @@ const mockClient = vi.hoisted(() => ({
 const i18n = vi.hoisted(() => ({ t: (key: string) => key }))
 
 // 稳定的 push mock：用于断言搜索命中点击后的深链跳转（带时间戳）。
-const routerMock = vi.hoisted(() => ({ push: vi.fn() }))
+// replace：搜索词同步进 URL(?q=) 用——按键级写入须 replace 而非 push，否则历史栈被每个字符灌满。
+const routerMock = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }))
+
+// 可切换的 useSearchParams mock：用例可在 render 前设 current=URLSearchParams("q=...") 模拟带来源 q 的进入。
+const searchParamsMock = vi.hoisted(() => ({ current: new URLSearchParams() }))
 
 vi.mock("@/lib/use-api-client", () => ({
   useAPIClient: () => mockClient,
@@ -33,6 +37,7 @@ vi.mock("@/lib/use-date-formatter", () => ({
 
 vi.mock("next/navigation", () => ({
   useRouter: () => routerMock,
+  useSearchParams: () => searchParamsMock.current,
 }))
 
 vi.mock("@/lib/notify", () => ({
@@ -203,6 +208,7 @@ describe("TaskList 服务端转写搜索（替换纯客户端标题过滤）", (
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
+    searchParamsMock.current = new URLSearchParams()
     act(() => useGlobalStore.setState({ tasks: {} }))
     mockClient.getTasks.mockResolvedValue({
       items: [
@@ -252,7 +258,7 @@ describe("TaskList 服务端转写搜索（替换纯客户端标题过滤）", (
     expect(screen.queryByTestId("task-list-1")).toBeNull()
   })
 
-  it("点击命中深链到 /tasks/{id}?t={start_time} 以便跳播", async () => {
+  it("点击命中深链到 /tasks/{id}?t={start_time}&q={来源词} 以便跳播并让详情返回时恢复搜索态", async () => {
     render(<TaskList isAuthenticated onOpenLogin={vi.fn()} />)
     await screen.findByTestId("task-list-1")
 
@@ -260,7 +266,10 @@ describe("TaskList 服务端转写搜索（替换纯客户端标题过滤）", (
     const hit = await screen.findByTestId("search-hit-task-1")
 
     fireEvent.click(hit)
-    expect(routerMock.push).toHaveBeenCalledWith("/tasks/task-1?t=12.5")
+    // 命中深链带上来源 q，详情页「返回」按钮才能据此回到 /tasks?q=谷歌 恢复搜索态。
+    expect(routerMock.push).toHaveBeenCalledWith(
+      `/tasks/task-1?t=12.5&q=${encodeURIComponent("谷歌")}`
+    )
   })
 
   it("空白查询不打服务端，回落正常任务列表", async () => {
@@ -285,5 +294,38 @@ describe("TaskList 服务端转写搜索（替换纯客户端标题过滤）", (
     await waitFor(() => expect(mockClient.searchTranscripts).toHaveBeenCalledWith("不存在"))
     await waitFor(() => expect(screen.queryByTestId("search-hit-task-1")).toBeNull())
     expect(screen.queryByTestId("task-list-1")).toBeNull()
+  })
+
+  // 从详情返回(或浏览器后退)会带着 /tasks?q=谷歌 重新挂载列表；搜索词须从 URL 还原，
+  // 防抖 effect 据此自动重查，关键词+结果一并回来，无需用户重新输入。
+  it("挂载时从 URL ?q= 恢复搜索词并自动重查", async () => {
+    searchParamsMock.current = new URLSearchParams("q=谷歌")
+    render(<TaskList isAuthenticated onOpenLogin={vi.fn()} />)
+
+    // 输入框回填来源词
+    await waitFor(() =>
+      expect(screen.getByRole("textbox")).toHaveValue("谷歌")
+    )
+    // 防抖后据恢复出的 q 自动重查
+    await waitFor(() =>
+      expect(mockClient.searchTranscripts).toHaveBeenCalledWith("谷歌")
+    )
+    const hit = await screen.findByTestId("search-hit-task-1")
+    expect(hit).toBeInTheDocument()
+  })
+
+  it("输入查询时把搜索词写进 URL(?q=) 用 replace(不灌历史栈)；清空回纯 /tasks", async () => {
+    render(<TaskList isAuthenticated onOpenLogin={vi.fn()} />)
+    await screen.findByTestId("task-list-1")
+
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "谷歌" } })
+    expect(routerMock.replace).toHaveBeenCalledWith(
+      `/tasks?q=${encodeURIComponent("谷歌")}`
+    )
+    // 写 URL 必须用 replace 而非 push，避免每个按键都进历史栈
+    expect(routerMock.push).not.toHaveBeenCalled()
+
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "" } })
+    expect(routerMock.replace).toHaveBeenLastCalledWith("/tasks")
   })
 })

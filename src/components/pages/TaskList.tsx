@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import { Pagination } from '@/components/common/Pagination';
 import Sidebar from '@/components/layout/Sidebar';
@@ -32,6 +32,9 @@ export default function TaskList({
   onToggleTheme = () => {}
 }: TaskListProps) {
   const router = useRouter();
+  // 搜索态的 source of truth 提升到 URL(?q=):列表与详情是两个独立 route segment,互跳必卸载、
+  // 本地 state 丢失。把搜索词放进 URL 后,「详情返回 / 浏览器后退」都能据此还原(与详情 ?t= 深链同范式)。
+  const searchParams = useSearchParams();
   const client = useAPIClient();
   const { formatRelativeTime } = useDateFormatter();
   const { t } = useI18n();
@@ -46,7 +49,9 @@ export default function TaskList({
     failed: 0
   });
   const [filterStatus, setFilterStatus] = useState<'all' | 'processing' | 'completed' | 'failed'>('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  // 初值从 URL ?q= 还原:从详情返回/浏览器后退回到带 ?q= 的列表时,搜索词与结果一并恢复
+  // (searchHits 不必持久化——下方防抖 effect 依赖 searchQuery,恢复出 q 即自动重查)。
+  const [searchQuery, setSearchQuery] = useState(() => searchParams?.get('q') ?? '');
   // 服务端转写搜索结果：null = 无激活搜索（显示常规列表），数组 = 当前查询的命中（可能为空 = 无结果）。
   const [searchHits, setSearchHits] = useState<TaskSearchHit[] | null>(null);
   const [searching, setSearching] = useState(false);
@@ -300,10 +305,13 @@ export default function TaskList({
   // 是否处于激活搜索态：有非空查询即用服务端命中替换常规列表（不再做当前页客户端过滤）。
   const isSearching = searchQuery.trim().length > 0;
 
-  // 命中点击：深链到任务详情并带 ?t={start_time} 让详情页跳播到该时间戳。
+  // 命中点击：深链到任务详情并带 ?t={start_time} 让详情页跳播到该时间戳；同时把来源搜索词 ?q=
+  // 一并带进详情 URL,使详情页「返回」能回到 /tasks?q= 恢复搜索态(列表卸载会丢本地 state,靠 URL 还原)。
   const handleHitClick = useCallback((hit: TaskSearchHit) => {
-    router.push(`/tasks/${hit.task_id}?t=${hit.start_time}`);
-  }, [router]);
+    const q = searchQuery.trim();
+    const base = `/tasks/${hit.task_id}?t=${hit.start_time}`;
+    router.push(q ? `${base}&q=${encodeURIComponent(q)}` : base);
+  }, [router, searchQuery]);
 
   // 计算分页（服务端已分页，这里只显示当前页数据）
   const totalPages = Math.ceil(totalTasks / tasksPerPage);
@@ -317,10 +325,13 @@ export default function TaskList({
     setCurrentPage(1);
   };
 
-  // 搜索时重置到第一页
+  // 搜索时重置到第一页，并把搜索词同步进 URL(?q=)以便返回/后退时还原。
+  // 用 router.replace 而非 push:按键级写入若用 push 会把每个字符灌进历史栈、毁掉后退体验。
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
     setCurrentPage(1);
+    const q = value.trim();
+    router.replace(q ? `/tasks?q=${encodeURIComponent(q)}` : '/tasks');
   };
 
   const handlePageChange = (page: number) => {

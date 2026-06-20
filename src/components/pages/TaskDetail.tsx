@@ -123,6 +123,13 @@ export default function TaskDetail({
   const { t, locale } = useI18n();
   const { formatRelativeTime } = useDateFormatter();
   const id = params?.id as string;
+
+  // 返回任务列表：带回来源搜索词(?q=,由列表跳转时注入到详情 URL)让列表恢复搜索态;无来源 q 则回纯列表。
+  // 用 push(明确目标)而非 router.back():back 在「详情→详情」历史下会回错页,破坏确定性的「回列表」语义。
+  const handleBackToTasks = useCallback(() => {
+    const q = searchParams?.get('q')?.trim();
+    router.push(q ? `/tasks?q=${encodeURIComponent(q)}` : '/tasks');
+  }, [router, searchParams]);
   const isPlaying = useAudioStore((state) => state.isPlaying);
   const audioDuration = useAudioStore((state) => state.duration);
   const currentSrc = useAudioStore((state) => state.src);
@@ -1882,7 +1889,7 @@ export default function TaskDetail({
             type="general"
             title={t("errors.taskNotFound")}
             description={error || t("errors.taskNotFoundDesc")}
-            onRetry={() => router.push('/tasks')}
+            onRetry={handleBackToTasks}
             retryLabel={t("errors.backHome")}
           />
         </div>
@@ -1914,9 +1921,8 @@ export default function TaskDetail({
             >
               {/* Left: Back Button */}
               <button
-                onClick={() => router.push('/tasks')}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-[var(--app-glass-bg-strong)] transition-colors"
-                style={{ color: 'var(--app-text-muted)' }}
+                onClick={handleBackToTasks}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer text-[var(--app-text-muted)] transition-all duration-150 hover:bg-[var(--app-surface-alt)] hover:text-[var(--app-text)] active:scale-95 active:bg-[var(--app-primary-soft)]"
               >
                 <ArrowLeft className="w-5 h-5" />
                 <span className="text-sm" style={{ fontWeight: 500 }}>{t("common.back")}</span>
@@ -2001,9 +2007,8 @@ export default function TaskDetail({
             >
               {/* Left: Back Button */}
               <button
-                onClick={() => router.push('/tasks')}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-[var(--app-glass-bg-strong)] transition-colors"
-                style={{ color: 'var(--app-text-muted)' }}
+                onClick={handleBackToTasks}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer text-[var(--app-text-muted)] transition-all duration-150 hover:bg-[var(--app-surface-alt)] hover:text-[var(--app-text)] active:scale-95 active:bg-[var(--app-primary-soft)]"
               >
                 <ArrowLeft className="w-5 h-5" />
                 <span className="text-sm" style={{ fontWeight: 500 }}>{t("common.back")}</span>
@@ -2129,9 +2134,8 @@ export default function TaskDetail({
           >
             {/* Left: Back Button */}
             <button
-              onClick={() => router.push('/tasks')}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-[var(--app-glass-bg-strong)] transition-colors"
-              style={{ color: 'var(--app-text-muted)' }}
+              onClick={handleBackToTasks}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer text-[var(--app-text-muted)] transition-all duration-150 hover:bg-[var(--app-surface-alt)] hover:text-[var(--app-text)] active:scale-95 active:bg-[var(--app-primary-soft)]"
             >
               <ArrowLeft className="w-5 h-5" />
               <span className="text-sm" style={{ fontWeight: 500 }}>{t("common.back")}</span>

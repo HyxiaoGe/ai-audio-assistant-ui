@@ -1,4 +1,4 @@
-import { render, screen, waitFor, act } from "@testing-library/react"
+import { render, screen, waitFor, act, fireEvent } from "@testing-library/react"
 import type { ComponentType } from "react"
 import { useEffect, useState } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -682,5 +682,55 @@ describe("TaskDetail — ?t= 深链跳播", () => {
     expect(localStorage.getItem("audio:progress:task-1")).not.toBeNull()
     expect(mocks.audioState.seek).not.toHaveBeenCalled()
     localStorage.clear()
+  })
+})
+
+// 从搜索命中进详情、再点「返回」时,详情 URL 携带的来源 ?q= 须带回 /tasks?q=,让列表恢复搜索态;
+// 无来源 q 时回纯 /tasks。返回用 push(明确目标)而非 router.back()——back 在「详情→详情」历史下会回错页。
+describe("TaskDetail — 返回按钮恢复搜索态 + 交互反馈", () => {
+  afterEach(() => {
+    mocks.searchParams = new URLSearchParams()
+    mocks.router.push.mockClear()
+  })
+
+  it("有来源 ?q= 时返回带回搜索词(/tasks?q=)", async () => {
+    mocks.searchParams = new URLSearchParams("q=谷歌")
+    apiMock.getTask.mockResolvedValue(
+      task({ status: "completed", audio_url: "https://media.example/x.mp3" })
+    )
+    apiMock.getSummary.mockResolvedValue(summaryResp())
+
+    render(<TaskDetail />)
+
+    const back = await screen.findByText("common.back")
+    fireEvent.click(back.closest("button")!)
+    expect(mocks.router.push).toHaveBeenCalledWith(`/tasks?q=${encodeURIComponent("谷歌")}`)
+  })
+
+  it("无来源 ?q= 时返回纯 /tasks", async () => {
+    apiMock.getTask.mockResolvedValue(
+      task({ status: "completed", audio_url: "https://media.example/x.mp3" })
+    )
+    apiMock.getSummary.mockResolvedValue(summaryResp())
+
+    render(<TaskDetail />)
+
+    const back = await screen.findByText("common.back")
+    fireEvent.click(back.closest("button")!)
+    expect(mocks.router.push).toHaveBeenCalledWith("/tasks")
+  })
+
+  it("返回按钮带可点击交互态(cursor-pointer + active 按压反馈)", async () => {
+    apiMock.getTask.mockResolvedValue(
+      task({ status: "completed", audio_url: "https://media.example/x.mp3" })
+    )
+    apiMock.getSummary.mockResolvedValue(summaryResp())
+
+    render(<TaskDetail />)
+
+    const back = await screen.findByText("common.back")
+    const btn = back.closest("button")!
+    expect(btn.className).toContain("cursor-pointer")
+    expect(btn.className).toContain("active:scale-95")
   })
 })
