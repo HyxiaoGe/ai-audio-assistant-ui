@@ -25,12 +25,22 @@ interface TranscriptListProps {
   readOnly?: boolean;
 }
 
-// 程序化(自动)滚动结束的「兜底」清旗时限。正常路径由权威的 `scrollend` 事件清旗（动画真正
-// 停下时浏览器派发，不受帧间隔/主线程卡顿影响）；本兜底仅用于 scrollend 不触发的少数情形：
-// 旧浏览器（Safari < 18.2 等无 scrollend）、或 0 距离 scrollIntoView（目标已在视口、根本没滚动，
-// 故无 scrollend）。取一个宽松上界（远大于任何合理的 smooth 动画时长），它不是精度参数——
-// 真实浏览器上 scrollend 先清旗，此值几乎用不到，故无「调小一点就复发」的脆弱性。
+// 深链跳播「定位」根因(4 次修复后由 ADBG 坐标实锤):转写每行带 content-visibility:auto +
+// contain-intrinsic-size:auto 100px,未渲染行按 100px 估算。早期用 behavior:'smooth' 的大跨度
+// scrollIntoView 会逐帧「穿过」沿途约 960 行 → 每行首次渲染、真实高度(~103px)替换估算 →
+// 文档被撑高 ~3000px → 固定终点的平滑滚动结构性「欠冲」(ADBG:首滚落定后目标 rect.top 仍偏 +3448,
+// 此前几次 resume-timer 重滚其实在对已长高的布局重新测量、逐步收敛 3448→547→~0)。
+// 现改为「瞬时跳转(behavior:'auto')+有界 rAF 重定位收敛」:瞬时跳转不穿过中间行 → 不撑高文档 →
+// 落点即居中,只剩目标周围约一个视口的小残差,由下面的 rAF 循环按 rect 差测量并收敛。
+
+// 程序化滚动在途标志的「兜底」清旗时限。正常由 rAF 收敛循环自己清旗;此兜底仅防 rAF 长时间不触发
+// (如标签页后台化时浏览器暂停 rAF)导致标志永久卡住、吞掉用户滚动。取宽松上界,非精度参数。
 const PROGRAMMATIC_SCROLL_BACKSTOP_MS = 4000;
+// 收敛「已居中」判定阈值(像素)。容忍 block:'center' 的亚像素取整与滚动锚定抖动;对高 CJK 行
+// 取 max(4, 行高 2%)。漂移 ≤ 此值即认为到位,停止重定位。
+const PROGRAMMATIC_SCROLL_TOL_PX = 4;
+// 收敛重定位的帧上限(~0.5s,全程瞬时无感)。漂移迟迟不达 TOL 时由它硬收口,绝不无限循环。
+const PROGRAMMATIC_SCROLL_MAX_FRAMES = 30;
 
 /** 居中 spinner + 文案占位：转写「加载中」与「生成中」复用同一视觉，仅文案不同（均无失败语义、无重试）。 */
 function TranscriptSpinner({ label }: { label: string }) {
@@ -127,18 +137,25 @@ function TranscriptListImpl({
 
   const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
   const autoScrollPauseUntilRef = useRef(0);
-  // 程序化(自动)滚动在途标志。置真期间，容器自身派发的 scroll 事件一律视为「我们自己的动画帧」
-  // 而非用户滚动，绝不触发「3s 暂停 + 恢复」。由 scrollend 事件（权威）清旗，backstop 仅兜底。
+  // 程序化(自动)滚动在途标志。置真期间，容器自身派发的 scroll 事件一律视为「我们自己的滚动帧」
+  // 而非用户滚动，绝不触发「3s 暂停 + 恢复」。由 rAF 收敛循环清旗，backstop 仅兜底。
   const programmaticScrollRef = useRef(false);
   const programmaticBackstopRef = useRef<number | null>(null);
+  // 收敛重定位的 rAF id（单一在途循环）。重入/手势/卸载时据此取消，绝不让两个循环争用 scrollTop。
+  const convergeRafRef = useRef<number | null>(null);
   const resumeScrollTimerRef = useRef<number | null>(null);
   const activeSegmentIdRef = useRef<string | null>(null);
   // 诊断用：把每帧 currentTime 存进 ref，供 activeSegmentId 变化 effect 读取而不入 deps。
   const currentTimeRef = useRef(currentTime);
 
-  // 清掉程序化滚动标志（由 scrollend 事件或 backstop 兜底调用）。同时取消 backstop 定时器。
+  // 统一拆卸程序化滚动：清标志 + 取消在途 rAF 收敛 + 取消 backstop。是唯一的「收尾/中止」入口，
+  // 保证三者原子地一起归零（收敛完成、用户手势中止、重入、卸载、兜底均经此处）。
   const clearProgrammaticScroll = useCallback(() => {
     programmaticScrollRef.current = false;
+    if (convergeRafRef.current != null) {
+      cancelAnimationFrame(convergeRafRef.current);
+      convergeRafRef.current = null;
+    }
     if (programmaticBackstopRef.current) {
       window.clearTimeout(programmaticBackstopRef.current);
       programmaticBackstopRef.current = null;
@@ -161,22 +178,60 @@ function TranscriptListImpl({
       targetTop: Math.round(node.getBoundingClientRect().top),
       scrollTop: Math.round(container.scrollTop),
     });
-    // 大跨度 smooth scrollIntoView（深链跳播到长转写深处）动画可达 ~1.5s。整段动画期间标志须保持，
-    // 否则动画自身的 scroll 帧会被 handleScroll 误判为用户滚动 → 触发「3s 暂停 + 恢复」对同一段二次
-    // 定位（用户报告的「滑到位后等一会又滑一次」，ADBG 实测第二次滚动 reason='resume-timer'）。
-    // 关键：清旗用权威的 `scrollend` 事件（见下方 effect），它在动画真正停下时由浏览器派发，
-    // 不受帧间隔/卡顿影响——这正是修掉旧「固定 300ms 计时器太短」根因的要害。
+
+    // 重入幂等:先拆掉任何在途的收敛循环/兜底,再重新武装。绝不让两个循环同时争用 scrollTop
+    // (新深链或播放推进改变活动段时,旧循环必须先死)。
+    clearProgrammaticScroll();
     programmaticScrollRef.current = true;
-    node.scrollIntoView({ behavior: "smooth", block: "center" });
-    // backstop：仅在 scrollend 不触发时（旧浏览器无 scrollend、或 0 距离滚动无 scrollend）兜底清旗。
-    if (programmaticBackstopRef.current) {
-      window.clearTimeout(programmaticBackstopRef.current);
-    }
-    programmaticBackstopRef.current = window.setTimeout(() => {
-      programmaticScrollRef.current = false;
-      programmaticBackstopRef.current = null;
-    }, PROGRAMMATIC_SCROLL_BACKSTOP_MS);
-  }, []);
+    // 兜底:仅当 rAF 因标签页后台化等长时间不触发、收敛循环没能清旗时,防止标志永久卡住吞掉用户滚动。
+    programmaticBackstopRef.current = window.setTimeout(clearProgrammaticScroll, PROGRAMMATIC_SCROLL_BACKSTOP_MS);
+
+    // 初次「瞬时」跳转:behavior:'auto' 不逐帧穿过沿途行,故不会首次渲染它们、不撑高文档——这正是
+    // 根治旧 smooth 欠冲漂移的要害(见文件顶部注释)。落点按当前(估算)布局即居中。
+    node.scrollIntoView({ behavior: "auto", block: "center" });
+
+    // 有界 rAF 收敛:吸收「目标周围约一个视口的行首次渲染」带来的小残差。每帧重新测量行相对容器的
+    // 居中漂移(用 rect 差,绝不拿 viewport 相对的 rect.top 跟容器相对的 scrollTop 比),漂移 ≤ TOL
+    // 或达帧上限或连续两帧不再下降即止。全程 programmaticScrollRef 保持真,我们自己的 scroll 帧被
+    // handleScroll 屏蔽——这是「不二次定位」的关键不变量。
+    let iters = 0;
+    let prevAbsDrift = Number.POSITIVE_INFINITY;
+    let stall = 0;
+    const step = () => {
+      const c = transcriptScrollRef.current;
+      const n = c?.querySelector(`[data-segment-id="${CSS.escape(segmentId)}"]`) as HTMLElement | null;
+      if (!c || !n) {
+        clearProgrammaticScroll();
+        return;
+      }
+      const cRect = c.getBoundingClientRect();
+      const nRect = n.getBoundingClientRect();
+      const drift = nRect.top - cRect.top - (c.clientHeight - nRect.height) / 2;
+      const absDrift = Math.abs(drift);
+      const tol = Math.max(PROGRAMMATIC_SCROLL_TOL_PX, Math.round(nRect.height * 0.02));
+      if (absDrift <= tol || iters >= PROGRAMMATIC_SCROLL_MAX_FRAMES) {
+        adbg("TL.converge.done", { iters, drift: Math.round(drift), why: absDrift <= tol ? "tol" : "max" });
+        clearProgrammaticScroll();
+        return;
+      }
+      // 连续两帧漂移不再下降(病态/振荡布局):提前退出,避免烧满帧上限或可见抖动。
+      if (absDrift >= prevAbsDrift) {
+        stall += 1;
+      } else {
+        stall = 0;
+      }
+      if (stall >= 2) {
+        adbg("TL.converge.done", { iters, drift: Math.round(drift), why: "stall" });
+        clearProgrammaticScroll();
+        return;
+      }
+      prevAbsDrift = absDrift;
+      n.scrollIntoView({ behavior: "auto", block: "center" });
+      iters += 1;
+      convergeRafRef.current = requestAnimationFrame(step);
+    };
+    convergeRafRef.current = requestAnimationFrame(step);
+  }, [clearProgrammaticScroll]);
 
   const scheduleAutoScrollResume = useCallback(() => {
     if (resumeScrollTimerRef.current) {
@@ -223,8 +278,13 @@ function TranscriptListImpl({
     if (!container) return;
 
     const pauseAutoScroll = () => {
+      // 用户真实手势/滚动:若有程序化收敛在途,立即中止它(原生 smooth 会被用户输入打断,手写 rAF
+      // 须显式接线),用户优先。注:handleScroll 在程序化在途时已 early-return,故经它进来时标志必为假;
+      // 只有 wheel/touchmove/pointerdown 才可能在收敛途中触发中止。
+      const wasProgrammatic = programmaticScrollRef.current;
+      if (wasProgrammatic) clearProgrammaticScroll();
       adbg("TL.pauseAutoScroll", {
-        programmatic: programmaticScrollRef.current,
+        abortedConverge: wasProgrammatic,
         activeRef: activeSegmentIdRef.current,
       });
       autoScrollPauseUntilRef.current = Date.now() + 3000;
@@ -236,29 +296,19 @@ function TranscriptListImpl({
         programmatic: programmaticScrollRef.current,
         scrollTop: Math.round(container.scrollTop),
       });
-      // 程序化滚动动画在途：本帧是我们自己的 scrollIntoView 产生的，绝不当成用户滚动。
-      // 不做任何续命/计时——标志由权威的 scrollend 事件清掉（见 handleScrollEnd）。
+      // 程序化滚动在途:本帧是我们自己的 scrollIntoView 产生的,绝不当成用户滚动。
+      // 标志由 rAF 收敛循环(或 backstop)清掉,绝不在此处续命/计时。
       if (programmaticScrollRef.current) return;
       pauseAutoScroll();
     };
 
-    // scrollend：滚动（含 smooth 动画）真正停下时浏览器派发一次。用它权威地结束程序化滚动窗口，
-    // 替代「固定计时器」——因此整段动画期间标志稳定保持，与帧间隔/主线程卡顿无关，根治二次定位。
-    const handleScrollEnd = () => {
-      adbg("TL.scrollEnd", { programmatic: programmaticScrollRef.current });
-      if (!programmaticScrollRef.current) return;
-      clearProgrammaticScroll();
-    };
-
     container.addEventListener("scroll", handleScroll, { passive: true });
-    container.addEventListener("scrollend", handleScrollEnd, { passive: true });
     container.addEventListener("wheel", pauseAutoScroll, { passive: true });
     container.addEventListener("touchmove", pauseAutoScroll, { passive: true });
     container.addEventListener("pointerdown", pauseAutoScroll, { passive: true });
 
     return () => {
       container.removeEventListener("scroll", handleScroll);
-      container.removeEventListener("scrollend", handleScrollEnd);
       container.removeEventListener("wheel", pauseAutoScroll);
       container.removeEventListener("touchmove", pauseAutoScroll);
       container.removeEventListener("pointerdown", pauseAutoScroll);
@@ -275,6 +325,10 @@ function TranscriptListImpl({
       }
       if (programmaticBackstopRef.current) {
         window.clearTimeout(programmaticBackstopRef.current);
+      }
+      // 卸载时取消在途收敛 rAF,避免回调在已脱离的容器上跑。
+      if (convergeRafRef.current != null) {
+        cancelAnimationFrame(convergeRafRef.current);
       }
     };
   }, []);
