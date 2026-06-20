@@ -31,6 +31,11 @@ interface ImagePlaceholderProps {
    * 才进「[图片：..]」显示回退。私有页不传，行为零变化。
    */
   fallbackUrl?: string | null
+  /**
+   * 配图溯源文案(已本地化 + 友好模型短名,如「由 Seedream 4.5 生成」):由调用方(有 i18n + 生成模型)
+   * 算好后下发,本组件纯展示——加载完成的图注里以淡色小字补一行。缺省 null(旧数据无模型)→不显示。
+   */
+  provenanceLabel?: string | null
   className?: string
 }
 
@@ -42,12 +47,14 @@ function ImageLoader({
   baseUrl,
   mediaToken,
   description,
+  provenanceLabel,
   className,
   onExhausted,
 }: {
   baseUrl: string
   mediaToken: string | null
   description: string
+  provenanceLabel?: string | null
   className: string
   /** 本 URL 的重试机会耗尽时回调（代替显示回退）：父组件据此切到回落 URL 重挂。 */
   onExhausted?: (() => void) | null
@@ -160,6 +167,11 @@ function ImageLoader({
         style={{ color: "var(--app-text-muted)" }}
       >
         {description}
+        {provenanceLabel && (
+          <span className="block text-xs mt-0.5" style={{ color: "var(--app-text-subtle)" }}>
+            {provenanceLabel}
+          </span>
+        )}
       </figcaption>
     </figure>
   )
@@ -225,12 +237,14 @@ function ImagePlaceholderReady({
   imageUrl,
   mediaToken,
   description,
+  provenanceLabel,
   className,
   onExhausted,
 }: {
   imageUrl: string
   mediaToken: string | null
   description: string
+  provenanceLabel?: string | null
   className: string
   onExhausted?: (() => void) | null
 }) {
@@ -275,6 +289,7 @@ function ImagePlaceholderReady({
       baseUrl={imageUrl}
       mediaToken={token}
       description={description}
+      provenanceLabel={provenanceLabel}
       className={className}
       onExhausted={onExhausted}
     />
@@ -302,6 +317,7 @@ export function ImagePlaceholder({
   imageUrl,
   mediaToken = null,
   fallbackUrl = null,
+  provenanceLabel = null,
   className = "",
 }: ImagePlaceholderProps) {
   // 直链过期回落（fallbackUrl，opt-in）：记录「已放弃的主 URL」而非布尔开关——imageUrl 一旦换新
@@ -336,6 +352,7 @@ export function ImagePlaceholder({
         imageUrl={effectiveUrl}
         mediaToken={mediaToken}
         description={description}
+        provenanceLabel={provenanceLabel}
         className={className}
         // 仅主 URL 阶段且有回落 URL 时提供「耗尽即切换」出口；已在回落 URL 上（或无回落）则
         // 不提供——重试机会耗尽走既有「[图片：..]」显示回退，绝不无限循环切换。

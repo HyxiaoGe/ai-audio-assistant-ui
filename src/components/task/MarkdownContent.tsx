@@ -6,7 +6,6 @@ import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import type { StreamingImage } from "@/types/api";
 import { ImagePlaceholder } from "@/components/task/ImagePlaceholder";
-import { ProvenanceBadge } from "@/components/common/ProvenanceBadge";
 import { formatModelName } from "@/lib/model-name";
 import {
   extractImagePlaceholder,
@@ -62,9 +61,15 @@ const MarkdownImageContext = createContext<MarkdownImageContextValue>({
  * 由 ImagePlaceholder/ImageLoader 内部拼 token 与失败换票重试（这里不要预拼，否则双重拼接）。
  */
 function SummaryImagePlaceholder({ placeholder }: { placeholder: string }) {
-  const { streamingImages, mediaToken } = useContext(MarkdownImageContext);
+  const { t } = useI18n();
+  const { streamingImages, mediaToken, imageModel } = useContext(MarkdownImageContext);
   const description = extractPlaceholderDescription(placeholder);
   const imageState = streamingImages.get(placeholder);
+  // 配图溯源:在此(有 i18n + 生成模型)算好可直接渲染的淡色文案,下发给展示型 ImagePlaceholder,
+  // 让它保持纯展示、不依赖 i18n。旧数据无 image_model→null→图注不显示溯源。
+  const provenanceLabel = imageModel
+    ? t("summary.imageGeneratedBy", { model: formatModelName(imageModel) })
+    : null;
   return (
     <ImagePlaceholder
       description={description}
@@ -73,6 +78,7 @@ function SummaryImagePlaceholder({ placeholder }: { placeholder: string }) {
       mediaToken={mediaToken}
       // 公开页 OSS 预签名直链的代理回落 URL(StreamingImage.fallbackUrl);私有页不设置=null,零变化。
       fallbackUrl={imageState?.fallbackUrl ?? null}
+      provenanceLabel={provenanceLabel}
     />
   );
 }
@@ -107,12 +113,8 @@ function MarkdownImg({ src, alt }: { src?: string; alt?: string }) {
       >
         {alt}
         {imageModel && (
-          <span style={{ marginLeft: "8px", display: "inline-flex", verticalAlign: "middle" }}>
-            <ProvenanceBadge
-              label={formatModelName(imageModel)}
-              tooltip={t("summary.imageGeneratedBy", { model: imageModel })}
-              variant="secondary"
-            />
+          <span className="block text-xs mt-0.5" style={{ color: "var(--app-text-subtle)" }}>
+            {t("summary.imageGeneratedBy", { model: formatModelName(imageModel) })}
           </span>
         )}
       </figcaption>
