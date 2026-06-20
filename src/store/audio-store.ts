@@ -94,7 +94,22 @@ export const useAudioStore = create<AudioStore>((set, get) => {
       if (recovering) return
       // 重试额度已耗尽（如 YouTube key 尚未生成的真 404），不再补播，避免对坏媒体反复 play。
       if (mediaAuthRetries >= MAX_MEDIA_AUTH_RETRIES) return
+      // 补票重载会再做一次 src=…;load()，load() 把元素 currentTime 归零。若不恢复，深链 seek /
+      // 已播位置会丢失（播放从头），且恢复期的瞬时 0 会经 timeupdate 泄漏成转写列表的第二次自动
+      // 滚动（深链跳播「定位两遍」）。以 store 的逻辑位置为权威（元素可能已被 load 归零），元数据
+      // 就绪后重新落位——与 reloadWithFreshToken 对称。setCurrentTime 在 recovering 期间忽略元素
+      // 驱动的瞬时位置，故重载在途绝不二次滚动。
+      const resumeAt = cur.currentTime > 0 ? cur.currentTime : audioEl.currentTime
       beginRecovery(audioEl)
+      audioEl.addEventListener(
+        "loadedmetadata",
+        () => {
+          if (resumeAt > 0 && Number.isFinite(resumeAt)) {
+            audioEl.currentTime = resumeAt
+          }
+        },
+        { once: true }
+      )
       audioEl.src = appendMediaToken(src, token)
       audioEl.load()
       if (intendToPlay) cur.play()
@@ -190,7 +205,14 @@ export const useAudioStore = create<AudioStore>((set, get) => {
       set({ currentTime: time })
     },
     setDuration: (duration) => set({ duration }),
-    setCurrentTime: (currentTime) => set({ currentTime }),
+    // 媒体鉴权重载（冷启动补票 / reloadWithFreshToken）在途时，元素 currentTime 会被 load()
+    // 瞬时归零——那是重载的内部状态、非真实播放位置。若放行，会经 <audio> timeupdate 写进 store，
+    // 驱动转写列表二次自动滚动（深链跳播「定位两遍」）。重载在途一律忽略元素驱动的 currentTime，
+    // 落位交由重载完成后按权威逻辑位置恢复。seek() 直接 set（不走此路），深链定位不受影响。
+    setCurrentTime: (currentTime) => {
+      if (recovering) return
+      set({ currentTime })
+    },
     setIsPlaying: (isPlaying) => set({ isPlaying }),
     // 媒体票据过期/缺失导致代理 401 时，<audio> 的 error 事件会触发这里：用异步
     // getMediaTicket()（命中缓存或重新签发）取短票重建 src 并重载，保留进度后按播放意图续播。
@@ -215,7 +237,11 @@ export const useAudioStore = create<AudioStore>((set, get) => {
       mediaAuthRetries += 1
       recovering = true
 
-      const resumeAt = audioEl.currentTime
+      // 恢复位置以 store 的逻辑位置为权威：深链跳播等场景里元素可能已被前一次 load 归零，
+      // 而 store.currentTime 持有真实意图位置。store 为 0（未初始化）时回落元素当前位置，
+      // 兼容「播放中 token 过期」——彼时 store 已随 timeupdate 跟到元素位置。
+      const logicalTime = get().currentTime
+      const resumeAt = logicalTime > 0 ? logicalTime : audioEl.currentTime
       const wasPlaying = !audioEl.paused
 
       const token = await getMediaTicket()
