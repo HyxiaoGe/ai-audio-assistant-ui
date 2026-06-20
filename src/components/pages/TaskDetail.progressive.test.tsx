@@ -22,6 +22,8 @@ const mocks = vi.hoisted(() => {
     dateFormatter: { formatRelativeTime: () => "刚刚" },
     authState: { user: { id: "u1", name: "User" }, status: "authenticated" },
     router: { push: vi.fn() },
+    // 深链 ?t= 跳播用：默认空，按用例覆盖。
+    searchParams: new URLSearchParams(),
     audioState: {
       isPlaying: false,
       duration: 0,
@@ -54,6 +56,7 @@ vi.mock("@/store/auth-store", () => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => mocks.router,
   useParams: () => ({ id: "task-1" }),
+  useSearchParams: () => mocks.searchParams,
 }))
 
 // ---- next/dynamic：同步解析真实组件，使真实 MarkdownContent 异步加载、配合 waitFor 断言。 ----
@@ -587,5 +590,55 @@ describe("TaskDetail — detected summary style", () => {
       expect(screen.getByText("task.summaryOverview")).toBeInTheDocument()
     })
     expect(screen.queryByText("task.detectedStyle")).toBeNull()
+  })
+})
+
+// 从转写全文搜索命中跳转过来时，URL 带 ?t=<秒>。详情页须读取它并在媒体就绪后跳播到该时刻
+//（store.seek 即便音频元素未就绪也会落 currentTime，进而驱动 TranscriptList 滚动/高亮到该句）。
+// 只触发一次，避免页面内手动 seek 后被深链反复拉回。
+describe("TaskDetail — ?t= 深链跳播", () => {
+  afterEach(() => {
+    mocks.searchParams = new URLSearchParams()
+  })
+
+  it("媒体就绪后跳播到 ?t= 指定的时间戳", async () => {
+    mocks.searchParams = new URLSearchParams("t=42.5")
+    apiMock.getTask.mockResolvedValue(
+      task({ status: "completed", audio_url: "https://media.example/x.mp3" })
+    )
+    apiMock.getSummary.mockResolvedValue(summaryResp())
+
+    render(<TaskDetail />)
+
+    await waitFor(() => expect(mocks.audioState.seek).toHaveBeenCalledWith(42.5))
+  })
+
+  it("无 ?t= 时不跳播", async () => {
+    apiMock.getTask.mockResolvedValue(
+      task({ status: "completed", audio_url: "https://media.example/x.mp3" })
+    )
+    apiMock.getSummary.mockResolvedValue(summaryResp())
+
+    render(<TaskDetail />)
+
+    await waitFor(() => {
+      expect(screen.getByText("task.summaryOverview")).toBeInTheDocument()
+    })
+    expect(mocks.audioState.seek).not.toHaveBeenCalled()
+  })
+
+  it("忽略非法 ?t=（非数字）", async () => {
+    mocks.searchParams = new URLSearchParams("t=abc")
+    apiMock.getTask.mockResolvedValue(
+      task({ status: "completed", audio_url: "https://media.example/x.mp3" })
+    )
+    apiMock.getSummary.mockResolvedValue(summaryResp())
+
+    render(<TaskDetail />)
+
+    await waitFor(() => {
+      expect(screen.getByText("task.summaryOverview")).toBeInTheDocument()
+    })
+    expect(mocks.audioState.seek).not.toHaveBeenCalled()
   })
 })

@@ -38,6 +38,7 @@ import {
   TaskDetail,
   TaskListRequest,
   TaskListResponse,
+  TaskSearchResponse,
   TaskStatusCounts,
   TaskRetryResponse,
   TranscriptRequest,
@@ -468,6 +469,15 @@ export class APIClient {
    */
   async getTaskStatusCounts(): Promise<TaskStatusCounts> {
     return request("/tasks/status-counts", { method: "GET" }, this.token)
+  }
+
+  /**
+   * 转写全文搜索：「哪个视频提到 X」+ 跳时间戳。
+   * 跨用户隔离、仅本人任务，后端经 pg_jieba 中文分词在转写正文上 FTS。
+   */
+  async searchTranscripts(q: string, limit = 20): Promise<TaskSearchResponse> {
+    const params = new URLSearchParams({ q, limit: String(limit) })
+    return request(`/tasks/search?${params.toString()}`, { method: "GET" }, this.token)
   }
 
   /**

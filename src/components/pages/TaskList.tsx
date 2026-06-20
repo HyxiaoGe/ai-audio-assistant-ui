@@ -7,12 +7,13 @@ import { Pagination } from '@/components/common/Pagination';
 import Sidebar from '@/components/layout/Sidebar';
 import TaskCard from '@/components/task/TaskCard';
 import { TaskSearchInput } from '@/components/task/TaskSearchInput';
+import { SearchSnippet } from '@/components/task/SearchSnippet';
 import EmptyState from '@/components/common/EmptyState';
 import { Button } from '@/components/ui/button';
 import { useAPIClient } from '@/lib/use-api-client';
 import { useDateFormatter } from '@/lib/use-date-formatter';
 import { ApiError } from '@/types/api';
-import type { TaskListItem, TaskStatus } from '@/types/api';
+import type { TaskListItem, TaskSearchHit, TaskStatus } from '@/types/api';
 import { useI18n } from '@/lib/i18n-context';
 import { notifyError, notifySuccess } from '@/lib/notify';
 import { useGlobalStore } from '@/store/global-store';
@@ -46,6 +47,9 @@ export default function TaskList({
   });
   const [filterStatus, setFilterStatus] = useState<'all' | 'processing' | 'completed' | 'failed'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  // 服务端转写搜索结果：null = 无激活搜索（显示常规列表），数组 = 当前查询的命中（可能为空 = 无结果）。
+  const [searchHits, setSearchHits] = useState<TaskSearchHit[] | null>(null);
+  const [searching, setSearching] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [retryingTaskId, setRetryingTaskId] = useState<string | null>(null);
   // 自增计数：重试成功后 +1，触发列表与状态计数重新拉取，避免卡片停留在 failed 态。
@@ -176,6 +180,39 @@ export default function TaskList({
     };
   }, [client, isAuthenticated, reloadKey, terminalTaskSignal]);
 
+  // 服务端转写全文搜索：替换旧的「当前页标题 includes」客户端过滤（P1-6：翻页之外的命中被漏、
+  // 且搜不到转写正文）。防抖 300ms 后打 GET /tasks/search（后端 pg_jieba 中文分词）；空查询不打
+  // 服务端、清空命中回落常规列表。ignore 标记丢弃过期响应，避免快速改词时旧结果覆盖新结果。
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q || !isAuthenticated) {
+      setSearchHits(null);
+      setSearching(false);
+      return;
+    }
+    let ignore = false;
+    setSearching(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await client.searchTranscripts(q);
+        if (!ignore) setSearchHits(res.hits);
+      } catch (err) {
+        if (!ignore) {
+          setSearchHits([]);
+          if (err instanceof ApiError && err.code >= 40100 && err.code < 40200) {
+            onOpenLoginRef.current();
+          }
+        }
+      } finally {
+        if (!ignore) setSearching(false);
+      }
+    }, 300);
+    return () => {
+      ignore = true;
+      clearTimeout(timer);
+    };
+  }, [searchQuery, client, isAuthenticated]);
+
   const formatDurationLabel = (seconds?: number) => {
     if (!seconds || seconds <= 0) return '--';
     const minutes = Math.round(seconds / 60);
@@ -185,6 +222,17 @@ export default function TaskList({
     return remainder === 0
       ? t("time.hours", { count: hours })
       : t("time.hoursMinutes", { hours, minutes: remainder });
+  };
+
+  // 命中时间戳标签：H:MM:SS（不足 1 小时省略小时位）。供搜索结果显示「跳到哪一刻」。
+  const formatTimestamp = (seconds: number) => {
+    const total = Math.max(0, Math.floor(seconds));
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    const mm = String(m).padStart(h > 0 ? 2 : 1, '0');
+    const ss = String(s).padStart(2, '0');
+    return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
   };
 
   const displayStatus = (status: TaskStatus) => {
@@ -249,17 +297,19 @@ export default function TaskList({
   }, [retryingTaskId, client, t, router]);
 
 
-  // 搜索关键词筛选（当前页数据）
-  const filteredTasks = tasks.filter(task => {
-    if (!searchQuery.trim()) return true;
-    return task.title.toLowerCase().includes(searchQuery.toLowerCase());
-  });
+  // 是否处于激活搜索态：有非空查询即用服务端命中替换常规列表（不再做当前页客户端过滤）。
+  const isSearching = searchQuery.trim().length > 0;
+
+  // 命中点击：深链到任务详情并带 ?t={start_time} 让详情页跳播到该时间戳。
+  const handleHitClick = useCallback((hit: TaskSearchHit) => {
+    router.push(`/tasks/${hit.task_id}?t=${hit.start_time}`);
+  }, [router]);
 
   // 计算分页（服务端已分页，这里只显示当前页数据）
   const totalPages = Math.ceil(totalTasks / tasksPerPage);
   const startIndex = (currentPage - 1) * tasksPerPage;
-  const endIndex = startIndex + filteredTasks.length;
-  const currentTasks = filteredTasks;
+  const endIndex = startIndex + tasks.length;
+  const currentTasks = tasks;
 
   // 切换状态时重置到第一页
   const handleStatusChange = (status: 'all' | 'processing' | 'completed' | 'failed') => {
@@ -365,14 +415,14 @@ export default function TaskList({
           {/* 搜索框 */}
           <div className="mb-6">
             <TaskSearchInput value={searchQuery} onChange={handleSearchChange} />
-            {searchQuery && (
+            {isSearching && searchHits !== null && (
               <p className="mt-2 text-sm" style={{ color: "var(--app-text-muted)" }}>
-                {t("tasks.searchResults", { count: filteredTasks.length })}
+                {t("tasks.searchResults", { count: searchHits.length })}
               </p>
             )}
           </div>
 
-          {/* 任务列表 */}
+          {/* 任务列表 / 搜索结果 */}
           <div className="space-y-3">
             {!isAuthenticated ? (
               <div className="space-y-3">
@@ -396,6 +446,42 @@ export default function TaskList({
                   </button>
                 </div>
               </div>
+            ) : isSearching ? (
+              // 服务端转写搜索结果：命中渲染为可点卡片（标题 + 高亮片段 + 时间戳），点击深链跳播。
+              searching && (searchHits === null || searchHits.length === 0) ? (
+                <div style={{ minHeight: "72px" }} />
+              ) : searchHits && searchHits.length > 0 ? (
+                searchHits.map((hit) => (
+                  <button
+                    key={`${hit.task_id}-${hit.start_time}`}
+                    type="button"
+                    data-testid={`search-hit-${hit.task_id}`}
+                    onClick={() => handleHitClick(hit)}
+                    className="glass-control w-full text-left p-4 rounded-lg block"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-medium" style={{ color: "var(--app-text)" }}>
+                        {hit.title ?? t("audio.untitled")}
+                      </span>
+                      <span className="text-xs shrink-0 tabular-nums" style={{ color: "var(--app-text-subtle)" }}>
+                        {formatTimestamp(hit.start_time)}
+                      </span>
+                    </div>
+                    <SearchSnippet text={hit.snippet} className="mt-1 block text-sm" />
+                  </button>
+                ))
+              ) : (
+                <EmptyState
+                  variant="search"
+                  title={t("tasks.noResultTitle")}
+                  description={t("tasks.noResultDescription")}
+                  action={{
+                    label: t("tasks.clearSearch"),
+                    onClick: () => setSearchQuery(''),
+                    variant: 'secondary'
+                  }}
+                />
+              )
             ) : loading && currentTasks.length === 0 ? (
               <div style={{ minHeight: "72px" }} />
             ) : error ? (
@@ -419,55 +505,40 @@ export default function TaskList({
                 />
               ))
             ) : (
-              // 空状态：区分搜索无结果和真的没有任务
-              searchQuery ? (
-                <EmptyState
-                  variant="search"
-                  title={t("tasks.noResultTitle")}
-                  description={t("tasks.noResultDescription")}
-                  action={{
-                    label: t("tasks.clearFilters"),
-                    onClick: () => {
-                      setSearchQuery('');
-                      setFilterStatus('all');
-                    },
-                    variant: 'secondary'
-                  }}
-                />
-              ) : (
-                <EmptyState
-                  variant="default"
-                  title={filterStatus === "all"
-                    ? t("tasks.noTaskTitleAll")
-                    : t("tasks.noTaskTitle", { status: getStatusText(filterStatus) })}
-                  description={filterStatus === 'all' ? t("tasks.noTaskDescriptionAll") : t("tasks.noTaskDescriptionFiltered")}
-                  action={filterStatus === 'all' ? {
-                    label: t("dashboard.createTask"),
-                    onClick: () => {
-                      if (onOpenNewTask) {
-                        onOpenNewTask()
-                      }
-                    },
-                    variant: 'primary'
-                  } : {
-                    label: t("tasks.viewAll"),
-                    onClick: () => setFilterStatus('all'),
-                    variant: 'secondary'
-                  }}
-                />
-              )
+              <EmptyState
+                variant="default"
+                title={filterStatus === "all"
+                  ? t("tasks.noTaskTitleAll")
+                  : t("tasks.noTaskTitle", { status: getStatusText(filterStatus) })}
+                description={filterStatus === 'all' ? t("tasks.noTaskDescriptionAll") : t("tasks.noTaskDescriptionFiltered")}
+                action={filterStatus === 'all' ? {
+                  label: t("dashboard.createTask"),
+                  onClick: () => {
+                    if (onOpenNewTask) {
+                      onOpenNewTask()
+                    }
+                  },
+                  variant: 'primary'
+                } : {
+                  label: t("tasks.viewAll"),
+                  onClick: () => setFilterStatus('all'),
+                  variant: 'secondary'
+                }}
+              />
             )}
           </div>
 
-          {/* 分页 */}
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={handlePageChange}
-          />
+          {/* 分页（搜索态隐藏：搜索结果不分页） */}
+          {!isSearching && (
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+            />
+          )}
 
           {/* 分页信息 */}
-          {filteredTasks.length > 0 && (
+          {!isSearching && currentTasks.length > 0 && (
             <div className="text-center mt-4">
               <p className="text-sm" style={{ color: "var(--app-text-subtle)" }}>
                 {t("tasks.pagination", {
