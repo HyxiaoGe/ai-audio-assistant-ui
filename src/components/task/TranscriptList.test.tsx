@@ -72,6 +72,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
 
@@ -125,109 +127,286 @@ describe("TranscriptList", () => {
     ]
   }
 
-  // 回归核心(深链跳播「二次定位」根因):大跨度 smooth scrollIntoView 动画时长可达 ~1.5s,整段动画
-  // 持续派发 scroll 事件。旧代码用「固定 300ms 计时器」清程序化标志,远短于动画时长,尾帧被误判为
-  // 用户滚动 → 触发「3s 暂停 + 恢复」对同一活动段二次 scrollIntoView(用户看到「滑到位后等一会又滑
-  // 一次」,ADBG 实测第二次滚动 reason='resume-timer')。修复改用权威的 scrollend 事件清旗:整段动画
-  // 期间标志稳定保持,无第二次滚动。currentTime/activeSegment 全程未变。
-  it("does not re-scroll when a long programmatic smooth scroll keeps emitting scroll frames (cleared by scrollend, not a timer)", () => {
+  // ───────────────────────────────────────────────────────────────────────────
+  // 深链跳播「定位」根因(4 次修复后由 ADBG 坐标实锤):转写每行 content-visibility:auto +
+  // contain-intrinsic-size:auto 100px,未渲染行按 100px 估算。behavior:'smooth' 的大跨度
+  // scrollIntoView 会逐帧「穿过」沿途约 960 行 → 每行首次渲染、真实高度(~103px)替换估算 →
+  // 文档被撑高 ~3000px → 固定终点的平滑滚动结构性「欠冲」(ADBG:首滚落定后目标 rect.top 仍偏 +3448)。
+  // 此前几次 resume-timer 重滚其实在对「已长高布局」重新测量、逐步收敛(3448→547→~0),是位置收敛的
+  // 承重梁;ui#98 用 scrollend 砍掉这些重滚后,欠冲暴露=只滚一次但落点错。修复:改「瞬时跳转
+  // (behavior:'auto')+有界 rAF 重定位收敛」。瞬时跳转不穿过中间行 → 不撑高文档 → 落点即居中,仅剩
+  // 目标周围约一个视口的小残差,由 rAF 循环按 rect 差(非 rect.top vs scrollTop)测量并收敛。
+  // 以下用例钉死控制流(jsdom 无真实布局,真浏览器视觉由人工验证)。
+
+  // 可控 rAF:手动队列,flush 一代回调即「跑一帧」。各 step 末尾自排下一帧,故 flush N 次 = N 帧。
+  function installRaf() {
+    const cbs = new Map<number, FrameRequestCallback>()
+    let id = 0
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      id += 1
+      cbs.set(id, cb)
+      return id
+    })
+    vi.stubGlobal("cancelAnimationFrame", (rid: number) => {
+      cbs.delete(rid)
+    })
+    const runGen = () => {
+      const snapshot = [...cbs.values()]
+      cbs.clear()
+      act(() => {
+        for (const cb of snapshot) cb(0)
+      })
+    }
+    return {
+      pending: () => cbs.size,
+      flush: runGen,
+      flushAll: (max = 80) => {
+        let n = 0
+        while (cbs.size && n < max) {
+          runGen()
+          n += 1
+        }
+      },
+    }
+  }
+
+  // 直接给目标行/容器装上可控几何:drift = (nodeTop - containerTop) - (clientHeight - nodeHeight)/2。
+  // 取 containerTop=0、clientHeight=600、nodeHeight=100 → 期望居中位 250 → drift = nodeTop - 250。
+  function mockGeometry(sc: HTMLElement, node: HTMLElement, nodeTop: () => number) {
+    Object.defineProperty(sc, "clientHeight", { value: 600, configurable: true })
+    vi.spyOn(sc, "getBoundingClientRect").mockReturnValue({
+      top: 0, left: 0, right: 0, bottom: 600, width: 0, height: 600, x: 0, y: 0, toJSON() {},
+    } as DOMRect)
+    vi.spyOn(node, "getBoundingClientRect").mockImplementation(() => {
+      const top = nodeTop()
+      return { top, left: 0, right: 0, bottom: top + 100, width: 0, height: 100, x: 0, y: top, toJSON() {} } as DOMRect
+    })
+  }
+  // 让目标行的 rect.top 对应一个指定的 |drift|(像素)。
+  const DRIFT = (px: number) => 250 + px
+
+  // 核心回归 #1:深链是「瞬时」跳转(behavior:'auto'),不是平滑滑入——平滑正是欠冲漂移的成因。
+  it("deep-links with an INSTANT scroll (behavior:auto), not a smooth glide", () => {
+    const scrollSpy = vi.fn()
+    Element.prototype.scrollIntoView = scrollSpy
+    installRaf()
+    const { container } = renderList({ transcript: farSegments() })
+    const node = container.querySelector('[data-segment-id="p"]') as HTMLElement
+    const sc = container.querySelector(".overflow-y-auto") as HTMLElement
+    mockGeometry(sc, node, () => DRIFT(4)) // 已基本居中,聚焦「首滚是 auto」
+
+    act(() => useAudioStore.setState({ currentTime: 101 }))
+
+    expect(scrollSpy).toHaveBeenCalledTimes(1)
+    expect(scrollSpy.mock.calls[0][0]).toMatchObject({ behavior: "auto", block: "center" })
+  })
+
+  // 核心回归 #2:rAF 收敛——首滚后残差(content-visibility 局部重估)会被逐帧重定位吸收直至居中。
+  it("re-centers across rAF frames until the target is centered (convergence absorbs content-visibility drift)", () => {
+    const scrollSpy = vi.fn()
+    Element.prototype.scrollIntoView = scrollSpy
+    const raf = installRaf()
+    const { container } = renderList({ transcript: farSegments() })
+    const node = container.querySelector('[data-segment-id="p"]') as HTMLElement
+    const sc = container.querySelector(".overflow-y-auto") as HTMLElement
+    // 模拟 ADBG 实测序列:首滚后残差 3448 → 547 → ~0(收敛)。
+    let top = DRIFT(3448)
+    mockGeometry(sc, node, () => top)
+
+    act(() => useAudioStore.setState({ currentTime: 101 })) // 初次瞬时跳转
+    expect(scrollSpy).toHaveBeenCalledTimes(1)
+
+    raf.flush() // 帧1:drift 3448 → 重定位
+    top = DRIFT(547)
+    raf.flush() // 帧2:drift 547 → 重定位
+    top = DRIFT(4)
+    raf.flush() // 帧3:drift 4 ≤ TOL → 收敛退出,不再滚动
+
+    expect(scrollSpy).toHaveBeenCalledTimes(3)
+    for (const call of scrollSpy.mock.calls) expect(call[0]).toMatchObject({ behavior: "auto" })
+    raf.flushAll()
+    expect(scrollSpy).toHaveBeenCalledTimes(3) // 收敛后不再有追加帧
+  })
+
+  // 播放跟随(目标已近居中):退化为一次瞬时滚动,无收敛追加帧。
+  it("does a single instant scroll with no extra frames when the target is already centered (playback follow)", () => {
+    const scrollSpy = vi.fn()
+    Element.prototype.scrollIntoView = scrollSpy
+    const raf = installRaf()
+    const { container } = renderList({ transcript: farSegments() })
+    const node = container.querySelector('[data-segment-id="p"]') as HTMLElement
+    const sc = container.querySelector(".overflow-y-auto") as HTMLElement
+    mockGeometry(sc, node, () => DRIFT(1)) // drift 1 ≤ TOL
+
+    act(() => useAudioStore.setState({ currentTime: 101 }))
+    expect(scrollSpy).toHaveBeenCalledTimes(1)
+    raf.flushAll()
+    expect(scrollSpy).toHaveBeenCalledTimes(1)
+  })
+
+  // 终止性:漂移始终不收敛时,由帧上限收口,绝不无限滚动。
+  it("bounds the convergence loop to a finite number of frames when drift never settles", () => {
+    const scrollSpy = vi.fn()
+    Element.prototype.scrollIntoView = scrollSpy
+    const raf = installRaf()
+    const { container } = renderList({ transcript: farSegments() })
+    const node = container.querySelector('[data-segment-id="p"]') as HTMLElement
+    const sc = container.querySelector(".overflow-y-auto") as HTMLElement
+    // 严格递减但始终远大于 TOL:停滞守卫不触发,只能由帧上限收口。
+    let top = DRIFT(5000)
+    mockGeometry(sc, node, () => {
+      const v = top
+      top -= 1
+      return v
+    })
+
+    act(() => useAudioStore.setState({ currentTime: 101 }))
+    raf.flushAll(200)
+
+    // 初次(1)+ 帧上限(MAX=30)次重定位后停止。
+    expect(scrollSpy).toHaveBeenCalledTimes(31)
+    const settled = scrollSpy.mock.calls.length
+    raf.flushAll(50)
+    expect(scrollSpy).toHaveBeenCalledTimes(settled)
+  })
+
+  // 停滞守卫:漂移连续两帧不再下降即提前退出,远早于帧上限——防止病态布局下的可见抖动。
+  it("exits early (well before the frame cap) when drift stops decreasing (stall guard)", () => {
+    const scrollSpy = vi.fn()
+    Element.prototype.scrollIntoView = scrollSpy
+    const raf = installRaf()
+    const { container } = renderList({ transcript: farSegments() })
+    const node = container.querySelector('[data-segment-id="p"]') as HTMLElement
+    const sc = container.querySelector(".overflow-y-auto") as HTMLElement
+    mockGeometry(sc, node, () => DRIFT(1000)) // 恒定 drift,从不下降
+
+    act(() => useAudioStore.setState({ currentTime: 101 }))
+    raf.flushAll(200)
+
+    // 初次(1)+ 两帧未改善 → 停滞退出,共 3 次,远小于帧上限 31。
+    expect(scrollSpy).toHaveBeenCalledTimes(3)
+  })
+
+  // masking 不变量:程序化收敛在途时,容器自身派发的 scroll(我们自己的瞬时滚动)绝不能被当成用户滚动。
+  it("ignores container scroll events emitted during programmatic convergence (no pause, no second positioning)", () => {
     vi.useFakeTimers()
     const scrollSpy = vi.fn()
     Element.prototype.scrollIntoView = scrollSpy
+    installRaf()
     const { container } = renderList({ transcript: farSegments() })
-    expect(scrollSpy).toHaveBeenCalledTimes(0) // 挂载不滚动
+    const node = container.querySelector('[data-segment-id="p"]') as HTMLElement
+    const sc = container.querySelector(".overflow-y-auto") as HTMLElement
+    mockGeometry(sc, node, () => DRIFT(3448)) // 收敛在途(flag 保持真,不 flush rAF)
 
-    // 深链落入段 p → 触发一次合法的自动滚动(effect)
     act(() => useAudioStore.setState({ currentTime: 101 }))
     expect(scrollSpy).toHaveBeenCalledTimes(1)
 
-    const sc = container.querySelector(".overflow-y-auto") as HTMLElement
-    expect(sc).not.toBeNull()
-
-    // 平滑动画:~1.2s 内每 50ms 一帧 scroll。整段动画期间标志保持,这些帧不得被当成用户滚动。
     act(() => {
-      for (let i = 0; i < 24; i += 1) {
-        vi.advanceTimersByTime(50)
-        sc.dispatchEvent(new Event("scroll"))
-      }
+      sc.dispatchEvent(new Event("scroll"))
     })
-    // 动画真正停下 → 浏览器派发 scrollend,权威清旗。
-    act(() => {
-      sc.dispatchEvent(new Event("scrollend"))
-    })
-    // 再静默推进 >3s,给任何被(错误)安排的恢复定时器充分触发机会。
     act(() => {
       vi.advanceTimersByTime(3500)
     })
-
-    expect(scrollSpy).toHaveBeenCalledTimes(1) // 不得二次定位
+    expect(scrollSpy).toHaveBeenCalledTimes(1) // 不暂停、不排恢复、不二次定位
     vi.useRealTimers()
   })
 
-  // 关键鲁棒性守卫(对抗审查发现的「帧间隔脆弱性」+ 防止退回任何短计时器方案):
-  // 慢机/主线程卡顿时 smooth 动画两帧之间可能停顿很久(实测已见 230ms,卡顿更大)。只要 scrollend 未到、
-  // 动画未结束,程序化标志就不能被某个短计时器提前清掉,否则下一帧会被误判为用户滚动 → 二次定位。
-  // 本用例插入 1500ms 的「帧间停顿」——远超旧的固定 300ms 与曾试的 400ms 静默窗——只有 scrollend/宽松
-  // 兜底方案能通过;任何 <1500ms 的计时阈值都会让它 FAIL。
-  it("keeps the programmatic flag through a long inter-frame stall (immune to frame-gap timing; no second scroll)", () => {
+  // 不变量守卫:收敛结束清旗后,真实用户滚动仍要「暂停自动跟随 → 3s 后恢复」。
+  it("after convergence clears the flag, a genuine user scroll pauses auto-follow and resumes after 3s", () => {
     vi.useFakeTimers()
     const scrollSpy = vi.fn()
     Element.prototype.scrollIntoView = scrollSpy
+    const raf = installRaf()
     const { container } = renderList({ transcript: farSegments() })
+    const node = container.querySelector('[data-segment-id="p"]') as HTMLElement
+    const sc = container.querySelector(".overflow-y-auto") as HTMLElement
+    mockGeometry(sc, node, () => DRIFT(4)) // 首帧即收敛清旗
 
     act(() => useAudioStore.setState({ currentTime: 101 }))
+    raf.flushAll()
     expect(scrollSpy).toHaveBeenCalledTimes(1)
 
-    const sc = container.querySelector(".overflow-y-auto") as HTMLElement
-    // 动画中途主线程卡顿 1500ms(无帧、无 scrollend)——远超任何合理的短计时窗口。
     act(() => {
-      vi.advanceTimersByTime(1500)
+      sc.dispatchEvent(new Event("scroll")) // 用户真实滚动(flag 已清)→ 暂停
     })
-    // 卡顿后动画恢复又来一帧:此刻标志必须仍为真,否则该帧会被误判为用户滚动 → 二次定位。
-    act(() => {
-      sc.dispatchEvent(new Event("scroll"))
-    })
-    // 动画结束 scrollend 清旗,再推进给恢复定时器机会。
-    act(() => {
-      sc.dispatchEvent(new Event("scrollend"))
-      vi.advanceTimersByTime(3500)
-    })
-
-    expect(scrollSpy).toHaveBeenCalledTimes(1) // 帧间隔再大也不二次定位
-    vi.useRealTimers()
-  })
-
-  // 不变量守卫 + scrollend 接线证明:scrollend 清旗后(程序化滚动已结束),真实用户滚动仍要
-  // 「暂停自动跟随 → 3s 后恢复」。若 scrollend 未正确接线,标志会一直为真、用户滚动被吞,则下面
-  // currentTime=103 会立刻滚到 q 使断言提前变 2 而失败——故本用例同时锁定 scrollend 必须清旗。
-  it("clears the flag on scrollend so a genuine user scroll still pauses auto-follow and resumes after 3s", () => {
-    vi.useFakeTimers()
-    const scrollSpy = vi.fn()
-    Element.prototype.scrollIntoView = scrollSpy
-    const { container } = renderList({ transcript: farSegments() })
-
-    act(() => useAudioStore.setState({ currentTime: 101 })) // effect 滚动 #1,flag=true
+    act(() => useAudioStore.setState({ currentTime: 103 })) // 段 q,暂停窗口内不滚
     expect(scrollSpy).toHaveBeenCalledTimes(1)
 
-    const sc = container.querySelector(".overflow-y-auto") as HTMLElement
-    // 程序化滚动结束 → scrollend 清旗
     act(() => {
-      sc.dispatchEvent(new Event("scrollend"))
-    })
-    // 用户真实滚动(此刻 flag 已清)→ 暂停自动跟随
-    act(() => {
-      sc.dispatchEvent(new Event("scroll"))
-    })
-    // 播放推进到段 q:处于暂停窗口内,不应立即滚动(若 scrollend 没清旗,这里会变成 2 → 失败)
-    act(() => useAudioStore.setState({ currentTime: 103 }))
-    expect(scrollSpy).toHaveBeenCalledTimes(1)
-
-    // 3s 后自动恢复,把当前活动段 q 滚入视图
-    act(() => {
-      vi.advanceTimersByTime(3000)
+      vi.advanceTimersByTime(3000) // 3s 后恢复 → 滚到 q
     })
     expect(scrollSpy).toHaveBeenCalledTimes(2)
     vi.useRealTimers()
+  })
+
+  // 用户手势(wheel)在收敛在途时直接中止循环(原生 smooth 会被用户输入打断,手写 rAF 须显式接线)。
+  it("aborts an in-flight convergence when the user scrolls with a gesture (wheel)", () => {
+    const scrollSpy = vi.fn()
+    Element.prototype.scrollIntoView = scrollSpy
+    const raf = installRaf()
+    const { container } = renderList({ transcript: farSegments() })
+    const node = container.querySelector('[data-segment-id="p"]') as HTMLElement
+    const sc = container.querySelector(".overflow-y-auto") as HTMLElement
+    let top = DRIFT(3448)
+    mockGeometry(sc, node, () => top)
+
+    act(() => useAudioStore.setState({ currentTime: 101 }))
+    raf.flush() // 帧1:重定位(2),排帧2
+    expect(scrollSpy).toHaveBeenCalledTimes(2)
+    expect(raf.pending()).toBe(1)
+
+    act(() => {
+      sc.dispatchEvent(new Event("wheel")) // 用户手势 → 中止收敛
+    })
+    expect(raf.pending()).toBe(0)
+
+    top = DRIFT(547)
+    raf.flushAll()
+    expect(scrollSpy).toHaveBeenCalledTimes(2) // 中止后无追加重定位
+  })
+
+  // 重入:活动段在收敛途中改变(新深链/播放推进)须先拆掉旧循环,绝不让两个循环争用 scrollTop。
+  it("tears down the previous convergence loop when the active segment changes mid-flight (no two loops)", () => {
+    const scrollSpy = vi.fn()
+    Element.prototype.scrollIntoView = scrollSpy
+    const raf = installRaf()
+    const { container } = renderList({ transcript: farSegments() })
+    const nodeP = container.querySelector('[data-segment-id="p"]') as HTMLElement
+    const nodeQ = container.querySelector('[data-segment-id="q"]') as HTMLElement
+    const sc = container.querySelector(".overflow-y-auto") as HTMLElement
+    mockGeometry(sc, nodeP, () => DRIFT(3448)) // p 持续欠冲
+    vi.spyOn(nodeQ, "getBoundingClientRect").mockReturnValue({
+      top: DRIFT(1), left: 0, right: 0, bottom: DRIFT(1) + 100, width: 0, height: 100, x: 0, y: DRIFT(1), toJSON() {},
+    } as DOMRect)
+
+    act(() => useAudioStore.setState({ currentTime: 101 })) // 滚 p(1),收敛在途
+    raf.flush() // 帧1 p:重定位(2),排 p 帧2
+    expect(raf.pending()).toBe(1)
+
+    act(() => useAudioStore.setState({ currentTime: 103 })) // 活动段切到 q → 取消旧 p 循环,滚 q(3)
+    raf.flushAll()
+
+    const pCalls = scrollSpy.mock.contexts.filter((c) => c === nodeP).length
+    expect(pCalls).toBe(2) // p 仅:初次 + 帧1,之后被取消不再追加
+  })
+
+  // 卸载安全:在途 rAF 须被取消,即使强行 flush 也不滚动已脱离的节点、不抛错。
+  it("cancels in-flight convergence on unmount without scrolling a detached node", () => {
+    const scrollSpy = vi.fn()
+    Element.prototype.scrollIntoView = scrollSpy
+    const raf = installRaf()
+    const { container, unmount } = renderList({ transcript: farSegments() })
+    const node = container.querySelector('[data-segment-id="p"]') as HTMLElement
+    const sc = container.querySelector(".overflow-y-auto") as HTMLElement
+    mockGeometry(sc, node, () => DRIFT(3448))
+
+    act(() => useAudioStore.setState({ currentTime: 101 }))
+    expect(raf.pending()).toBe(1)
+
+    unmount()
+    const before = scrollSpy.mock.calls.length
+    expect(() => raf.flushAll()).not.toThrow()
+    expect(scrollSpy).toHaveBeenCalledTimes(before)
   })
 
   it("applies content-visibility classes to every row container so off-screen rows skip layout/paint", () => {
