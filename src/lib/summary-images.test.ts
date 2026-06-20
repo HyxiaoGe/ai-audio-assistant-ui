@@ -67,11 +67,24 @@ describe("buildStreamingImagesFromSummary", () => {
       description: "a",
       url: null,
       status: "pending",
+      model_id: null,
     })
     expect(map.get("{{IMAGE: b}}")?.status).toBe("ready")
     expect(map.get("{{IMAGE: b}}")?.url).toBe("/api/v1/summaries/images/b.png")
     expect(map.get("{{IMAGE: b}}")?.description).toBe("B图")
     expect(map.get("{{IMAGE: c}}")?.status).toBe("failed")
+  })
+
+  it("carries each image's per-image model_id into the StreamingImage (溯源源头)", () => {
+    // image_model_used(摘要级)切 Seedream 后恒 NULL;真正的生图模型在每张图的 model_id 上。
+    const map = buildStreamingImagesFromSummary([
+      summaryItem({
+        images: [
+          img({ placeholder: "{{IMAGE: a}}", status: "ready", url: "/x.webp", model_id: "doubao-seedream-4-5" }),
+        ],
+      }),
+    ])
+    expect(map.get("{{IMAGE: a}}")?.model_id).toBe("doubao-seedream-4-5")
   })
 
   it("prefers the active overview over inactive duplicates", () => {
@@ -167,7 +180,10 @@ describe("applyImageReadyToMap", () => {
       description: "a",
       url: "/api/v1/summaries/images/a.png",
       status: "ready",
+      model_id: "gemini",
     })
+    // WS 事件的 model_id 被带进来(实时生成时溯源源头)
+    expect(next.get("{{IMAGE: a}}")?.model_id).toBe("gemini")
     // 原 Map 不被原地改动
     expect(prev.get("{{IMAGE: a}}")?.status).toBe("pending")
   })

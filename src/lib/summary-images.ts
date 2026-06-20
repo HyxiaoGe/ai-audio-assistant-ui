@@ -25,6 +25,8 @@ export function buildStreamingImagesFromSummary(
       description: image.alt || extractPlaceholderDescription(image.placeholder),
       url: image.status === "ready" ? image.url : null,
       status: image.status,
+      // per-image 生图模型(溯源源头)；缺省 null。
+      model_id: image.model_id ?? null,
     })
   }
   return map
@@ -85,6 +87,8 @@ export function applyImageReadyToMap(
       existing?.description || extractPlaceholderDescription(evt.placeholder),
     url: evt.status === "ready" ? evt.url : null,
     status: evt.status,
+    // 事件带的生图模型(实时生成时溯源源头)；缺省回退到已有值。
+    model_id: evt.model_id ?? existing?.model_id ?? null,
   })
   return next
 }

@@ -101,6 +101,28 @@ describe("MarkdownContent", () => {
     expect(caption?.textContent).toContain("summary.imageGeneratedBy:Gpt Image 1")
   })
 
+  it("uses the per-image StreamingImage.model_id for provenance even when summary-level imageModel is absent (Seedream)", () => {
+    // 真实场景:image_model_used(摘要级)切 Seedream 后恒 NULL,生图模型只在每张图的 model_id 上。
+    // 占位符图注应据 per-image model_id 显示溯源,无需依赖摘要级 imageModel。
+    const images = new Map<string, StreamingImage>([
+      [
+        "{{IMAGE: 时间轴}}",
+        {
+          placeholder: "{{IMAGE: 时间轴}}",
+          description: "时间轴",
+          url: "/api/v1/summaries/images/t.png",
+          status: "ready",
+          model_id: "doubao-seedream-4-5",
+        },
+      ],
+    ])
+    render(<MarkdownContent content={"{{IMAGE: 时间轴}}"} streamingImages={images} mediaToken={"tok"} />)
+    const img = screen.getByRole("img", { name: "时间轴" })
+    const caption = img.closest("figure")?.querySelector("figcaption")
+    // mock t 回显 `${key}:${model}`;model 为友好短名(数字段合并)→ Doubao Seedream 4.5
+    expect(caption?.textContent).toContain("summary.imageGeneratedBy:Doubao Seedream 4.5")
+  })
+
   it("renders no provenance caption on a READY image when imageModel is absent (old data)", () => {
     const images = new Map<string, StreamingImage>([
       [
