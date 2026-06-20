@@ -641,4 +641,46 @@ describe("TaskDetail — ?t= 深链跳播", () => {
     })
     expect(mocks.audioState.seek).not.toHaveBeenCalled()
   })
+
+  // 深链 ?t= 是"跳到这一句"的显式意图，须压过 localStorage 保存的播放进度。否则进度恢复(在
+  // GlobalAudioPlayer)会先把 currentTime 写成上次保存的位置(滚动一次到错位置)，深链 seek 再写
+  // 一次(滚动到目标)——产生双重滚动。做法:深链命中时先删掉本任务的进度缓存,使恢复 effect 读到
+  // 空缓存即早返回、不写 currentTime，深链 seek 成为唯一写入(单次滚动)。
+  it("有 ?t= 时删除本任务的进度缓存（让进度恢复早返回，避免与深链竞争双滚动）", async () => {
+    localStorage.setItem(
+      "audio:progress:task-1",
+      JSON.stringify({ time: 999, updatedAt: Date.now(), src: "/api/v1/media/task-1" })
+    )
+    mocks.searchParams = new URLSearchParams("t=42.5")
+    apiMock.getTask.mockResolvedValue(
+      task({ status: "completed", audio_url: "https://media.example/x.mp3" })
+    )
+    apiMock.getSummary.mockResolvedValue(summaryResp())
+
+    render(<TaskDetail />)
+
+    await waitFor(() => expect(mocks.audioState.seek).toHaveBeenCalledWith(42.5))
+    expect(localStorage.getItem("audio:progress:task-1")).toBeNull()
+    localStorage.clear()
+  })
+
+  it("无 ?t= 时不删进度缓存（正常进度恢复不回归）", async () => {
+    localStorage.setItem(
+      "audio:progress:task-1",
+      JSON.stringify({ time: 999, updatedAt: Date.now(), src: "/api/v1/media/task-1" })
+    )
+    apiMock.getTask.mockResolvedValue(
+      task({ status: "completed", audio_url: "https://media.example/x.mp3" })
+    )
+    apiMock.getSummary.mockResolvedValue(summaryResp())
+
+    render(<TaskDetail />)
+
+    await waitFor(() => {
+      expect(screen.getByText("task.summaryOverview")).toBeInTheDocument()
+    })
+    expect(localStorage.getItem("audio:progress:task-1")).not.toBeNull()
+    expect(mocks.audioState.seek).not.toHaveBeenCalled()
+    localStorage.clear()
+  })
 })

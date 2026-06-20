@@ -1236,8 +1236,18 @@ export default function TaskDetail({
     const seconds = Number(raw);
     if (!Number.isFinite(seconds) || seconds < 0) return;
     deepLinkSeekedRef.current = true;
+    // 深链「跳到这一句」是显式意图，须压过 localStorage 保存的播放进度：先删掉本任务的进度缓存，
+    // 让 GlobalAudioPlayer 的进度恢复 effect 读到空缓存即早返回、不写 currentTime；否则它会先把
+    // 进度恢复到上次位置(滚动一次到错位置)，深链 seek 再写一次(滚动到目标)——双重滚动。删缓存后
+    // 深链 seek 成为唯一的 currentTime 写入，单次滚动落到目标句。key 与 GlobalAudioPlayer 持久化
+    // 所用的 `audio:progress:${store.taskId}` 一致(store.taskId 由 setSource 取 task.id)。
+    try {
+      localStorage.removeItem(`audio:progress:${task.id}`);
+    } catch {
+      // 忽略存储异常(隐私模式/配额)，不影响跳播本身。
+    }
     handleSeek(seconds);
-  }, [task?.audio_url, searchParams, handleSeek]);
+  }, [task?.audio_url, task?.id, searchParams, handleSeek]);
 
   const handleEditTranscript = useCallback((segmentId: string, newContent: string) => {
     setTranscript(prev =>
