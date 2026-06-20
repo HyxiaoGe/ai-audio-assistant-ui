@@ -1,9 +1,8 @@
 "use client"
 
 import { useCallback, useEffect, useRef } from "react"
-import { ensureCurrentMediaActive, getRecovering, useAudioStore } from "@/store/audio-store"
+import { ensureCurrentMediaActive, useAudioStore } from "@/store/audio-store"
 import { canonicalizeAudioSrc } from "@/lib/audio-progress"
-import { adbg } from "@/lib/adbg"
 
 const CACHE_TTL = 7 * 24 * 60 * 60 * 1000
 const PERSIST_INTERVAL_MS = 1000
@@ -63,7 +62,6 @@ export default function GlobalAudioPlayer() {
     if (!cacheKey || !audioRef.current || !src) return
     try {
       const cached = localStorage.getItem(cacheKey)
-      adbg("GAP.restore.enter", { cacheKey, src, hasCached: !!cached })
       if (!cached) return
       const parsed = JSON.parse(cached) as {
         time?: number
@@ -72,11 +70,6 @@ export default function GlobalAudioPlayer() {
       }
       // 两侧都归一到 pathname 再比较：兼容旧的绝对+token 持久值，也兼容相对的 store.src。
       if (!parsed || canonicalizeAudioSrc(parsed.src) !== canonicalizeAudioSrc(src)) {
-        adbg("GAP.restore.skip", {
-          reason: "src-mismatch",
-          cachedSrc: parsed ? canonicalizeAudioSrc(parsed.src) : null,
-          storeSrc: canonicalizeAudioSrc(src),
-        })
         return
       }
       if (!parsed.updatedAt || Date.now() - parsed.updatedAt > CACHE_TTL) {
@@ -84,11 +77,6 @@ export default function GlobalAudioPlayer() {
         return
       }
       if (typeof parsed.time === "number" && isFinite(parsed.time)) {
-        adbg("GAP.restore.set", {
-          parsedTime: parsed.time,
-          src,
-          elBefore: audioRef.current.currentTime,
-        })
         audioRef.current.currentTime = parsed.time
         setCurrentTime(parsed.time)
         setIsPlaying(false)
@@ -103,11 +91,6 @@ export default function GlobalAudioPlayer() {
 
   const handleLoadedMetadata = () => {
     const duration = audioRef.current?.duration
-    adbg("GAP.loadedmetadata", {
-      duration,
-      elCurrentTime: audioRef.current?.currentTime,
-      recovering: getRecovering(),
-    })
     if (duration && !isNaN(duration) && isFinite(duration)) {
       setDuration(duration)
     }
@@ -116,7 +99,6 @@ export default function GlobalAudioPlayer() {
   const handleTimeUpdate = () => {
     const time = audioRef.current?.currentTime
     if (time !== undefined && !isNaN(time)) {
-      adbg("GAP.timeupdate", { elCurrentTime: time, recovering: getRecovering(), taskId })
       setCurrentTime(time)
       persistProgressThrottled()
     }
@@ -214,7 +196,6 @@ export default function GlobalAudioPlayer() {
         persistProgress()
       }}
       onSeeked={() => {
-        adbg("GAP.seeked", { elCurrentTime: audioRef.current?.currentTime, recovering: getRecovering() })
         persistProgress()
       }}
       onEnded={() => {
@@ -224,7 +205,6 @@ export default function GlobalAudioPlayer() {
       // 媒体代理鉴权基于 URL 上的 token；token 过期会让请求 401，<audio> 随即触发 error。
       // 交给 store 用新 token 重建 src 并重载（保留进度、按原播放态续播，带重试上限）。
       onError={() => {
-        adbg("GAP.error", { elCurrentTime: audioRef.current?.currentTime, src })
         void reloadWithFreshToken()
       }}
     />
