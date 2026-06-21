@@ -2,6 +2,8 @@
 
 import { useEffect } from "react"
 
+import { reportClientError } from "@/lib/client-error-report"
+
 /**
  * 全局错误边界：仅当 root layout 本身渲染抛错时触发，会替换整个根布局（含 html/body）。
  * 此时位于所有 Provider 之外，且不会加载 globals.css —— 故不可用 useI18n/主题/Tailwind，
@@ -16,6 +18,12 @@ export default function GlobalError({
 }) {
   useEffect(() => {
     console.error(error)
+    reportClientError({
+      message: error.message || String(error),
+      source: "global_error_boundary",
+      stack: error.stack,
+      digest: error.digest,
+    })
   }, [error])
 
   return (
