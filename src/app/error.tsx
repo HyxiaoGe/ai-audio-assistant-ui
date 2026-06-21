@@ -5,6 +5,7 @@ import Link from "next/link"
 import { RotateCw, Home } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useI18n } from "@/lib/i18n-context"
+import { reportClientError } from "@/lib/client-error-report"
 
 /**
  * App Router 段级错误边界：捕获 root layout 之下任意页面渲染抛出的错误，
@@ -22,6 +23,12 @@ export default function Error({
   useEffect(() => {
     // 上报到控制台/监控，便于排查（digest 为 Next 生成的服务端错误指纹）
     console.error(error)
+    reportClientError({
+      message: error.message || String(error),
+      source: "error_boundary",
+      stack: error.stack,
+      digest: error.digest,
+    })
   }, [error])
 
   return (

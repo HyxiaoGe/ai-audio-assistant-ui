@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import "./globals.css"
 import { Providers } from "./providers"
 import { Toaster } from "@/components/ui/sonner"
+import { GlobalErrorListener } from "@/components/global-error-listener"
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
@@ -13,6 +14,7 @@ const RootLayout = ({ children }: { children: React.ReactNode }) => {
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <body className="font-sans">
+        <GlobalErrorListener />
         <Providers>{children}</Providers>
         <Toaster />
       </body>
