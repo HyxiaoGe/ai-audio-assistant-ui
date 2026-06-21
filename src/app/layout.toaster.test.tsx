@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render } from "@testing-library/react";
 
-const sonnerToaster = vi.fn(() => null);
+const sonnerToaster = vi.fn((_props: Record<string, unknown>) => null);
 vi.mock("sonner", () => ({
   Toaster: (props: Record<string, unknown>) => sonnerToaster(props),
 }));
