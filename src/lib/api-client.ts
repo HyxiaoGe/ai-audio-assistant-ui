@@ -11,6 +11,7 @@
 import { getToken } from "@/lib/auth-token"
 import { translateStatic } from "@/lib/i18n-static"
 import {
+  AdminCostsResponse,
   ApiError,
   ApiResponse,
   AsrUserFreeQuotaResponse,
@@ -350,6 +351,17 @@ export class APIClient {
 
   async getAsrAdminOverview(): Promise<AsrAdminOverviewResponse> {
     return request("/asr/quotas/admin/overview", { method: "GET" }, this.token)
+  }
+
+  // ==========================================================================
+  // 成本看板（管理员）
+  // ==========================================================================
+
+  /**
+   * 按用户成本聚合：¥（ASR/配图）与 $（LLM）双列。仅管理员可访问。
+   */
+  async getCostsByUser(): Promise<AdminCostsResponse> {
+    return request("/admin/costs/by-user", { method: "GET" }, this.token)
   }
 
   // ==========================================================================

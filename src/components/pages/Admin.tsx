@@ -9,8 +9,9 @@ import { useI18n } from '@/lib/i18n-context';
 import { useAPIClient } from '@/lib/use-api-client';
 import { useDateFormatter } from '@/lib/use-date-formatter';
 import { useUserStore } from '@/store/user-store';
-import type { AsrAdminOverviewResponse } from '@/types/api';
-import { ShieldAlert, TrendingUp, Clock, DollarSign, Zap } from 'lucide-react';
+import { formatMoney, isLlmUnavailable } from '@/lib/admin-cost-format';
+import type { AdminCostsResponse, AsrAdminOverviewResponse } from '@/types/api';
+import { ShieldAlert, TrendingUp, Clock, DollarSign, Zap, Users } from 'lucide-react';
 
 interface AdminProps {
   isAuthenticated?: boolean;
@@ -33,6 +34,10 @@ export default function Admin({
   const [asrOverview, setAsrOverview] = useState<AsrAdminOverviewResponse | null>(null);
   const [asrOverviewLoading, setAsrOverviewLoading] = useState(false);
 
+  // 按用户成本状态
+  const [costs, setCosts] = useState<AdminCostsResponse | null>(null);
+  const [costsLoading, setCostsLoading] = useState(false);
+
   // 加载 ASR 概览
   useEffect(() => {
     if (!isAdmin) return;
@@ -53,6 +58,31 @@ export default function Admin({
       }
     };
     loadOverview();
+    return () => {
+      active = false;
+    };
+  }, [client, isAdmin]);
+
+  // 加载按用户成本
+  useEffect(() => {
+    if (!isAdmin) return;
+    let active = true;
+    const loadCosts = async () => {
+      setCostsLoading(true);
+      try {
+        const result = await client.getCostsByUser();
+        if (active) {
+          setCosts(result);
+        }
+      } catch {
+        // 静默失败
+      } finally {
+        if (active) {
+          setCostsLoading(false);
+        }
+      }
+    };
+    loadCosts();
     return () => {
       active = false;
     };
@@ -287,6 +317,84 @@ export default function Admin({
                 )}
                 {!asrOverviewLoading && !asrOverview && (
                   <p className="text-sm text-[var(--app-text-muted)]">{t("settings.asrQuotaEmpty")}</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* 按用户成本（双币种：¥ ASR/配图 · $ LLM，绝不相加） */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-4 h-4" style={{ color: "var(--app-primary)" }} />
+                  {t("admin.costByUser.title")}
+                </CardTitle>
+                <CardDescription>{t("admin.costByUser.desc")}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {costsLoading && (
+                  <p className="text-sm text-[var(--app-text-muted)]">{t("common.loading")}...</p>
+                )}
+                {!costsLoading && costs && costs.items.length === 0 && (
+                  <p className="text-sm text-[var(--app-text-muted)]">{t("admin.costByUser.empty")}</p>
+                )}
+                {!costsLoading && costs && costs.items.length > 0 && (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left" style={{ color: "var(--app-text-muted)" }}>
+                          <th className="py-2 pr-4 font-medium">{t("admin.costByUser.user")}</th>
+                          <th className="py-2 px-4 font-medium text-right">{t("admin.costByUser.asrCost")}</th>
+                          <th className="py-2 px-4 font-medium text-right">{t("admin.costByUser.imageCost")}</th>
+                          <th className="py-2 px-4 font-medium text-right">{t("admin.costByUser.cnyTotal")}</th>
+                          <th className="py-2 pl-4 font-medium text-right">{t("admin.costByUser.llmCost")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {costs.items.map((row) => {
+                          const llmNa = isLlmUnavailable(row.llm_usd, costs.llm_source);
+                          return (
+                            <tr
+                              key={row.user_id}
+                              className="border-t"
+                              style={{ borderColor: "var(--app-glass-border)" }}
+                            >
+                              <td className="py-2 pr-4" style={{ color: "var(--app-text)" }}>
+                                <div className="flex flex-col">
+                                  <span className="font-medium">
+                                    {row.display_name || t("admin.costByUser.anonymous")}
+                                  </span>
+                                  <span className="text-xs text-[var(--app-text-muted)]">
+                                    {t("admin.costByUser.calls", { value: String(row.asr_calls) })}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="py-2 px-4 text-right" style={{ color: "var(--app-text)" }}>
+                                {formatMoney(row.asr_cny, "¥")}
+                              </td>
+                              <td className="py-2 px-4 text-right" style={{ color: "var(--app-text)" }}>
+                                {formatMoney(row.image_cny, "¥")}
+                              </td>
+                              <td className="py-2 px-4 text-right font-semibold" style={{ color: "var(--app-text)" }}>
+                                {formatMoney(row.cny_total, "¥")}
+                              </td>
+                              <td className="py-2 pl-4 text-right" style={{ color: "var(--app-text)" }}>
+                                {llmNa ? (
+                                  <span
+                                    className="text-xs text-[var(--app-text-muted)]"
+                                    title={t("admin.costByUser.llmUnavailableHint")}
+                                  >
+                                    {t("admin.costByUser.llmUnavailable")}
+                                  </span>
+                                ) : (
+                                  formatMoney(row.llm_usd as number, "$")
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </CardContent>
             </Card>
