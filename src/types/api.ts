@@ -218,6 +218,7 @@ export interface AsrAdminOverviewResponse {
 export interface UserCostRow {
   user_id: string
   display_name: string | null
+  is_self: boolean         // 是否为当前查看者本人（用于在名字后标「（你）」）
   asr_cny: number          // ASR 毛成本（¥）
   asr_paid_cny: number     // 扣免费额度后实付（¥）
   asr_calls: number        // ASR 调用次数
