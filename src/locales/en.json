@@ -60,6 +60,20 @@
       "hours": "{value} hrs",
       "yuan": "¥{value}",
       "yuanPerHour": "¥{value}/hr"
+    },
+    "costByUser": {
+      "title": "Cost by User",
+      "desc": "Each user's ASR/image spend (¥) and LLM spend ($). Different currencies — shown in separate columns, not summed.",
+      "user": "User",
+      "anonymous": "Unnamed user",
+      "asrCost": "ASR (¥)",
+      "imageCost": "Image (¥)",
+      "cnyTotal": "CNY total",
+      "llmCost": "LLM ($)",
+      "llmUnavailable": "N/A",
+      "llmUnavailableHint": "LiteLLM master key not configured; LLM spend unavailable",
+      "calls": "{value} calls",
+      "empty": "No cost data yet"
     }
   },
   "player": {

@@ -211,6 +211,31 @@ export interface AsrAdminOverviewResponse {
 }
 
 // ============================================================================
+// 管理员成本看板（按用户）
+// ============================================================================
+
+// 单个用户的成本行。¥（ASR/配图）与 $（LLM）为不同币种，分两列、绝不相加。
+export interface UserCostRow {
+  user_id: string
+  display_name: string | null
+  asr_cny: number          // ASR 毛成本（¥）
+  asr_paid_cny: number     // 扣免费额度后实付（¥）
+  asr_calls: number        // ASR 调用次数
+  image_cny: number        // 配图成本（¥，按张估）
+  cny_total: number        // asr_cny + image_cny（同币种合计）
+  llm_usd: number | null   // LiteLLM end-user spend（$）；来源不可用时为 null
+}
+
+export interface AdminCostsResponse {
+  items: UserCostRow[]
+  // "litellm" = 已读到 LiteLLM spend；"unavailable" = 无 master key，LLM 列为 null
+  llm_source: "litellm" | "unavailable"
+  period_start: string | null
+  period_end: string | null
+  currency_note: string
+}
+
+// ============================================================================
 // 任务相关
 // ============================================================================
 

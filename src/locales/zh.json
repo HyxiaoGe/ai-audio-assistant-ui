@@ -60,6 +60,20 @@
       "hours": "{value} 小时",
       "yuan": "¥{value}",
       "yuanPerHour": "¥{value}/小时"
+    },
+    "costByUser": {
+      "title": "用户成本",
+      "desc": "每位用户的 ASR/配图（¥）与 LLM（$）花销。两列币种不同，分列展示、不可相加。",
+      "user": "用户",
+      "anonymous": "未命名用户",
+      "asrCost": "ASR（¥）",
+      "imageCost": "配图（¥）",
+      "cnyTotal": "人民币合计",
+      "llmCost": "LLM（$）",
+      "llmUnavailable": "未配置",
+      "llmUnavailableHint": "未配置 LiteLLM master key，无法读取 LLM 花销",
+      "calls": "{value} 次",
+      "empty": "暂无成本数据"
     }
   },
   "player": {
