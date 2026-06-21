@@ -66,6 +66,7 @@
       "desc": "Each user's ASR/image spend (¥) and LLM spend ($). Different currencies — shown in separate columns, not summed.",
       "user": "User",
       "anonymous": "Unnamed user",
+      "youSuffix": " (You)",
       "asrCost": "ASR (¥)",
       "imageCost": "Image (¥)",
       "cnyTotal": "CNY total",

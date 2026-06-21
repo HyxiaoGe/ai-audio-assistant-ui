@@ -9,7 +9,7 @@ import { useI18n } from '@/lib/i18n-context';
 import { useAPIClient } from '@/lib/use-api-client';
 import { useDateFormatter } from '@/lib/use-date-formatter';
 import { useUserStore } from '@/store/user-store';
-import { formatMoney, isLlmUnavailable } from '@/lib/admin-cost-format';
+import { formatMoney, isLlmUnavailable, formatUserName } from '@/lib/admin-cost-format';
 import type { AdminCostsResponse, AsrAdminOverviewResponse } from '@/types/api';
 import { ShieldAlert, TrendingUp, Clock, DollarSign, Zap, Users } from 'lucide-react';
 
@@ -361,7 +361,11 @@ export default function Admin({
                               <td className="py-2 pr-4" style={{ color: "var(--app-text)" }}>
                                 <div className="flex flex-col">
                                   <span className="font-medium">
-                                    {row.display_name || t("admin.costByUser.anonymous")}
+                                    {formatUserName(row.display_name, {
+                                      isSelf: row.is_self,
+                                      fallback: t("admin.costByUser.anonymous"),
+                                      selfSuffix: t("admin.costByUser.youSuffix"),
+                                    })}
                                   </span>
                                   <span className="text-xs text-[var(--app-text-muted)]">
                                     {t("admin.costByUser.calls", { value: String(row.asr_calls) })}

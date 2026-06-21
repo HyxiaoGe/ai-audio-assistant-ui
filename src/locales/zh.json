@@ -66,6 +66,7 @@
       "desc": "每位用户的 ASR/配图（¥）与 LLM（$）花销。两列币种不同，分列展示、不可相加。",
       "user": "用户",
       "anonymous": "未命名用户",
+      "youSuffix": "（你）",
       "asrCost": "ASR（¥）",
       "imageCost": "配图（¥）",
       "cnyTotal": "人民币合计",

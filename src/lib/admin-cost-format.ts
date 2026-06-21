@@ -26,3 +26,16 @@ export function isLlmUnavailable(
 ): boolean {
   return llmSource === "unavailable" || llmUsd == null
 }
+
+/**
+ * 成本看板某行的用户名展示文案：
+ * - displayName 为空时回落到 fallback（如「未命名用户」）；
+ * - 该行是当前查看者本人（isSelf）时，在名字后追加 selfSuffix（如「（你）」）以示区分。
+ */
+export function formatUserName(
+  displayName: string | null,
+  opts: { isSelf: boolean; fallback: string; selfSuffix: string }
+): string {
+  const base = displayName || opts.fallback
+  return opts.isSelf ? `${base}${opts.selfSuffix}` : base
+}
