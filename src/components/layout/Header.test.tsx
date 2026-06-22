@@ -43,6 +43,12 @@ vi.mock("@/lib/i18n-context", () => ({
   useI18n: () => ({ t: (k: string) => k, locale: "en" }),
 }))
 vi.mock("next-themes", () => ({ useTheme: () => ({ resolvedTheme: "light" }) }))
+vi.mock("@/store/ui-store", () => ({
+  useUIStore: (sel: (s: { openLogin: () => void }) => unknown) => sel({ openLogin: vi.fn() }),
+}))
+vi.mock("@/lib/settings-context", () => ({
+  useSettingsActions: () => ({ setTheme: vi.fn() }),
+}))
 vi.mock("next/navigation", () => ({
   usePathname: () => "/",
   useRouter: () => ({ push: pushMock }),
@@ -52,7 +58,7 @@ vi.mock("@/components/notifications/NotificationBell", () => ({
 }))
 
 function renderHeader() {
-  return render(<Header isAuthenticated onOpenLogin={vi.fn()} />)
+  return render(<Header />)
 }
 
 beforeEach(() => {
