@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { useDateFormatter } from "@/lib/use-date-formatter";
 import EmptyState from "@/components/common/EmptyState";
+import ErrorState from "@/components/common/ErrorState";
+import { VideoGridSkeleton } from "@/components/youtube/SubscriptionSkeleton";
 import VideoCard from "@/components/youtube/VideoCard";
 import { ChannelCard } from "@/components/youtube/ChannelCard";
 import { ChannelSearchInput } from "@/components/youtube/ChannelSearchInput";
@@ -103,7 +105,7 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
 
   // Latest videos state
   const [latestVideos, setLatestVideos] = useState<YouTubeVideoItem[]>([]);
-  const [videosLoading, setVideosLoading] = useState(false);
+  const [videosLoading, setVideosLoading] = useState(true);
   const [videosTotal, setVideosTotal] = useState(0);
   const [videosPage, setVideosPage] = useState(1);
   const [videosError, setVideosError] = useState<string | null>(null);
@@ -963,11 +965,13 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
                         </CardHeader>
                         <CardContent>
                           {videosError ? (
-                            <div className="text-center py-12">
-                              <p className="text-sm" style={{ color: "var(--app-danger)" }}>
-                                {videosError}
-                              </p>
-                            </div>
+                            <ErrorState
+                              type="network"
+                              description={videosError}
+                              onRetry={() => void loadLatestVideos(1, false)}
+                            />
+                          ) : videosLoading && latestVideos.length === 0 ? (
+                            <VideoGridSkeleton />
                           ) : latestVideos.length === 0 && !videosLoading ? (
                             <div className="text-center py-12">
                               <VideoIcon
