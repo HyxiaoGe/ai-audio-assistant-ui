@@ -16,16 +16,7 @@ import HeaderMiniPlayer from '@/components/layout/HeaderMiniPlayer';
 import { useUIStore } from '@/store/ui-store';
 import { useSettingsActions } from '@/lib/settings-context';
 
-interface HeaderProps {
-  /** @deprecated 外壳上提后 Header 自取，过渡期保留以兼容尚未去壳的调用点（Task 16 删除） */
-  isAuthenticated?: boolean;
-  /** @deprecated 外壳上提后 Header 自取，过渡期保留以兼容尚未去壳的调用点（Task 16 删除） */
-  onOpenLogin?: () => void;
-  /** @deprecated 外壳上提后 Header 自取，过渡期保留以兼容尚未去壳的调用点（Task 16 删除） */
-  onToggleTheme?: () => void;
-}
-
-function Header(_props: HeaderProps) {
+function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);

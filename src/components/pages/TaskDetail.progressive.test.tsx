@@ -109,12 +109,6 @@ vi.mock("@/store/ui-store", () => ({
 }))
 
 // ---- 顶层布局桩：不在被测范围，且会引入 ws/通知等依赖 ----
-vi.mock("@/components/layout/Header", () => ({
-  default: () => null,
-}))
-vi.mock("@/components/layout/Sidebar", () => ({
-  default: () => null,
-}))
 vi.mock("@/components/task/PlayerBarContainer", () => ({
   PlayerBarContainer: () => null,
 }))
