@@ -91,6 +91,7 @@ describe("Explore 公开列表页", () => {
     mockClient.getPublicTasks.mockRejectedValue(new Error("boom"))
     render(<Explore />)
     await waitFor(() => expect(screen.getByText("explore.loadFailed")).toBeInTheDocument())
-    expect(screen.getByText("explore.retry")).toBeInTheDocument()
+    // PublicTaskList 失败态改用 ErrorState,重试按钮文案由 explore.retry 变为 common.retry
+    expect(screen.getByText("common.retry")).toBeInTheDocument()
   })
 })
