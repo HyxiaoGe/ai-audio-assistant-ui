@@ -699,6 +699,24 @@ export interface StatsTasksOverviewResponse {
   total_audio_duration_formatted: string
 }
 
+export interface StatsTasksTimeseriesBucket {
+  date: string
+  total: number
+  completed: number
+  failed: number
+  processing: number
+  pending: number
+  audio_duration_seconds: number
+  asr_cost: number
+}
+
+export interface StatsTasksTimeseriesResponse {
+  time_range: StatsTimeRangeWindow
+  timezone: string
+  granularity: string
+  buckets: StatsTasksTimeseriesBucket[]
+}
+
 // ============================================================================
 // WebSocket 消息
 // ============================================================================
