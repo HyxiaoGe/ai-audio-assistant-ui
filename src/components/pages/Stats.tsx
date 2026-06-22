@@ -842,15 +842,13 @@ export default function Stats() {
                       <p className="text-xs text-[var(--app-text-muted)]">
                         {t("stats.totalTasks")}
                       </p>
-                      <p className="text-2xl font-semibold text-[var(--app-text)]">
-                        {taskOverview ? (
-                          taskOverview.total_tasks
-                        ) : firstLoad ? (
-                          <Skeleton data-testid="stats-skeleton" className="inline-block h-7 w-16 align-middle" />
-                        ) : (
-                          "--"
-                        )}
-                      </p>
+                      {firstLoad && !taskOverview ? (
+                        <Skeleton data-testid="stats-skeleton" className="h-7 w-16" />
+                      ) : (
+                        <p className="text-2xl font-semibold text-[var(--app-text)]">
+                          {taskOverview ? taskOverview.total_tasks : "--"}
+                        </p>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
