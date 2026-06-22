@@ -128,7 +128,7 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
 
   // Starred videos state
   const [starredVideos, setStarredVideos] = useState<YouTubeVideoItem[]>([]);
-  const [starredVideosLoading, setStarredVideosLoading] = useState(false);
+  const [starredVideosLoading, setStarredVideosLoading] = useState(true);
   const [starredVideosTotal, setStarredVideosTotal] = useState(0);
   const [starredVideosPage, setStarredVideosPage] = useState(1);
   const [starredVideosError, setStarredVideosError] = useState<string | null>(null);
@@ -1058,11 +1058,13 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
                         </CardHeader>
                         <CardContent>
                           {starredVideosError ? (
-                            <div className="text-center py-12">
-                              <p className="text-sm" style={{ color: "var(--app-danger)" }}>
-                                {starredVideosError}
-                              </p>
-                            </div>
+                            <ErrorState
+                              type="network"
+                              description={starredVideosError}
+                              onRetry={() => void loadStarredVideos(1, false)}
+                            />
+                          ) : starredVideosLoading && starredVideos.length === 0 ? (
+                            <VideoGridSkeleton />
                           ) : starredVideos.length === 0 && !starredVideosLoading ? (
                             <div className="text-center py-12">
                               <Star
