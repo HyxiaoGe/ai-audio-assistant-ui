@@ -38,7 +38,7 @@ import {
   type BarDatum,
 } from "@/components/stats/StatsCharts";
 
-type TimeRangeOption = "today" | "week" | "month" | "all" | "custom";
+type TimeRangeOption = "today" | "week" | "month" | "all" | "custom" | "auto";
 
 
 type AppliedRange = {
@@ -144,7 +144,8 @@ export default function Stats() {
     tRef.current = t;
   });
 
-  const [timeRange, setTimeRange] = useState<TimeRangeOption>("month");
+  const [timeRange, setTimeRange] = useState<TimeRangeOption>("auto");
+  const [autoResolved, setAutoResolved] = useState<TimeRangeOption | null>(null);
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [appliedRange, setAppliedRange] = useState<AppliedRange | null>(null);
@@ -161,6 +162,7 @@ export default function Stats() {
   const [llmProvidersOpen, setLlmProvidersOpen] = useState(true);
 
   const timeQuery = useMemo(() => {
+    if (timeRange === "auto") return {};
     if (timeRange === "custom") {
       if (!appliedRange) return null;
       return {
@@ -201,6 +203,9 @@ export default function Stats() {
         setServiceOverview(serviceOverviewRes);
         setTaskOverview(taskOverviewRes);
         setTimeseries(timeseriesRes);
+        if (taskOverviewRes.resolved_range) {
+          setAutoResolved(taskOverviewRes.resolved_range as TimeRangeOption);
+        }
       } catch (err) {
         if (err instanceof ApiError) {
           setError(err.message);
@@ -516,7 +521,7 @@ export default function Stats() {
                       {t("stats.timeRangeLabel")}
                     </p>
                     <Select
-                      value={timeRange}
+                      value={timeRange === "auto" ? (autoResolved ?? "month") : timeRange}
                       onValueChange={(value) => {
                         setTimeRange(value as TimeRangeOption);
                         setCustomError(null);
