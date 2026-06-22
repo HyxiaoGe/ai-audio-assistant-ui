@@ -35,3 +35,13 @@ describe("标题工具类 text-h1/h2/h3 已定义且层级单调", () => {
     expect(h2).toBeGreaterThan(h3);
   });
 });
+
+describe("全局 :focus-visible 焦点环基线", () => {
+  it("存在 :focus-visible 规则且 outline 引用 --app-primary", () => {
+    const m = css.match(/:focus-visible\s*\{([^}]*)\}/);
+    expect(m, ":focus-visible 规则未找到").not.toBeNull();
+    const block = m![1];
+    expect(block).toMatch(/outline:[^;]*var\(--app-primary\)/);
+    expect(block).toMatch(/outline-offset:/);
+  });
+});
