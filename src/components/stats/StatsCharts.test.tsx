@@ -13,7 +13,7 @@ vi.mock("recharts", async (importActual) => {
   };
 });
 
-import { DonutChart, bucketTopSlices, CHART_PALETTE } from "./StatsCharts";
+import { DonutChart, HorizontalBarChart, bucketTopSlices, CHART_PALETTE } from "./StatsCharts";
 
 describe("bucketTopSlices", () => {
   it("项数 <= maxSlices 时原样返回", () => {
@@ -85,5 +85,23 @@ describe("DonutChart", () => {
   it("CHART_PALETTE 暴露 5 个 --chart token", () => {
     expect(CHART_PALETTE).toHaveLength(5);
     expect(CHART_PALETTE[0]).toBe("var(--chart-1)");
+  });
+});
+
+describe("HorizontalBarChart", () => {
+  const bars = [
+    { key: "transcribe", label: "转写", value: 42, displayValue: "42.0 秒", color: "var(--chart-1)" },
+    { key: "download", label: "下载", value: 21, displayValue: "21.0 秒", color: "var(--chart-2)" },
+  ];
+
+  it("sr-only 列表渲染每条 label 与 displayValue", () => {
+    render(<HorizontalBarChart bars={bars} ariaLabel="各阶段平均耗时" />);
+    expect(screen.getByText("转写: 42.0 秒")).toBeInTheDocument();
+    expect(screen.getByText("下载: 21.0 秒")).toBeInTheDocument();
+  });
+
+  it("外层有 role=img 与 aria-label", () => {
+    render(<HorizontalBarChart bars={bars} ariaLabel="各阶段平均耗时" />);
+    expect(screen.getByRole("img", { name: "各阶段平均耗时" })).toBeInTheDocument();
   });
 });

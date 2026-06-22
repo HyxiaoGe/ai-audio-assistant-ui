@@ -1,6 +1,6 @@
 "use client";
 
-import { Cell, Pie, PieChart } from "recharts";
+import { Bar, BarChart, Cell, LabelList, Pie, PieChart, XAxis, YAxis } from "recharts";
 import {
   ChartContainer,
   ChartTooltip,
@@ -97,6 +97,60 @@ export function DonutChart({
             </li>
           );
         })}
+      </ul>
+    </div>
+  );
+}
+
+export interface BarDatum {
+  key: string;
+  label: string;
+  value: number;
+  displayValue: string;
+  color: string;
+}
+
+export interface HorizontalBarChartProps {
+  bars: BarDatum[];
+  ariaLabel: string;
+}
+
+export function HorizontalBarChart({ bars, ariaLabel }: HorizontalBarChartProps) {
+  const config: ChartConfig = Object.fromEntries(
+    bars.map((b) => [b.key, { label: b.label, color: b.color }])
+  );
+
+  return (
+    <div role="img" aria-label={ariaLabel}>
+      <ChartContainer config={config} className="aspect-auto h-[200px] w-full">
+        <BarChart data={bars} layout="vertical" margin={{ left: 8, right: 40 }}>
+          <XAxis type="number" hide />
+          <YAxis
+            type="category"
+            dataKey="label"
+            width={84}
+            tickLine={false}
+            axisLine={false}
+            tick={{ fontSize: 11 }}
+          />
+          <ChartTooltip content={<ChartTooltipContent nameKey="key" hideLabel />} />
+          <Bar dataKey="value" radius={4} isAnimationActive={false}>
+            {bars.map((b) => (
+              <Cell key={b.key} fill={b.color} />
+            ))}
+            <LabelList
+              dataKey="displayValue"
+              position="right"
+              className="fill-[var(--app-text-muted)]"
+              fontSize={11}
+            />
+          </Bar>
+        </BarChart>
+      </ChartContainer>
+      <ul className="sr-only">
+        {bars.map((b) => (
+          <li key={b.key}>{`${b.label}: ${b.displayValue}`}</li>
+        ))}
       </ul>
     </div>
   );
