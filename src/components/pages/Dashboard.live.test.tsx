@@ -19,8 +19,14 @@ vi.mock("@/lib/use-date-formatter", () => ({
   useDateFormatter: () => ({ formatRelativeTime: () => "just now" }),
 }))
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }))
-vi.mock("@/components/layout/Header", () => ({ default: () => null }))
-vi.mock("@/components/layout/Sidebar", () => ({ default: () => null }))
+vi.mock("@/store/ui-store", () => ({
+  useUIStore: (sel: (s: { openLogin: () => void; openNewTask: () => void }) => unknown) =>
+    sel({ openLogin: vi.fn(), openNewTask: vi.fn() }),
+}))
+vi.mock("@/store/auth-store", () => ({
+  useAuthStore: (sel: (s: { user: { name: string } | null }) => unknown) =>
+    sel({ user: { name: "Sean" } }),
+}))
 vi.mock("@/components/task/NewTaskCard", () => ({ default: () => null }))
 vi.mock("@/components/pages/PublicTaskList", () => ({ default: () => <div>public-task-list</div> }))
 vi.mock("@/components/task/TaskCard", () => ({
@@ -56,7 +62,7 @@ describe("Dashboard 最近任务标题随 WS 实时刷新", () => {
   })
 
   it("download 阶段解析出真标题后,卡片标题随 store 即时刷新", async () => {
-    render(<Dashboard isAuthenticated onOpenLogin={() => {}} onOpenNewTask={() => {}} />)
+    render(<Dashboard />)
 
     const card = await screen.findByTestId("task-y1")
 
@@ -88,7 +94,7 @@ describe("Dashboard 最近任务标题随 WS 实时刷新", () => {
       page: 1,
       page_size: 5,
     })
-    render(<Dashboard isAuthenticated onOpenLogin={() => {}} onOpenNewTask={() => {}} />)
+    render(<Dashboard />)
 
     await screen.findByTestId("task-y1")
 

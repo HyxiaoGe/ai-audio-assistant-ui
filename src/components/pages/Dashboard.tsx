@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Header from '@/components/layout/Header';
-import Sidebar from '@/components/layout/Sidebar';
+import { useAuthStore } from '@/store/auth-store';
+import { useUIStore } from '@/store/ui-store';
 import NewTaskCard from '@/components/task/NewTaskCard';
 import TaskCard from '@/components/task/TaskCard';
 import EmptyState from '@/components/common/EmptyState';
@@ -15,21 +15,7 @@ import type { TaskListItem, TaskStatus } from '@/types/api';
 import { useI18n } from '@/lib/i18n-context';
 import { useGlobalStore } from '@/store/global-store';
 
-interface DashboardProps {
-  isAuthenticated: boolean;
-  onOpenLogin: () => void;
-  onOpenNewTask?: () => void;
-  userName?: string | null;
-  onToggleTheme?: () => void;
-}
-
-export default function Dashboard({ 
-  isAuthenticated, 
-  onOpenLogin,
-  onOpenNewTask,
-  userName,
-  onToggleTheme = () => {}
-}: DashboardProps) {
+export default function Dashboard() {
   const router = useRouter();
   const client = useAPIClient();
   const { formatRelativeTime } = useDateFormatter();
@@ -38,16 +24,22 @@ export default function Dashboard({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const authUser = useAuthStore((s) => s.user);
+  const isAuthenticated = !!authUser;
+  const userName = authUser?.name;
+  const openLogin = useUIStore((s) => s.openLogin);
+  const openNewTask = useUIStore((s) => s.openNewTask);
+
   // Get real-time task updates from WebSocket
   const globalTasks = useGlobalStore((state) => state.tasks);
 
-  // 始终保存最新的 onOpenLogin / t，但不让它们成为下方拉取 effect 的依赖。
-  // 否则父组件每次重渲染（如开关弹窗）都会重建 onOpenLogin 的函数身份，
+  // 始终保存最新的 openLogin / t，但不让它们成为下方拉取 effect 的依赖。
+  // 否则父组件每次重渲染（如开关弹窗）都会重建函数身份，
   // 触发该 effect 重跑、反复 getTasks，造成无谓请求。
-  const onOpenLoginRef = useRef(onOpenLogin);
+  const onOpenLoginRef = useRef(openLogin);
   const tRef = useRef(t);
   useEffect(() => {
-    onOpenLoginRef.current = onOpenLogin;
+    onOpenLoginRef.current = openLogin;
     tRef.current = t;
   });
 
@@ -138,11 +130,9 @@ export default function Dashboard({
 
   const handleNewTask = () => {
     if (!isAuthenticated) {
-      onOpenLogin();
+      openLogin();
     } else {
-      if (onOpenNewTask) {
-        onOpenNewTask();
-      }
+      openNewTask();
     }
   };
 
@@ -155,111 +145,95 @@ export default function Dashboard({
   const hasNoTasks = displayTasks.length === 0;
 
   return (
-    <div className="h-screen flex flex-col" style={{ background: "var(--app-bg)" }}>
-      {/* Header */}
-      <Header 
-        isAuthenticated={isAuthenticated} 
-        onOpenLogin={onOpenLogin}
-        onToggleTheme={onToggleTheme}
-      />
+    <div className="p-8">
+      {/* 欢迎区域 */}
+      <div className="mb-8">
+        <h2
+          className="text-h2"
+          style={{ color: "var(--app-text)" }}
+        >
+          {t("dashboard.welcome")}{userName ? `，${userName}` : `，${t("dashboard.friend")}`} 👋
+        </h2>
+      </div>
 
-      {/* 主体：Sidebar + 主内容区 */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar */}
-        <Sidebar />
+      {/* 新建任务卡片 */}
+      <div className="mb-8">
+        <NewTaskCard onClick={handleNewTask} />
+      </div>
 
-        {/* 主内容区 */}
-        <main className="flex-1 overflow-y-auto p-8" style={{ background: "var(--app-bg)" }}>
-          {/* 欢迎区域 */}
-          <div className="mb-8">
-            <h2 
-              className="text-h2"
-              style={{ color: "var(--app-text)" }}
-            >
-              {t("dashboard.welcome")}{userName ? `，${userName}` : `，${t("dashboard.friend")}`} 👋
-            </h2>
-          </div>
+      {/* 最近任务 */}
+      <div>
+        <h3
+          className="text-h3 mb-4"
+          style={{ color: "var(--app-text)" }}
+        >
+          {t("dashboard.recentTasks")}
+        </h3>
 
-          {/* 新建任务卡片 */}
-          <div className="mb-8">
-            <NewTaskCard onClick={handleNewTask} />
-          </div>
-
-          {/* 最近任务 */}
-          <div>
-            <h3 
-              className="text-h3 mb-4"
-              style={{ color: "var(--app-text)" }}
-            >
-              {t("dashboard.recentTasks")}
-            </h3>
-
-            {/* 任务列表 */}
+        {/* 任务列表 */}
+        <div className="space-y-3">
+          {!isAuthenticated ? (
             <div className="space-y-3">
-              {!isAuthenticated ? (
-                <div className="space-y-3">
-                  <EmptyState
-                    variant="default"
-                    title={t("dashboard.loginToViewTitle")}
-                    description={t("dashboard.loginToViewDescription")}
-                    action={{
-                      label: t("dashboard.goLogin"),
-                      onClick: onOpenLogin,
-                      variant: 'primary'
-                    }}
-                  />
-                  <div className="flex justify-center">
-                    <button
-                      onClick={() => router.push('/explore')}
-                      className="text-sm hover:underline underline-offset-4"
-                      style={{ color: 'var(--app-primary)' }}
-                    >
-                      {t("explore.goExplore")}
-                    </button>
-                  </div>
-                </div>
-              ) : loading ? (
-                <div className="text-sm" style={{ color: "var(--app-text-muted)" }}>
-                  {t("common.loading")}...
-                </div>
-              ) : error ? (
-                <div className="text-sm" style={{ color: "var(--app-danger)" }}>
-                  {error}
-                </div>
-              ) : hasNoTasks ? (
-                <div className="space-y-4">
-                  <EmptyState
-                    variant="default"
-                    title={t("dashboard.emptyTitle")}
-                    description={t("dashboard.emptyDescription")}
-                    action={{
-                      label: t("dashboard.createTask"),
-                      onClick: handleNewTask,
-                      variant: 'primary'
-                    }}
-                  />
-                  <p className="text-sm" style={{ color: "var(--app-text-muted)" }}>
-                    {t("dashboard.exploreHint")}
-                  </p>
-                  <PublicTaskList />
-                </div>
-              ) : (
-                displayTasks.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    id={task.id}
-                    title={task.title}
-                    duration={formatDurationLabel(task.duration_seconds)}
-                    timeAgo={formatRelativeTime(task.created_at)}
-                    status={displayStatus(task.status)}
-                    type={task.source_type === 'youtube' ? 'video' : 'file'}
-                    onClick={handleTaskClick}
-                  />
-                ))
-              )}
+              <EmptyState
+                variant="default"
+                title={t("dashboard.loginToViewTitle")}
+                description={t("dashboard.loginToViewDescription")}
+                action={{
+                  label: t("dashboard.goLogin"),
+                  onClick: openLogin,
+                  variant: 'primary'
+                }}
+              />
+              <div className="flex justify-center">
+                <button
+                  onClick={() => router.push('/explore')}
+                  className="text-sm hover:underline underline-offset-4"
+                  style={{ color: 'var(--app-primary)' }}
+                >
+                  {t("explore.goExplore")}
+                </button>
+              </div>
             </div>
-          </div>
-        </main>
+          ) : loading ? (
+            <div className="text-sm" style={{ color: "var(--app-text-muted)" }}>
+              {t("common.loading")}...
+            </div>
+          ) : error ? (
+            <div className="text-sm" style={{ color: "var(--app-danger)" }}>
+              {error}
+            </div>
+          ) : hasNoTasks ? (
+            <div className="space-y-4">
+              <EmptyState
+                variant="default"
+                title={t("dashboard.emptyTitle")}
+                description={t("dashboard.emptyDescription")}
+                action={{
+                  label: t("dashboard.createTask"),
+                  onClick: handleNewTask,
+                  variant: 'primary'
+                }}
+              />
+              <p className="text-sm" style={{ color: "var(--app-text-muted)" }}>
+                {t("dashboard.exploreHint")}
+              </p>
+              <PublicTaskList />
+            </div>
+          ) : (
+            displayTasks.map((task) => (
+              <TaskCard
+                key={task.id}
+                id={task.id}
+                title={task.title}
+                duration={formatDurationLabel(task.duration_seconds)}
+                timeAgo={formatRelativeTime(task.created_at)}
+                status={displayStatus(task.status)}
+                type={task.source_type === 'youtube' ? 'video' : 'file'}
+                onClick={handleTaskClick}
+              />
+            ))
+          )}
+        </div>
       </div>
     </div>
   );
