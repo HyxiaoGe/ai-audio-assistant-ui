@@ -94,10 +94,11 @@ describe("TimeSeriesChart", () => {
   });
 
   it("sr-only 数据表逐日列出选中指标的格式化值", () => {
-    renderChart();
-    // 默认任务数:每日 completed/failed 计数,格式化为整数
-    // getAllByText:XAxis tspan 与 sr-only li 均含日期字符串,取至少一个即可
-    expect(screen.getAllByText(/06-20/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/06-21/).length).toBeGreaterThan(0);
+    const { container } = renderChart();
+    // 限定到自绘的 sr-only 列表(而非 recharts XAxis 的 SVG tspan),真正校验逐日数据落表。
+    const srList = container.querySelector("ul.sr-only");
+    expect(srList).not.toBeNull();
+    expect(srList?.textContent).toMatch(/06-20/);
+    expect(srList?.textContent).toMatch(/06-21/);
   });
 });
