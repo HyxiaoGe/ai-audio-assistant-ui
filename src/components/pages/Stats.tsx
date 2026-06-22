@@ -22,6 +22,7 @@ import {
   StatsServicesOverviewResponse,
   StatsTasksOverviewResponse,
 } from "@/types/api";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type TimeRangeOption = "today" | "week" | "month" | "all" | "custom";
 
@@ -383,6 +384,7 @@ export default function Stats() {
   }, [serviceBreakdown]);
 
   const hasData = !!serviceOverview || !!taskOverview;
+  const firstLoad = loading && !hasData;
 
   return (
     <div className="px-8 py-6">
@@ -840,26 +842,41 @@ export default function Stats() {
                       <p className="text-xs text-[var(--app-text-muted)]">
                         {t("stats.totalTasks")}
                       </p>
-                      <p className="text-2xl font-semibold text-[var(--app-text)]">
-                        {taskOverview ? taskOverview.total_tasks : "--"}
-                      </p>
+                      {firstLoad && !taskOverview ? (
+                        <Skeleton data-testid="stats-skeleton" className="h-7 w-16" />
+                      ) : (
+                        <p className="text-2xl font-semibold text-[var(--app-text)]">
+                          {taskOverview ? taskOverview.total_tasks : "--"}
+                        </p>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
-                      {statusItems.map((item) => (
-                        <div
-                          key={item.key}
-                          className="rounded-xl border px-3 py-2"
-                          style={{ borderColor: "var(--app-glass-border)" }}
-                        >
-                          <p className="text-xs text-[var(--app-text-muted)]">
-                            {item.label}
-                          </p>
-                          <p className="text-lg font-semibold text-[var(--app-text)]">
-                            {item.value}
-                          </p>
-                        </div>
-                      ))}
+                      {firstLoad && statusItems.length === 0
+                        ? Array.from({ length: 4 }).map((_, i) => (
+                            <div
+                              key={i}
+                              className="rounded-xl border px-3 py-2"
+                              style={{ borderColor: "var(--app-glass-border)" }}
+                            >
+                              <Skeleton data-testid="stats-skeleton" className="h-3 w-12 mb-2" />
+                              <Skeleton data-testid="stats-skeleton" className="h-5 w-10" />
+                            </div>
+                          ))
+                        : statusItems.map((item) => (
+                            <div
+                              key={item.key}
+                              className="rounded-xl border px-3 py-2"
+                              style={{ borderColor: "var(--app-glass-border)" }}
+                            >
+                              <p className="text-xs text-[var(--app-text-muted)]">
+                                {item.label}
+                              </p>
+                              <p className="text-lg font-semibold text-[var(--app-text)]">
+                                {item.value}
+                              </p>
+                            </div>
+                          ))}
                     </div>
 
                     <div className="space-y-2 text-xs text-[var(--app-text-muted)]">

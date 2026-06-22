@@ -1,5 +1,5 @@
 import React from "react"
-import { render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor, fireEvent } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const mockClient = vi.hoisted(() => ({ getTasks: vi.fn() }))
@@ -51,3 +51,22 @@ describe("Dashboard 零任务软引导", () => {
     expect(screen.queryByText("public-task-list")).not.toBeInTheDocument()
   })
 })
+
+describe("Dashboard 三态", () => {
+  beforeEach(() => { vi.clearAllMocks(); })
+
+  it("加载中渲染骨架屏而非裸文本", async () => {
+    mockClient.getTasks.mockReturnValue(new Promise(() => {})); // pending
+    render(<Dashboard />);
+    expect(await screen.findAllByTestId("task-card-skeleton")).toHaveLength(4);
+  });
+
+  it("加载失败渲染 ErrorState,点重试重新拉取", async () => {
+    mockClient.getTasks.mockRejectedValue(new Error("boom"));
+    render(<Dashboard />);
+    const retry = await screen.findByText("common.retry");
+    expect(mockClient.getTasks).toHaveBeenCalledTimes(1);
+    fireEvent.click(retry);
+    await waitFor(() => expect(mockClient.getTasks).toHaveBeenCalledTimes(2));
+  });
+});

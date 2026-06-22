@@ -7,6 +7,8 @@ import TaskCard from '@/components/task/TaskCard';
 import { TaskSearchInput } from '@/components/task/TaskSearchInput';
 import { SearchSnippet } from '@/components/task/SearchSnippet';
 import EmptyState from '@/components/common/EmptyState';
+import ErrorState from '@/components/common/ErrorState';
+import TaskCardSkeleton from '@/components/task/TaskCardSkeleton';
 import { Button } from '@/components/ui/button';
 import { useAPIClient } from '@/lib/use-api-client';
 import { useDateFormatter } from '@/lib/use-date-formatter';
@@ -51,6 +53,7 @@ export default function TaskList() {
   const [retryingTaskId, setRetryingTaskId] = useState<string | null>(null);
   // 自增计数：重试成功后 +1，触发列表与状态计数重新拉取，避免卡片停留在 failed 态。
   const [reloadKey, setReloadKey] = useState(0);
+  const reload = useCallback(() => setReloadKey((k) => k + 1), []);
   const tasksPerPage = 10;
 
   // 订阅全局 WS 任务态：列表此前纯 refetch（仅 mount/翻页/切筛选/重试时拉取），处理中卡片
@@ -470,11 +473,9 @@ export default function TaskList() {
                 />
               )
             ) : loading && currentTasks.length === 0 ? (
-              <div style={{ minHeight: "72px" }} />
+              <TaskCardSkeleton count={6} />
             ) : error ? (
-              <div className="text-sm" style={{ color: "var(--app-danger)" }}>
-                {error}
-              </div>
+              <ErrorState type="network" description={error} onRetry={reload} />
             ) : currentTasks.length > 0 ? (
               currentTasks.map((task) => (
                 <TaskCard

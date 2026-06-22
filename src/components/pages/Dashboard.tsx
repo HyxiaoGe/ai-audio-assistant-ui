@@ -7,6 +7,8 @@ import { useUIStore } from '@/store/ui-store';
 import NewTaskCard from '@/components/task/NewTaskCard';
 import TaskCard from '@/components/task/TaskCard';
 import EmptyState from '@/components/common/EmptyState';
+import ErrorState from '@/components/common/ErrorState';
+import TaskCardSkeleton from '@/components/task/TaskCardSkeleton';
 import PublicTaskList from '@/components/pages/PublicTaskList';
 import { useAPIClient } from '@/lib/use-api-client';
 import { useDateFormatter } from '@/lib/use-date-formatter';
@@ -23,6 +25,8 @@ export default function Dashboard() {
   const [tasks, setTasks] = useState<TaskListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reloadNonce, setReloadNonce] = useState(0);
+  const reload = useCallback(() => setReloadNonce((n) => n + 1), []);
 
   const authUser = useAuthStore((s) => s.user);
   const isAuthenticated = !!authUser;
@@ -83,7 +87,7 @@ export default function Dashboard() {
     return () => {
       isMounted = false;
     };
-  }, [client, isAuthenticated]);
+  }, [client, isAuthenticated, reloadNonce]);
 
   // Sync WebSocket task updates to local task list
   useEffect(() => {
@@ -195,13 +199,9 @@ export default function Dashboard() {
               </div>
             </div>
           ) : loading ? (
-            <div className="text-sm" style={{ color: "var(--app-text-muted)" }}>
-              {t("common.loading")}...
-            </div>
+            <TaskCardSkeleton count={4} />
           ) : error ? (
-            <div className="text-sm" style={{ color: "var(--app-danger)" }}>
-              {error}
-            </div>
+            <ErrorState type="network" description={error} onRetry={reload} />
           ) : hasNoTasks ? (
             <div className="space-y-4">
               <EmptyState
