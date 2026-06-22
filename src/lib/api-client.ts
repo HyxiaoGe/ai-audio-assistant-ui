@@ -36,6 +36,7 @@ import {
   SummaryStylesResponse,
   StatsServicesOverviewResponse,
   StatsTasksOverviewResponse,
+  StatsTasksTimeseriesResponse,
   TaskDetail,
   TaskListRequest,
   TaskListResponse,
@@ -136,12 +137,14 @@ function buildStatsQuery(params?: {
   start_date?: string
   end_date?: string
   granularity?: string
+  tz?: string
 }): string {
   const queryParams = new URLSearchParams()
   if (params?.time_range) queryParams.set("time_range", params.time_range)
   if (params?.start_date) queryParams.set("start_date", params.start_date)
   if (params?.end_date) queryParams.set("end_date", params.end_date)
   if (params?.granularity) queryParams.set("granularity", params.granularity)
+  if (params?.tz) queryParams.set("tz", params.tz)
   return queryParams.toString()
 }
 
@@ -760,6 +763,19 @@ export class APIClient {
   }): Promise<StatsTasksOverviewResponse> {
     const query = buildStatsQuery(params)
     const endpoint = query ? `/stats/tasks/overview?${query}` : "/stats/tasks/overview"
+    return request(endpoint, { method: "GET" }, this.token)
+  }
+
+  async getTaskStatsTimeseries(params?: {
+    time_range?: string
+    start_date?: string
+    end_date?: string
+    tz?: string
+  }): Promise<StatsTasksTimeseriesResponse> {
+    const query = buildStatsQuery(params)
+    const endpoint = query
+      ? `/stats/tasks/timeseries?${query}`
+      : "/stats/tasks/timeseries"
     return request(endpoint, { method: "GET" }, this.token)
   }
 

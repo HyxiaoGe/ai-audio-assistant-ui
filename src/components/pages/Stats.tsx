@@ -17,11 +17,17 @@ import {
 import { useAPIClient } from "@/lib/use-api-client";
 import { useI18n } from "@/lib/i18n-context";
 import { resolveNumberFormatLocale } from "@/lib/intl-locale";
+import { getUserTimeZone } from "@/lib/utils";
 import {
   ApiError,
   StatsServicesOverviewResponse,
   StatsTasksOverviewResponse,
+  StatsTasksTimeseriesResponse,
 } from "@/types/api";
+import {
+  TimeSeriesChart,
+  type TimeSeriesMetric,
+} from "@/components/stats/TimeSeriesChart";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   DonutChart,
@@ -147,6 +153,8 @@ export default function Stats() {
     useState<StatsServicesOverviewResponse | null>(null);
   const [taskOverview, setTaskOverview] =
     useState<StatsTasksOverviewResponse | null>(null);
+  const [timeseries, setTimeseries] =
+    useState<StatsTasksTimeseriesResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [asrProvidersOpen, setAsrProvidersOpen] = useState(true);
@@ -183,14 +191,16 @@ export default function Stats() {
       setLoading(true);
       setError(null);
       try {
-        const [serviceOverviewRes, taskOverviewRes] =
+        const [serviceOverviewRes, taskOverviewRes, timeseriesRes] =
           await Promise.all([
             client.getServiceStatsOverview(query),
             client.getTaskStatsOverview(query),
+            client.getTaskStatsTimeseries({ ...query, tz: getUserTimeZone() }),
           ]);
 
         setServiceOverview(serviceOverviewRes);
         setTaskOverview(taskOverviewRes);
+        setTimeseries(timeseriesRes);
       } catch (err) {
         if (err instanceof ApiError) {
           setError(err.message);
@@ -211,6 +221,7 @@ export default function Stats() {
     if (!isAuthenticated) {
       setServiceOverview(null);
       setTaskOverview(null);
+      setTimeseries(null);
       setLoading(false);
       setError(null);
       return;
@@ -384,6 +395,38 @@ export default function Stats() {
     displayValue: formatSeconds(item.value),
     color: CHART_PALETTE[index % CHART_PALETTE.length],
   }));
+
+  const trendPoints = timeseries?.buckets ?? [];
+  const trendTotal = trendPoints.reduce((sum, p) => sum + p.total, 0);
+  const trendMetrics: TimeSeriesMetric[] = [
+    {
+      key: "tasks",
+      label: t("stats.trendMetricTasks"),
+      series: [
+        { key: "completed", label: t("stats.status.completed"), color: STATUS_COLORS.completed ?? "var(--app-text-muted)", stackId: "tasks" },
+        { key: "processing", label: t("stats.status.processing"), color: STATUS_COLORS.processing ?? "var(--app-text-muted)", stackId: "tasks" },
+        { key: "pending", label: t("stats.status.pending"), color: STATUS_COLORS.pending ?? "var(--app-text-muted)", stackId: "tasks" },
+        { key: "failed", label: t("stats.status.failed"), color: STATUS_COLORS.failed ?? "var(--app-text-muted)", stackId: "tasks" },
+      ],
+      format: (v) => String(Math.round(v)),
+    },
+    {
+      key: "duration",
+      label: t("stats.trendMetricDuration"),
+      series: [{ key: "audio_duration_seconds", label: t("stats.trendMetricDuration"), color: CHART_PALETTE[0] }],
+      format: (v) => formatSeconds(v),
+    },
+    {
+      key: "cost",
+      label: t("stats.trendMetricCost"),
+      series: [{ key: "asr_cost", label: t("stats.trendMetricCost"), color: CHART_PALETTE[1] }],
+      format: (v) => `¥${v.toFixed(2)}`,
+    },
+  ];
+  const formatTrendDate = (iso: string) => {
+    const parts = iso.split("-");
+    return parts.length === 3 ? `${parts[1]}/${parts[2]}` : iso;
+  };
 
   const buildProviderSlices = (
     usage: typeof asrProviderUsage,
@@ -1008,6 +1051,25 @@ export default function Stats() {
                     </div>
                   </div>
 
+                </div>
+
+                <div className="glass-panel rounded-2xl p-6 space-y-4">
+                  <p className="text-sm font-medium text-[var(--app-text)]">
+                    {t("stats.taskTrend")}
+                  </p>
+                  {firstLoad && !timeseries ? (
+                    <Skeleton data-testid="stats-skeleton" className="h-[220px] w-full" />
+                  ) : trendTotal > 0 ? (
+                    <TimeSeriesChart
+                      points={trendPoints}
+                      metrics={trendMetrics}
+                      ariaLabel={t("stats.trendChartAria")}
+                      metricGroupLabel={t("stats.trendMetricLabel")}
+                      formatDate={formatTrendDate}
+                    />
+                  ) : (
+                    <p className="text-xs text-[var(--app-text-muted)]">--</p>
+                  )}
                 </div>
               </section>
             </>

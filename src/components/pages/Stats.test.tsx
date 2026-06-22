@@ -5,6 +5,7 @@ import { cloneElement, type ReactElement } from "react";
 const mockClient = vi.hoisted(() => ({
   getServiceStatsOverview: vi.fn(),
   getTaskStatsOverview: vi.fn(),
+  getTaskStatsTimeseries: vi.fn(),
 }));
 const i18n = vi.hoisted(() => ({ t: (k: string) => k }));
 
@@ -95,6 +96,26 @@ describe("Stats 服务统计供应商图表", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("img", { name: "stats.llmProviderChartAria" })
+    ).toBeInTheDocument();
+  });
+});
+
+describe("Stats 任务趋势时序图", () => {
+  it("有时序数据时在任务区渲染趋势图(role=img)", async () => {
+    mockClient.getServiceStatsOverview.mockResolvedValue(serviceOverview);
+    mockClient.getTaskStatsOverview.mockResolvedValue(taskOverview);
+    mockClient.getTaskStatsTimeseries.mockResolvedValue({
+      time_range: { start: "", end: "" },
+      timezone: "Asia/Shanghai",
+      granularity: "day",
+      buckets: [
+        { date: "2026-06-20", total: 3, completed: 2, failed: 1, processing: 0, pending: 0, audio_duration_seconds: 120, asr_cost: 0.05 },
+        { date: "2026-06-21", total: 2, completed: 2, failed: 0, processing: 0, pending: 0, audio_duration_seconds: 60, asr_cost: 0.02 },
+      ],
+    });
+    render(<Stats />);
+    expect(
+      await screen.findByRole("img", { name: "stats.trendChartAria" })
     ).toBeInTheDocument();
   });
 });
