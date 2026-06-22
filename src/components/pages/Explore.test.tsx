@@ -20,8 +20,6 @@ vi.mock("next/link", () => ({
     <a href={href} {...props}>{children}</a>
   ),
 }))
-vi.mock("@/components/layout/Header", () => ({ default: () => null }))
-vi.mock("@/components/layout/Sidebar", () => ({ default: () => null }))
 // PublicTaskList 挂载时 fire-and-forget 预取详情页重 chunk(prod 暖 chunk 优化)。测试里这些
 // 动态 import 会拖入 media-ticket→api-client→auth-token→auth-store 链,用例毫秒级结束后 worker
 // 关闭时该 fetch 仍 pending →「Closing rpc while fetch was pending」未处理拒绝(偶发 exit 1)。
@@ -53,9 +51,10 @@ describe("Explore 公开列表页", () => {
       page: 1,
       page_size: 20,
     })
-    render(<Explore isAuthenticated={false} onOpenLogin={() => {}} />)
+    const { container } = render(<Explore />)
     await waitFor(() => expect(screen.getByText("公开任务一")).toBeInTheDocument())
     expect(mockClient.getPublicTasks).toHaveBeenCalledTimes(1)
+    expect(container.querySelector(".h-screen")).toBeNull()
   })
 
   it("卡片渲染为 Link,href 指向正确路由", async () => {
@@ -75,7 +74,7 @@ describe("Explore 公开列表页", () => {
       page: 1,
       page_size: 20,
     })
-    render(<Explore isAuthenticated={false} onOpenLogin={() => {}} />)
+    render(<Explore />)
     await waitFor(() => expect(screen.getByText("Link 测试任务")).toBeInTheDocument())
     // 卡片已改 Link;断言 <a> href 指向详情页,替代旧的 router.push 断言。
     const link = screen.getByRole("link", { name: /Link 测试任务/ })
@@ -84,13 +83,13 @@ describe("Explore 公开列表页", () => {
 
   it("空列表渲染空态", async () => {
     mockClient.getPublicTasks.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 })
-    render(<Explore isAuthenticated={false} onOpenLogin={() => {}} />)
+    render(<Explore />)
     await waitFor(() => expect(screen.getByText("explore.emptyTitle")).toBeInTheDocument())
   })
 
   it("加载失败显示错误与重试", async () => {
     mockClient.getPublicTasks.mockRejectedValue(new Error("boom"))
-    render(<Explore isAuthenticated={false} onOpenLogin={() => {}} />)
+    render(<Explore />)
     await waitFor(() => expect(screen.getByText("explore.loadFailed")).toBeInTheDocument())
     expect(screen.getByText("explore.retry")).toBeInTheDocument()
   })
