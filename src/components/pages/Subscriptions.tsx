@@ -15,13 +15,12 @@ import {
   Star,
 } from "lucide-react";
 import { useDateFormatter } from "@/lib/use-date-formatter";
-import Header from "@/components/layout/Header";
-import Sidebar from "@/components/layout/Sidebar";
 import EmptyState from "@/components/common/EmptyState";
 import VideoCard from "@/components/youtube/VideoCard";
 import { ChannelCard } from "@/components/youtube/ChannelCard";
 import { ChannelSearchInput } from "@/components/youtube/ChannelSearchInput";
-import NewTaskModal from "@/components/task/NewTaskModal";
+import { useAuthStore } from "@/store/auth-store";
+import { useUIStore } from "@/store/ui-store";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -55,22 +54,19 @@ import {
 } from "@/types/api";
 
 interface SubscriptionsProps {
-  isAuthenticated: boolean;
-  onOpenLogin: () => void;
-  onToggleTheme?: () => void;
   searchParams: ReadonlyURLSearchParams;
 }
 
-export default function Subscriptions({
-  isAuthenticated,
-  onOpenLogin,
-  onToggleTheme,
-  searchParams,
-}: SubscriptionsProps) {
+export default function Subscriptions({ searchParams }: SubscriptionsProps) {
   const { t, locale } = useI18n();
   const client = useAPIClient();
   const router = useRouter();
   const { formatRelativeTime } = useDateFormatter();
+
+  const authUser = useAuthStore((s) => s.user);
+  const isAuthenticated = !!authUser;
+  const openLogin = useUIStore((s) => s.openLogin);
+  const openNewTask = useUIStore((s) => s.openNewTask);
 
   // Tab state
   const [activeTab, setActiveTab] = useState<"latest" | "starred" | "channels">("latest");
@@ -135,11 +131,6 @@ export default function Subscriptions({
   const [starredVideosPage, setStarredVideosPage] = useState(1);
   const [starredVideosError, setStarredVideosError] = useState<string | null>(null);
   const [starredVideosStale, setStarredVideosStale] = useState(false);
-
-  // New task modal for transcription
-  const [newTaskModalOpen, setNewTaskModalOpen] = useState(false);
-  const [transcribeVideoUrl, setTranscribeVideoUrl] = useState<string | undefined>(undefined);
-  const [transcribeVideoId, setTranscribeVideoId] = useState<string | undefined>(undefined);
 
   // Filter subscriptions by search query and visibility settings
   const filteredSubscriptions = useMemo(() => {
@@ -662,18 +653,9 @@ export default function Subscriptions({
   const hasMoreVideos = latestVideos.length < videosTotal;
   const hasMoreChannelVideos = channelVideos.length < channelVideosTotal;
 
-  // Handle transcribe action - opens modal with pre-filled URL
+  // Handle transcribe action - opens global modal with pre-filled URL
   const handleTranscribe = (videoUrl: string, videoId: string) => {
-    setTranscribeVideoUrl(videoUrl);
-    setTranscribeVideoId(videoId);
-    setNewTaskModalOpen(true);
-  };
-
-  // Handle modal close
-  const handleCloseNewTaskModal = () => {
-    setNewTaskModalOpen(false);
-    setTranscribeVideoUrl(undefined);
-    setTranscribeVideoId(undefined);
+    openNewTask({ initialVideoUrl: videoUrl, initialYouTubeVideoId: videoId });
   };
 
   // Find channel info for a video
@@ -724,16 +706,9 @@ export default function Subscriptions({
   const hasMoreStarredVideos = starredVideos.length < starredVideosTotal;
 
   return (
-    <div className="h-screen flex flex-col" style={{ background: "var(--app-bg)" }}>
-      <Header
-        isAuthenticated={isAuthenticated}
-        onOpenLogin={onOpenLogin}
-        onToggleTheme={onToggleTheme}
-      />
-      <div className="flex-1 flex overflow-hidden">
-        <Sidebar />
-        <main className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-6xl mx-auto space-y-6">
+    <>
+      <div className="p-6">
+        <div className="max-w-6xl mx-auto space-y-6">
             {/* Page header */}
             <div>
               <h1
@@ -758,7 +733,7 @@ export default function Subscriptions({
                 description={t("subscriptions.loginRequiredDesc")}
                 action={{
                   label: t("auth.login"),
-                  onClick: onOpenLogin,
+                  onClick: openLogin,
                 }}
               />
             ) : (
@@ -1430,8 +1405,7 @@ export default function Subscriptions({
               </>
             )}
           </div>
-        </main>
-      </div>
+        </div>
 
       {/* Disconnect confirmation dialog */}
       <Dialog open={disconnectDialogOpen} onOpenChange={setDisconnectDialogOpen}>
@@ -1460,14 +1434,6 @@ export default function Subscriptions({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* New task modal for transcription */}
-      <NewTaskModal
-        isOpen={newTaskModalOpen}
-        onClose={handleCloseNewTaskModal}
-        initialVideoUrl={transcribeVideoUrl}
-        initialYouTubeVideoId={transcribeVideoId}
-      />
-    </div>
+    </>
   );
 }
