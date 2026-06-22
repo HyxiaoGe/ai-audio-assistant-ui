@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { useDateFormatter } from "@/lib/use-date-formatter";
 import EmptyState from "@/components/common/EmptyState";
+import ErrorState from "@/components/common/ErrorState";
+import { ChannelListSkeleton, VideoGridSkeleton } from "@/components/youtube/SubscriptionSkeleton";
 import VideoCard from "@/components/youtube/VideoCard";
 import { ChannelCard } from "@/components/youtube/ChannelCard";
 import { ChannelSearchInput } from "@/components/youtube/ChannelSearchInput";
@@ -95,7 +97,7 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
 
   // Subscriptions list state
   const [subscriptions, setSubscriptions] = useState<YouTubeSubscriptionItem[]>([]);
-  const [subsLoading, setSubsLoading] = useState(false);
+  const [subsLoading, setSubsLoading] = useState(true);
   const [subsTotal, setSubsTotal] = useState(0);
   const [subsPage, setSubsPage] = useState(1);
   const [subsError, setSubsError] = useState<string | null>(null);
@@ -103,7 +105,7 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
 
   // Latest videos state
   const [latestVideos, setLatestVideos] = useState<YouTubeVideoItem[]>([]);
-  const [videosLoading, setVideosLoading] = useState(false);
+  const [videosLoading, setVideosLoading] = useState(true);
   const [videosTotal, setVideosTotal] = useState(0);
   const [videosPage, setVideosPage] = useState(1);
   const [videosError, setVideosError] = useState<string | null>(null);
@@ -111,7 +113,7 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
   // Selected channel (inline view instead of dialog)
   const [selectedChannel, setSelectedChannel] = useState<YouTubeSubscriptionItem | null>(null);
   const [channelVideos, setChannelVideos] = useState<YouTubeVideoItem[]>([]);
-  const [channelVideosLoading, setChannelVideosLoading] = useState(false);
+  const [channelVideosLoading, setChannelVideosLoading] = useState(true);
   const [channelVideosTotal, setChannelVideosTotal] = useState(0);
   const [channelVideosPage, setChannelVideosPage] = useState(1);
   const [channelVideosError, setChannelVideosError] = useState<string | null>(null);
@@ -126,7 +128,7 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
 
   // Starred videos state
   const [starredVideos, setStarredVideos] = useState<YouTubeVideoItem[]>([]);
-  const [starredVideosLoading, setStarredVideosLoading] = useState(false);
+  const [starredVideosLoading, setStarredVideosLoading] = useState(true);
   const [starredVideosTotal, setStarredVideosTotal] = useState(0);
   const [starredVideosPage, setStarredVideosPage] = useState(1);
   const [starredVideosError, setStarredVideosError] = useState<string | null>(null);
@@ -963,11 +965,13 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
                         </CardHeader>
                         <CardContent>
                           {videosError ? (
-                            <div className="text-center py-12">
-                              <p className="text-sm" style={{ color: "var(--app-danger)" }}>
-                                {videosError}
-                              </p>
-                            </div>
+                            <ErrorState
+                              type="network"
+                              description={videosError}
+                              onRetry={() => void loadLatestVideos(1, false)}
+                            />
+                          ) : videosLoading && latestVideos.length === 0 ? (
+                            <VideoGridSkeleton />
                           ) : latestVideos.length === 0 && !videosLoading ? (
                             <div className="text-center py-12">
                               <VideoIcon
@@ -1054,11 +1058,13 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
                         </CardHeader>
                         <CardContent>
                           {starredVideosError ? (
-                            <div className="text-center py-12">
-                              <p className="text-sm" style={{ color: "var(--app-danger)" }}>
-                                {starredVideosError}
-                              </p>
-                            </div>
+                            <ErrorState
+                              type="network"
+                              description={starredVideosError}
+                              onRetry={() => void loadStarredVideos(1, false)}
+                            />
+                          ) : starredVideosLoading && starredVideos.length === 0 ? (
+                            <VideoGridSkeleton />
                           ) : starredVideos.length === 0 && !starredVideosLoading ? (
                             <div className="text-center py-12">
                               <Star
@@ -1195,12 +1201,13 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
                         </CardHeader>
                         <CardContent>
                           {subsError ? (
-                            <p
-                              className="text-sm text-center py-8"
-                              style={{ color: "var(--app-danger)" }}
-                            >
-                              {subsError}
-                            </p>
+                            <ErrorState
+                              type="network"
+                              description={subsError}
+                              onRetry={() => void loadSubscriptions(1, false)}
+                            />
+                          ) : subsLoading && subscriptions.length === 0 ? (
+                            <ChannelListSkeleton />
                           ) : subscriptions.length === 0 && !subsLoading ? (
                             <div className="text-center py-8">
                               <p
@@ -1318,11 +1325,15 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
                           </CardHeader>
                           <CardContent>
                             {channelVideosError ? (
-                              <div className="text-center py-12">
-                                <p className="text-sm" style={{ color: "var(--app-danger)" }}>
-                                  {channelVideosError}
-                                </p>
-                              </div>
+                              <ErrorState
+                                type="network"
+                                description={channelVideosError}
+                                onRetry={() =>
+                                  void loadChannelVideos(selectedChannel.channel_id, 1, false)
+                                }
+                              />
+                            ) : channelVideosLoading && channelVideos.length === 0 ? (
+                              <VideoGridSkeleton />
                             ) : channelVideos.length === 0 && !channelVideosLoading ? (
                               <div className="text-center py-12">
                                 <VideoIcon
