@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Clock } from "lucide-react";
 import EmptyState from "@/components/common/EmptyState";
+import ErrorState from "@/components/common/ErrorState";
+import PublicTaskCardSkeleton from "@/components/common/PublicTaskCardSkeleton";
 import PublicTaskCover from "@/components/pages/PublicTaskCover";
 import { proxiedAvatar } from "@/lib/avatar-url";
 import { useAPIClient } from "@/lib/use-api-client";
@@ -101,28 +103,16 @@ export default function PublicTaskList({ initialItems, initialTotal }: PublicTas
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <div
-          className="size-5 border-2 rounded-full animate-spin"
-          style={{ borderColor: "var(--app-primary) transparent var(--app-primary) var(--app-primary)" }}
-        />
-      </div>
-    );
+    return <PublicTaskCardSkeleton count={5} />;
   }
 
   if (error) {
     return (
-      <div className="text-center py-16 space-y-3">
-        <p className="text-sm" style={{ color: "var(--app-danger)" }}>{t("explore.loadFailed")}</p>
-        <button
-          onClick={() => void load(pendingPage)}
-          className="px-4 py-2 text-sm border rounded-lg hover:bg-[var(--app-glass-bg-strong)] transition-colors"
-          style={{ borderColor: "var(--app-border)", color: "var(--app-text)" }}
-        >
-          {t("explore.retry")}
-        </button>
-      </div>
+      <ErrorState
+        type="network"
+        description={t("explore.loadFailed")}
+        onRetry={() => void load(pendingPage)}
+      />
     );
   }
 

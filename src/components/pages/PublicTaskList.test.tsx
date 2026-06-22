@@ -123,7 +123,7 @@ describe("PublicTaskList", () => {
     render(<PublicTaskList />)
     // 错误态 + 重试按钮
     expect(await screen.findByText("explore.loadFailed")).toBeInTheDocument()
-    const retry = screen.getByRole("button", { name: "explore.retry" })
+    const retry = screen.getByRole("button", { name: "common.retry" })
     // 重试成功
     mockClient.getPublicTasks.mockResolvedValueOnce({
       items: [makeItem({ title: "重试成功任务" })],
@@ -218,9 +218,26 @@ describe("PublicTaskList", () => {
       page: 2,
       page_size: 20,
     })
-    fireEvent.click(screen.getByRole("button", { name: "explore.retry" }))
+    fireEvent.click(screen.getByRole("button", { name: "common.retry" }))
     await waitFor(() => expect(screen.getByText("第二页任务")).toBeInTheDocument())
     // 关键断言:重试调用的是 page:2,不是 page:1(旧 bug 会回到第 1 页)
     expect(mockClient.getPublicTasks).toHaveBeenLastCalledWith({ page: 2, page_size: 20 })
   })
+})
+
+describe("PublicTaskList 三态", () => {
+  it("加载中渲染公开卡骨架而非 spinner", async () => {
+    mockClient.getPublicTasks.mockReturnValue(new Promise(() => {})); // pending
+    render(<PublicTaskList />);
+    expect(await screen.findAllByTestId("public-task-card-skeleton")).toHaveLength(5);
+  });
+
+  it("加载失败渲染 ErrorState,点重试重新拉取", async () => {
+    mockClient.getPublicTasks.mockRejectedValue(new Error("boom"));
+    render(<PublicTaskList />);
+    const retry = await screen.findByText("common.retry");
+    expect(mockClient.getPublicTasks).toHaveBeenCalledTimes(1);
+    fireEvent.click(retry);
+    await waitFor(() => expect(mockClient.getPublicTasks).toHaveBeenCalledTimes(2));
+  });
 })
