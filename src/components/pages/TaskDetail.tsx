@@ -6,8 +6,7 @@ import dynamic from 'next/dynamic';
 import { useAuthStore } from '@/store/auth-store';
 import { notifyError, notifySuccess } from '@/lib/notify';
 import { ArrowLeft, FileText, Lightbulb } from 'lucide-react';
-import Header from '@/components/layout/Header';
-import Sidebar from '@/components/layout/Sidebar';
+import { useUIStore } from '@/store/ui-store';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -31,7 +30,6 @@ import ProcessingState from '@/components/common/ProcessingState';
 import ErrorState from '@/components/common/ErrorState';
 import { ProvenanceBadge } from '@/components/common/ProvenanceBadge';
 import { formatAsrProvenance } from '@/lib/provenance';
-import LoginModal from '@/components/auth/LoginModal';
 import RetryCleanupToast from '@/components/task/RetryCleanupToast';
 import { SummaryModelSelect } from '@/components/task/SummaryModelSelect';
 import { useAPIClient } from '@/lib/use-api-client';
@@ -97,10 +95,6 @@ const MarkdownContent = dynamic(
   }
 );
 
-interface TaskDetailProps {
-  onToggleTheme?: () => void;
-}
-
 interface KeyPoint {
   text: string;
   timeReference: string;
@@ -111,9 +105,7 @@ interface Speaker {
   color: string;
 }
 
-export default function TaskDetail({
-  onToggleTheme = () => {}
-}: TaskDetailProps) {
+export default function TaskDetail() {
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
@@ -139,9 +131,9 @@ export default function TaskDetail({
   const seek = useAudioStore((state) => state.seek);
   // 文章内联图 / 生成图走鉴权代理；<img> 不能带 Authorization 头，故附加 ?token=
   const mediaToken = useMediaToken();
+  const openLogin = useUIStore((s) => s.openLogin);
   const [activeTab, setActiveTab] = useState('summary');
   const [progress, setProgress] = useState(0);
-  const [loginOpen, setLoginOpen] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [showCleanupToast, setShowCleanupToast] = useState(false);
   const [failedTaskIds, setFailedTaskIds] = useState<string[]>([]);
@@ -363,7 +355,7 @@ export default function TaskDetail({
           setError(err.message);
           notifyError(err.message);
           if (err.code >= 40100 && err.code < 40200) {
-            setLoginOpen(true);
+            openLogin();
           }
         } else {
           const message = err instanceof Error ? err.message : t("errors.loadTaskFailed");
@@ -1820,7 +1812,7 @@ export default function TaskDetail({
 
   if (sessionStatus === 'loading') {
     return (
-      <div className="h-screen flex items-center justify-center" style={{ background: 'var(--app-bg)' }}>
+      <div className="h-full flex items-center justify-center" style={{ background: 'var(--app-bg)' }}>
         <div className="text-sm" style={{ color: 'var(--app-text-muted)' }}>
           {t("common.loading")}...
         </div>
@@ -1830,25 +1822,13 @@ export default function TaskDetail({
 
   if (!authUser) {
     return (
-      <div className="h-screen flex flex-col" style={{ background: 'var(--app-bg)' }}>
-        <Header
-          isAuthenticated={false}
-          onOpenLogin={() => setLoginOpen(true)}
-          onToggleTheme={onToggleTheme}
-        />
-        <div className="flex-1 flex items-center justify-center">
-          <ErrorState
-            type="general"
-            title={t("errors.loginToViewTitle")}
-            description={t("errors.loginToViewDesc")}
-            onRetry={() => setLoginOpen(true)}
-            retryLabel={t("errors.retryLogin")}
-          />
-        </div>
-        <LoginModal
-          isOpen={loginOpen}
-          onClose={() => setLoginOpen(false)}
-          callbackUrl={`/tasks/${id}`}
+      <div className="h-full flex items-center justify-center">
+        <ErrorState
+          type="general"
+          title={t("errors.loginToViewTitle")}
+          description={t("errors.loginToViewDesc")}
+          onRetry={() => openLogin()}
+          retryLabel={t("errors.retryLogin")}
         />
       </div>
     );
@@ -1856,21 +1836,11 @@ export default function TaskDetail({
 
   if (loading && !task) {
     return (
-      <div className="h-screen flex flex-col" style={{ background: 'var(--app-bg)' }}>
-        <Header
-          isAuthenticated={!!authUser}
-          onOpenLogin={() => setLoginOpen(true)}
-          onToggleTheme={onToggleTheme}
-        />
-        <div className="flex-1 flex overflow-hidden">
-          <Sidebar />
-          <main className="flex-1 overflow-y-auto p-8">
-            <div className="glass-panel rounded-lg p-6">
-              <div className="text-sm" style={{ color: 'var(--app-text-muted)' }}>
-                {t("errors.loadTaskDetail")}
-              </div>
-            </div>
-          </main>
+      <div className="p-8">
+        <div className="glass-panel rounded-lg p-6">
+          <div className="text-sm" style={{ color: 'var(--app-text-muted)' }}>
+            {t("errors.loadTaskDetail")}
+          </div>
         </div>
       </div>
     );
@@ -1878,42 +1848,21 @@ export default function TaskDetail({
 
   if (error || !task) {
     return (
-      <div className="h-screen flex flex-col" style={{ background: 'var(--app-bg)' }}>
-        <Header
-          isAuthenticated={!!authUser}
-          onOpenLogin={() => setLoginOpen(true)}
-          onToggleTheme={onToggleTheme}
+      <div className="h-full flex items-center justify-center">
+        <ErrorState
+          type="general"
+          title={t("errors.taskNotFound")}
+          description={error || t("errors.taskNotFoundDesc")}
+          onRetry={handleBackToTasks}
+          retryLabel={t("errors.backHome")}
         />
-        <div className="flex-1 flex items-center justify-center">
-          <ErrorState
-            type="general"
-            title={t("errors.taskNotFound")}
-            description={error || t("errors.taskNotFoundDesc")}
-            onRetry={handleBackToTasks}
-            retryLabel={t("errors.backHome")}
-          />
-        </div>
       </div>
     );
   }
 
   if (task.status === 'failed') {
     return (
-      <div className="h-screen flex flex-col" style={{ background: 'var(--app-bg)' }}>
-        {/* Header */}
-        <Header
-          isAuthenticated={!!authUser}
-          onOpenLogin={() => setLoginOpen(true)}
-          onToggleTheme={onToggleTheme}
-        />
-
-        {/* Main Content Area */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Sidebar */}
-          <Sidebar />
-
-          {/* Page Content */}
-          <main className="flex-1 flex flex-col overflow-hidden" style={{ background: 'var(--app-bg)' }}>
+      <div className="h-full flex flex-col overflow-hidden">
             {/* Title Bar */}
             <div
               className="flex items-center justify-between px-6 border-b"
@@ -1970,32 +1919,13 @@ export default function TaskDetail({
                 </button>
               </div>
             </div>
-          </main>
-        </div>
       </div>
     );
   }
 
   if (isProcessingTask) {
     return (
-      <div className="h-screen flex flex-col" style={{ background: 'var(--app-bg)' }}>
-        {/* Header */}
-        <Header
-          isAuthenticated={!!authUser}
-          onOpenLogin={() => setLoginOpen(true)}
-          onToggleTheme={onToggleTheme}
-        />
-
-        {/* Main Content Area */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Sidebar */}
-          <Sidebar />
-
-          {/* Page Content */}
-          <main 
-            className="flex-1 flex flex-col overflow-hidden" 
-            style={{ background: 'var(--app-page-gradient)' }}
-          >
+      <div className="h-full flex flex-col overflow-hidden" style={{ background: 'var(--app-page-gradient)' }}>
             {/* Title Bar */}
             <div
               className="flex items-center justify-between px-6 border-b"
@@ -2100,8 +2030,6 @@ export default function TaskDetail({
                 </div>
               </div>
             </div>
-          </main>
-        </div>
       </div>
     );
   }
@@ -2112,21 +2040,7 @@ export default function TaskDetail({
       : null;
 
   return (
-    <div className="h-screen flex flex-col" style={{ background: 'var(--app-bg)' }}>
-      {/* Header */}
-      <Header 
-        isAuthenticated={!!authUser}
-        onOpenLogin={() => setLoginOpen(true)}
-        onToggleTheme={onToggleTheme}
-      />
-
-      {/* Main Content Area */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar */}
-        <Sidebar />
-
-        {/* Page Content */}
-        <main className="flex-1 flex flex-col overflow-hidden" style={{ background: 'var(--app-bg)' }}>
+    <div className="h-full flex flex-col overflow-hidden">
           {/* Title Bar */}
           <div
             className="flex items-center justify-between px-6 border-b"
@@ -2590,8 +2504,6 @@ export default function TaskDetail({
               </Dialog>
             </div>
           </div>
-        </main>
-      </div>
       <Dialog
         open={deleteOpen}
         onOpenChange={(open) => {
