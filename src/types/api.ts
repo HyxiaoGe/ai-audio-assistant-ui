@@ -679,6 +679,7 @@ export interface StatsServicesOverviewResponse {
   llm_usage_by_provider?:
     | StatsServiceProviderOverviewItem[]
     | Record<string, StatsServiceProviderOverviewItem>
+  resolved_range?: string
 }
 
 export interface StatsTasksOverviewResponse {
@@ -697,6 +698,7 @@ export interface StatsTasksOverviewResponse {
   processing_time_by_stage: Record<string, number>
   total_audio_duration_seconds: number
   total_audio_duration_formatted: string
+  resolved_range?: string
 }
 
 export interface StatsTasksTimeseriesBucket {
@@ -715,6 +717,7 @@ export interface StatsTasksTimeseriesResponse {
   timezone: string
   granularity: string
   buckets: StatsTasksTimeseriesBucket[]
+  resolved_range?: string
 }
 
 // ============================================================================

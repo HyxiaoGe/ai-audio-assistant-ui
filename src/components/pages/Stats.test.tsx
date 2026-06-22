@@ -1,6 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { cloneElement, type ReactElement } from "react";
+import React, { cloneElement, type ReactElement } from "react";
 
 const mockClient = vi.hoisted(() => ({
   getServiceStatsOverview: vi.fn(),
@@ -15,6 +15,30 @@ vi.mock("recharts", async (importActual) => {
     ...actual,
     ResponsiveContainer: ({ children }: { children: ReactElement }) =>
       cloneElement(children as ReactElement<{ width?: number; height?: number }>, { width: 400, height: 300 }),
+  };
+});
+
+// Mock Radix UI Select 为原生 <select> 以绕过 jsdom 的 pointer 事件限制
+vi.mock("@/components/ui/select", () => {
+  return {
+    Select: ({ value, onValueChange, children }: { value?: string; onValueChange?: (v: string) => void; children?: React.ReactNode }) => (
+      <select
+        role="combobox"
+        value={value}
+        onChange={(e) => onValueChange?.(e.target.value)}
+      >
+        {children}
+      </select>
+    ),
+    SelectTrigger: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    SelectValue: ({ placeholder }: { placeholder?: string }) => <>{placeholder}</>,
+    SelectContent: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    SelectItem: ({ value, children }: { value: string; children?: React.ReactNode }) => (
+      <option value={value}>{children}</option>
+    ),
+    SelectGroup: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    SelectLabel: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    SelectSeparator: () => null,
   };
 });
 vi.mock("@/lib/use-api-client", () => ({ useAPIClient: () => mockClient }));
@@ -39,11 +63,13 @@ const taskOverview = {
   processing_time_by_stage: { transcribe: 42, download: 21 },
   total_audio_duration_seconds: 600,
   total_audio_duration_formatted: "10:00",
+  resolved_range: "week",
 };
 const serviceOverview = {
   time_range: { start: "", end: "" },
   total_calls: 0,
   usage_by_service_type: [],
+  resolved_range: "week",
 };
 
 beforeEach(() => {
@@ -117,5 +143,60 @@ describe("Stats 任务趋势时序图", () => {
     expect(
       await screen.findByRole("img", { name: "stats.trendChartAria" })
     ).toBeInTheDocument();
+  });
+});
+
+describe("Stats auto 初始态自适应区间", () => {
+  it("初次挂载以 auto 取数:getTaskStatsOverview 调用入参不含 time_range", async () => {
+    mockClient.getServiceStatsOverview.mockResolvedValue(serviceOverview);
+    mockClient.getTaskStatsOverview.mockResolvedValue(taskOverview);
+    mockClient.getTaskStatsTimeseries.mockResolvedValue({
+      time_range: { start: "", end: "" },
+      timezone: "Asia/Shanghai",
+      granularity: "day",
+      buckets: [],
+      resolved_range: "week",
+    });
+    render(<Stats />);
+    // 等待数据加载完成
+    await screen.findByRole("img", { name: "stats.statusChartAria" });
+    expect(mockClient.getTaskStatsOverview).toHaveBeenCalledWith(
+      expect.not.objectContaining({ time_range: expect.anything() })
+    );
+  });
+
+  it("响应 resolved_range:'week' 后 Select 触发器显示 week 对应文案", async () => {
+    mockClient.getServiceStatsOverview.mockResolvedValue(serviceOverview);
+    mockClient.getTaskStatsOverview.mockResolvedValue({ ...taskOverview, resolved_range: "week" });
+    mockClient.getTaskStatsTimeseries.mockResolvedValue({
+      time_range: { start: "", end: "" },
+      timezone: "Asia/Shanghai",
+      granularity: "day",
+      buckets: [],
+      resolved_range: "week",
+    });
+    render(<Stats />);
+    await screen.findByRole("img", { name: "stats.statusChartAria" });
+    // Select 被 mock 为原生 <select>,其 value 应反映 autoResolved("week")
+    expect(screen.getByRole("combobox")).toHaveValue("week");
+  });
+
+  it("用户手动选'近30天'后以 { time_range: 'month' } 再次调用 getTaskStatsOverview", async () => {
+    mockClient.getServiceStatsOverview.mockResolvedValue(serviceOverview);
+    mockClient.getTaskStatsOverview.mockResolvedValue(taskOverview);
+    mockClient.getTaskStatsTimeseries.mockResolvedValue({
+      time_range: { start: "", end: "" },
+      timezone: "Asia/Shanghai",
+      granularity: "day",
+      buckets: [],
+      resolved_range: "week",
+    });
+    render(<Stats />);
+    await screen.findByRole("img", { name: "stats.statusChartAria" });
+    // 通过原生 select 触发 onValueChange(Select 已被 mock 为原生 <select>)
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "month" } });
+    expect(mockClient.getTaskStatsOverview).toHaveBeenCalledWith(
+      expect.objectContaining({ time_range: "month" })
+    );
   });
 });
