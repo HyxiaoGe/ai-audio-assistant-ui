@@ -113,7 +113,7 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
   // Selected channel (inline view instead of dialog)
   const [selectedChannel, setSelectedChannel] = useState<YouTubeSubscriptionItem | null>(null);
   const [channelVideos, setChannelVideos] = useState<YouTubeVideoItem[]>([]);
-  const [channelVideosLoading, setChannelVideosLoading] = useState(false);
+  const [channelVideosLoading, setChannelVideosLoading] = useState(true);
   const [channelVideosTotal, setChannelVideosTotal] = useState(0);
   const [channelVideosPage, setChannelVideosPage] = useState(1);
   const [channelVideosError, setChannelVideosError] = useState<string | null>(null);
@@ -1325,11 +1325,15 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
                           </CardHeader>
                           <CardContent>
                             {channelVideosError ? (
-                              <div className="text-center py-12">
-                                <p className="text-sm" style={{ color: "var(--app-danger)" }}>
-                                  {channelVideosError}
-                                </p>
-                              </div>
+                              <ErrorState
+                                type="network"
+                                description={channelVideosError}
+                                onRetry={() =>
+                                  void loadChannelVideos(selectedChannel.channel_id, 1, false)
+                                }
+                              />
+                            ) : channelVideosLoading && channelVideos.length === 0 ? (
+                              <VideoGridSkeleton />
                             ) : channelVideos.length === 0 && !channelVideosLoading ? (
                               <div className="text-center py-12">
                                 <VideoIcon

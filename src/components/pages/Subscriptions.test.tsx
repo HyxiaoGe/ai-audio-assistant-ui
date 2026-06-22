@@ -145,3 +145,33 @@ describe("Subscriptions 频道列表加载/错误态", () => {
     );
   });
 });
+
+describe("Subscriptions 频道详情视频加载/错误态", () => {
+  const oneSub = {
+    items: [{ channel_id: "c1", channel_title: "频道一", is_hidden: false, is_starred: false }],
+    total: 1,
+    page: 1,
+    page_size: 20,
+  };
+
+  it("选中频道后,详情视频首屏加载显示视频骨架", async () => {
+    mockClient.getYouTubeSubscriptions.mockResolvedValue(oneSub);
+    mockClient.getYouTubeChannelVideos.mockImplementation(PENDING);
+    renderPage();
+    fireEvent.click(await screen.findByTestId("channel-card-stub"));
+    expect((await screen.findAllByTestId("video-card-skeleton")).length).toBeGreaterThan(0);
+  });
+
+  it("选中频道后,详情视频加载失败显示 ErrorState 并可重试", async () => {
+    mockClient.getYouTubeSubscriptions.mockResolvedValue(oneSub);
+    mockClient.getYouTubeChannelVideos.mockRejectedValue(new Error("boom"));
+    renderPage();
+    fireEvent.click(await screen.findByTestId("channel-card-stub"));
+    const retry = await screen.findByText("common.retry");
+    const before = mockClient.getYouTubeChannelVideos.mock.calls.length;
+    fireEvent.click(retry);
+    await waitFor(() =>
+      expect(mockClient.getYouTubeChannelVideos.mock.calls.length).toBeGreaterThan(before)
+    );
+  });
+});
