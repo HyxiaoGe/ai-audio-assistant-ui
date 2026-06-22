@@ -337,3 +337,27 @@ describe("TaskList 服务端转写搜索（替换纯客户端标题过滤）", (
     expect(routerMock.replace).toHaveBeenLastCalledWith("/tasks")
   })
 })
+
+describe("TaskList 三态", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  it("加载中(无缓存任务)渲染骨架屏而非空白", async () => {
+    mockClient.getTasks.mockReturnValue(new Promise(() => {})); // 永不 resolve → 维持 loading
+    mockClient.getTaskStatusCounts.mockResolvedValue({ all: 0, completed: 0, processing: 0, failed: 0 });
+    render(<TaskList />);
+    expect(await screen.findAllByTestId("task-card-skeleton")).toHaveLength(6);
+  });
+
+  it("加载失败渲染 ErrorState,点重试重新拉取", async () => {
+    mockClient.getTasks.mockRejectedValue(new Error("boom"));
+    mockClient.getTaskStatusCounts.mockResolvedValue({ all: 0, completed: 0, processing: 0, failed: 0 });
+    render(<TaskList />);
+    const retry = await screen.findByText("common.retry");
+    expect(mockClient.getTasks).toHaveBeenCalledTimes(1);
+    fireEvent.click(retry);
+    await waitFor(() => expect(mockClient.getTasks).toHaveBeenCalledTimes(2));
+  });
+})
