@@ -5,8 +5,6 @@ import { useGlobalStore } from "@/store/global-store";
 import type { Notification } from "@/types/api";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
-vi.mock("@/components/layout/Header", () => ({ default: () => <div /> }));
-vi.mock("@/components/layout/Sidebar", () => ({ default: () => <div /> }));
 vi.mock("@/lib/i18n-context", () => ({
   useI18n: () => ({
     locale: "en",
@@ -21,6 +19,15 @@ vi.mock("@/lib/i18n-context", () => ({
       return map[key] ?? key;
     },
   }),
+}));
+
+const authState = vi.hoisted(() => ({ user: { id: "u1" } as { id: string } | null }));
+vi.mock("@/store/auth-store", () => ({
+  useAuthStore: (sel: (s: { user: { id: string } | null }) => unknown) => sel({ user: authState.user }),
+}));
+vi.mock("@/store/ui-store", () => ({
+  useUIStore: (sel: (s: { openLogin: () => void; openNewTask: () => void }) => unknown) =>
+    sel({ openLogin: vi.fn(), openNewTask: vi.fn() }),
 }));
 
 const loadNotifications = vi.fn();
@@ -42,6 +49,7 @@ function makeNotif(id: string): Notification {
 }
 
 beforeEach(() => {
+  authState.user = { id: "u1" };
   loadNotifications.mockReset();
   refreshUnread.mockReset();
   useGlobalStore.setState({
@@ -60,20 +68,22 @@ beforeEach(() => {
 
 describe("Notifications page", () => {
   it("loads notifications and refreshes unread on mount when authenticated", () => {
-    render(<Notifications isAuthenticated onOpenLogin={vi.fn()} />);
+    const { container } = render(<Notifications />);
     expect(loadNotifications).toHaveBeenCalledTimes(1);
     expect(refreshUnread).toHaveBeenCalledTimes(1);
+    expect(container.querySelector(".h-screen")).toBeNull();
   });
 
   it("renders the shared list reading the same store", () => {
-    render(<Notifications isAuthenticated onOpenLogin={vi.fn()} />);
+    render(<Notifications />);
     expect(
       screen.getByRole("button", { name: "Task completed" })
     ).toBeInTheDocument();
   });
 
   it("does not fetch when unauthenticated", () => {
-    render(<Notifications isAuthenticated={false} onOpenLogin={vi.fn()} />);
+    authState.user = null;
+    render(<Notifications />);
     expect(loadNotifications).not.toHaveBeenCalled();
   });
 });
