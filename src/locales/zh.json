@@ -186,6 +186,8 @@
     "seconds": "{count}秒",
     "callCount": "{count}次",
     "statusCounts": "成功 {success} / 失败 {failure} / 处理中 {processing} / 排队 {pending}",
+    "statusChartAria": "任务状态分布",
+    "stageChartAria": "各阶段平均耗时",
     "serviceType": {
       "asr": "语音识别",
       "llm": "大模型"

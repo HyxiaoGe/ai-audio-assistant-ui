@@ -186,6 +186,8 @@
     "seconds": "{count}s",
     "callCount": "{count} calls",
     "statusCounts": "Success {success} / Failed {failure} / Processing {processing} / Pending {pending}",
+    "statusChartAria": "Task status distribution",
+    "stageChartAria": "Average time per stage",
     "serviceType": {
       "asr": "ASR",
       "llm": "LLM"

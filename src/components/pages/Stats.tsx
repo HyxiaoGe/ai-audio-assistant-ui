@@ -23,6 +23,13 @@ import {
   StatsTasksOverviewResponse,
 } from "@/types/api";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  DonutChart,
+  HorizontalBarChart,
+  CHART_PALETTE,
+  type DonutSlice,
+  type BarDatum,
+} from "@/components/stats/StatsCharts";
 
 type TimeRangeOption = "today" | "week" | "month" | "all" | "custom";
 
@@ -106,7 +113,12 @@ const STAGE_ORDER_MAP = new Map(
   STAGE_ORDER.map((stage, index) => [stage, index])
 );
 
-
+const STATUS_COLORS: Record<string, string> = {
+  completed: "var(--app-success)",
+  failed: "var(--app-danger)",
+  processing: "var(--app-primary)",
+  pending: "var(--app-text-muted)",
+};
 
 export default function Stats() {
   const client = useAPIClient();
@@ -351,6 +363,26 @@ export default function Stats() {
     () => llmProviderUsage.reduce((sum, item) => sum + getItemCallCount(item), 0),
     [llmProviderUsage]
   );
+
+  const statusDonutSlices: DonutSlice[] = statusItems.map((item) => ({
+    key: item.key,
+    label: item.label,
+    value: item.value,
+    color: STATUS_COLORS[item.key] ?? "var(--app-text-muted)",
+  }));
+  const statusTotal = statusDonutSlices.reduce((sum, s) => sum + s.value, 0);
+  const statusCenterPrimary =
+    statusTotal > 0
+      ? `${Math.round(((taskOverview?.status_distribution.completed ?? 0) / statusTotal) * 100)}%`
+      : undefined;
+
+  const stageBars: BarDatum[] = stageBreakdown.map((item, index) => ({
+    key: item.stage,
+    label: stageLabel(item.stage),
+    value: item.value,
+    displayValue: formatSeconds(item.value),
+    color: CHART_PALETTE[index % CHART_PALETTE.length],
+  }));
 
   const totalServiceCalls = useMemo(() => {
     if (!serviceOverview) return 0;
@@ -851,33 +883,18 @@ export default function Stats() {
                       )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      {firstLoad && statusItems.length === 0
-                        ? Array.from({ length: 4 }).map((_, i) => (
-                            <div
-                              key={i}
-                              className="rounded-xl border px-3 py-2"
-                              style={{ borderColor: "var(--app-glass-border)" }}
-                            >
-                              <Skeleton data-testid="stats-skeleton" className="h-3 w-12 mb-2" />
-                              <Skeleton data-testid="stats-skeleton" className="h-5 w-10" />
-                            </div>
-                          ))
-                        : statusItems.map((item) => (
-                            <div
-                              key={item.key}
-                              className="rounded-xl border px-3 py-2"
-                              style={{ borderColor: "var(--app-glass-border)" }}
-                            >
-                              <p className="text-xs text-[var(--app-text-muted)]">
-                                {item.label}
-                              </p>
-                              <p className="text-lg font-semibold text-[var(--app-text)]">
-                                {item.value}
-                              </p>
-                            </div>
-                          ))}
-                    </div>
+                    {firstLoad && !taskOverview ? (
+                      <Skeleton data-testid="stats-skeleton" className="h-[180px] w-full" />
+                    ) : statusTotal > 0 ? (
+                      <DonutChart
+                        slices={statusDonutSlices}
+                        centerPrimary={statusCenterPrimary}
+                        centerSecondary={t("stats.status.completed")}
+                        ariaLabel={t("stats.statusChartAria")}
+                      />
+                    ) : (
+                      <p className="text-xs text-[var(--app-text-muted)]">--</p>
+                    )}
 
                     <div className="space-y-2 text-xs text-[var(--app-text-muted)]">
                       <div className="flex items-center justify-between">
@@ -939,23 +956,12 @@ export default function Stats() {
                         {t("stats.processingByStage")}
                       </p>
                       {stageBreakdown.length === 0 ? (
-                        <p className="text-xs text-[var(--app-text-muted)]">
-                          --
-                        </p>
+                        <p className="text-xs text-[var(--app-text-muted)]">--</p>
                       ) : (
-                        stageBreakdown.map((item, index) => (
-                          <div
-                            key={`${item.stage}-${index}`}
-                            className="flex items-center justify-between text-xs"
-                          >
-                            <span className="text-[var(--app-text-muted)]">
-                              {stageLabel(item.stage)}
-                            </span>
-                            <span className="text-[var(--app-text)]">
-                              {formatSeconds(item.value)}
-                            </span>
-                          </div>
-                        ))
+                        <HorizontalBarChart
+                          bars={stageBars}
+                          ariaLabel={t("stats.stageChartAria")}
+                        />
                       )}
                     </div>
                   </div>
