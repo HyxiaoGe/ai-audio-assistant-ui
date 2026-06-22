@@ -111,7 +111,8 @@
     "subscriptions": "订阅",
     "stats": "统计",
     "settings": "设置",
-    "explore": "探索"
+    "explore": "探索",
+    "primary": "主导航"
   },
   "explore": {
     "pageTitle": "探索广场",
