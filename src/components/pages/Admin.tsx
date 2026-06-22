@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import Header from '@/components/layout/Header';
-import Sidebar from '@/components/layout/Sidebar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { useI18n } from '@/lib/i18n-context';
@@ -13,17 +11,7 @@ import { formatMoney, isLlmUnavailable, formatUserName } from '@/lib/admin-cost-
 import type { AdminCostsResponse, AsrAdminOverviewResponse } from '@/types/api';
 import { ShieldAlert, TrendingUp, Clock, DollarSign, Zap, Users } from 'lucide-react';
 
-interface AdminProps {
-  isAuthenticated?: boolean;
-  onOpenLogin?: () => void;
-  onToggleTheme?: () => void;
-}
-
-export default function Admin({
-  isAuthenticated = false,
-  onOpenLogin = () => {},
-  onToggleTheme = () => {}
-}: AdminProps) {
+export default function Admin() {
   const { t } = useI18n();
   const client = useAPIClient();
   const { formatDateTime } = useDateFormatter();
@@ -91,18 +79,8 @@ export default function Admin({
   // 权限检查 - 等待 profile 加载完成
   if (!profileLoaded) {
     return (
-      <div className="h-screen flex flex-col" style={{ background: "var(--app-bg)" }}>
-        <Header
-          isAuthenticated={isAuthenticated}
-          onOpenLogin={onOpenLogin}
-          onToggleTheme={onToggleTheme}
-        />
-        <div className="flex-1 flex overflow-hidden">
-          <Sidebar />
-          <main className="flex-1 flex items-center justify-center">
-            <p className="text-[var(--app-text-muted)]">{t("common.loading")}...</p>
-          </main>
-        </div>
+      <div className="h-full flex items-center justify-center">
+        <p className="text-[var(--app-text-muted)]">{t("common.loading")}...</p>
       </div>
     );
   }
@@ -110,43 +88,23 @@ export default function Admin({
   // 非管理员显示 403
   if (!isAdmin) {
     return (
-      <div className="h-screen flex flex-col" style={{ background: "var(--app-bg)" }}>
-        <Header
-          isAuthenticated={isAuthenticated}
-          onOpenLogin={onOpenLogin}
-          onToggleTheme={onToggleTheme}
-        />
-        <div className="flex-1 flex overflow-hidden">
-          <Sidebar />
-          <main className="flex-1 flex items-center justify-center">
-            <div className="text-center space-y-4">
-              <ShieldAlert className="w-16 h-16 mx-auto" style={{ color: "var(--app-danger)" }} />
-              <h2 className="text-xl font-semibold" style={{ color: "var(--app-text)" }}>
-                {t("admin.accessDenied")}
-              </h2>
-              <p className="text-sm" style={{ color: "var(--app-text-muted)" }}>
-                {t("admin.accessDeniedDesc")}
-              </p>
-            </div>
-          </main>
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <ShieldAlert className="w-16 h-16 mx-auto" style={{ color: "var(--app-danger)" }} />
+          <h2 className="text-xl font-semibold" style={{ color: "var(--app-text)" }}>
+            {t("admin.accessDenied")}
+          </h2>
+          <p className="text-sm" style={{ color: "var(--app-text-muted)" }}>
+            {t("admin.accessDeniedDesc")}
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen flex flex-col" style={{ background: "var(--app-bg)" }}>
-      <Header
-        isAuthenticated={isAuthenticated}
-        onOpenLogin={onOpenLogin}
-        onToggleTheme={onToggleTheme}
-      />
-
-      <div className="flex-1 flex overflow-hidden">
-        <Sidebar />
-
-        <main className="flex-1 overflow-y-auto p-8">
-          <div className="mb-8">
+    <div className="p-8">
+      <div className="mb-8">
             <h2 className="text-h2" style={{ color: "var(--app-text)" }}>
               {t("admin.title")}
             </h2>
@@ -403,8 +361,6 @@ export default function Admin({
               </CardContent>
             </Card>
           </div>
-        </main>
-      </div>
     </div>
   );
 }

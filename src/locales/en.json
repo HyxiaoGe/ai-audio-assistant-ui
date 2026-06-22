@@ -111,7 +111,8 @@
     "subscriptions": "Subscriptions",
     "stats": "Stats",
     "settings": "Settings",
-    "explore": "Explore"
+    "explore": "Explore",
+    "primary": "Primary navigation"
   },
   "explore": {
     "pageTitle": "Explore",

@@ -103,13 +103,12 @@ vi.mock("@/store/audio-store", () => ({
   ensureCurrentMediaActive: vi.fn(),
 }))
 
+// ---- ui-store：全局登录模态 openLogin ----
+vi.mock("@/store/ui-store", () => ({
+  useUIStore: (sel: (s: { openLogin: () => void }) => unknown) => sel({ openLogin: vi.fn() }),
+}))
+
 // ---- 顶层布局桩：不在被测范围，且会引入 ws/通知等依赖 ----
-vi.mock("@/components/layout/Header", () => ({
-  default: () => null,
-}))
-vi.mock("@/components/layout/Sidebar", () => ({
-  default: () => null,
-}))
 vi.mock("@/components/task/PlayerBarContainer", () => ({
   PlayerBarContainer: () => null,
 }))
@@ -458,7 +457,7 @@ describe("TaskDetail — progressive disclosure", () => {
     // 首拉(loadTask)：图仍 pending；此后对账轮询重拉：DB 已 ready
     apiMock.getSummary.mockResolvedValueOnce(summaryResp()).mockResolvedValue(readyResp)
 
-    render(<TaskDetail />)
+    const { container } = render(<TaskDetail />)
 
     // 初始 pending 占位
     await waitFor(
@@ -467,6 +466,9 @@ describe("TaskDetail — progressive disclosure", () => {
       },
       { timeout: 5000 }
     )
+
+    // 去壳后：completed 分支不应再渲染 h-screen 根（AppShell 已提供全屏容器）
+    expect(container.querySelector(".h-screen")).toBeNull()
 
     // 不推送 image_ready，仅靠对账轮询（每 4s）从 DB 拉到 ready
     await waitFor(

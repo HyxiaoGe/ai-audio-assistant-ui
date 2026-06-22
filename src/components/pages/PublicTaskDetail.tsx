@@ -4,8 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { ArrowLeft, FileText, Globe } from 'lucide-react';
-import Header from '@/components/layout/Header';
-import Sidebar from '@/components/layout/Sidebar';
 import EmptyState from '@/components/common/EmptyState';
 import TabSwitch from '@/components/task/TabSwitch';
 import { PlayerBarContainer } from '@/components/task/PlayerBarContainer';
@@ -93,9 +91,6 @@ function buildPublicStreamingImages(summary: PublicSummaryItem): Map<string, Str
 }
 
 interface PublicTaskDetailProps {
-  isAuthenticated: boolean;
-  onOpenLogin: () => void;
-  onToggleTheme?: () => void;
   /**
    * 服务端 LAN 预取初值(可选):有初值的路对应 state 直接以 props 初始化,跳过该路的
    * 客户端初始拉取(loading 初值 false,无 spinner 阶段);没有的路照常客户端拉取。
@@ -107,9 +102,6 @@ interface PublicTaskDetailProps {
 }
 
 export default function PublicTaskDetail({
-  isAuthenticated,
-  onOpenLogin,
-  onToggleTheme,
   initialDetail,
   initialSummary,
 }: PublicTaskDetailProps) {
@@ -323,19 +315,7 @@ export default function PublicTaskDetail({
   }, [summaries]);
 
   const shell = (children: ReactNode) => (
-    <div className="h-screen flex flex-col" style={{ background: 'var(--app-bg)' }}>
-      <Header
-        isAuthenticated={isAuthenticated}
-        onOpenLogin={onOpenLogin}
-        onToggleTheme={onToggleTheme}
-      />
-      <div className="flex-1 flex overflow-hidden">
-        <Sidebar />
-        <main className="flex-1 flex flex-col overflow-hidden" style={{ background: 'var(--app-bg)' }}>
-          {children}
-        </main>
-      </div>
-    </div>
+    <div className="h-full flex flex-col overflow-hidden">{children}</div>
   );
 
   // detail 尚未回来:整页 spinner(此时连标题/骨架都没有,只能等 detail)。

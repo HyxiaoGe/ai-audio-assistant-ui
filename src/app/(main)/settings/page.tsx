@@ -1,25 +1,17 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect } from "react";
 import { useAuthStore } from "@/store/auth-store";
-import { useTheme } from "next-themes";
 import { useRouter, useSearchParams } from "next/navigation";
 import Settings from "@/components/pages/Settings";
-import LoginModal from "@/components/auth/LoginModal";
-import { useSettingsActions } from "@/lib/settings-context";
 import FullPageLoader from "@/components/common/FullPageLoader";
 
 function SettingsContent() {
-  const authUser = useAuthStore((s) => s.user);
   const status = useAuthStore((s) => s.status);
-  const { setTheme } = useSettingsActions();
-  const { resolvedTheme } = useTheme();
-  const [loginOpen, setLoginOpen] = useState(false);
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  // Handle YouTube OAuth callback redirect
-  // Backend redirects to /settings?youtube=connected, we forward to /subscriptions
+  // 后端把 YouTube OAuth 回调重定向到 /settings?youtube=connected，这里转发到 /subscriptions
   useEffect(() => {
     const youtubeParam = searchParams.get("youtube");
     if (youtubeParam) {
@@ -31,29 +23,8 @@ function SettingsContent() {
     }
   }, [searchParams, router]);
 
-
-  const toggleTheme = () => {
-    setTheme(resolvedTheme === "dark" ? "light" : "dark");
-  };
-
-  if (status === "loading") {
-    return <FullPageLoader />;
-  }
-
-  return (
-    <>
-      <Settings
-        isAuthenticated={!!authUser}
-        onOpenLogin={() => setLoginOpen(true)}
-        onToggleTheme={toggleTheme}
-      />
-      <LoginModal
-        isOpen={loginOpen}
-        onClose={() => setLoginOpen(false)}
-        callbackUrl="/settings"
-      />
-    </>
-  );
+  if (status === "loading") return <FullPageLoader />;
+  return <Settings />;
 }
 
 export default function SettingsPage() {

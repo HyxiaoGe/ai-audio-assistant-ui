@@ -13,18 +13,10 @@ import { useAudioStore } from '@/store/audio-store';
 import { useUserStore } from '@/store/user-store';
 import { proxiedAvatar } from '@/lib/avatar-url';
 import HeaderMiniPlayer from '@/components/layout/HeaderMiniPlayer';
+import { useUIStore } from '@/store/ui-store';
+import { useSettingsActions } from '@/lib/settings-context';
 
-interface HeaderProps {
-  isAuthenticated: boolean;
-  onOpenLogin: () => void;
-  onToggleTheme?: () => void;
-}
-
-function Header({
-  isAuthenticated,
-  onOpenLogin,
-  onToggleTheme = () => {}
-}: HeaderProps) {
+function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -34,6 +26,12 @@ function Header({
   const authLogout = useAuthStore((s) => s.logout);
   const { t } = useI18n();
   const { resolvedTheme } = useTheme();
+  const openLogin = useUIStore((s) => s.openLogin);
+  const { setTheme } = useSettingsActions();
+  const isAuthenticated = !!authUser;
+  // 主题切换走 settings-context（额外做 localStorage 持久化 + runThemeTransition 视图过渡）；
+  // resolvedTheme 仍取自 next-themes。绝不直接用 next-themes 的 setTheme，否则丢持久化与过渡。
+  const toggleTheme = () => setTheme(resolvedTheme === "dark" ? "light" : "dark");
   const pathname = usePathname();
   // 仅订阅决定「是否显示迷你播放器」所需的 src/taskId（极少变化）；逐帧跳动的
   // currentTime/duration/isPlaying 等播放态订阅都下沉到 HeaderMiniPlayer 子组件，
@@ -136,7 +134,7 @@ function Header({
         {/* 主题切换 */}
         <button
           type="button"
-          onClick={onToggleTheme}
+          onClick={toggleTheme}
           className="w-6 h-6 flex items-center justify-center transition-all hover:opacity-70 duration-300"
           style={{
             color: isMounted && isDark ? "var(--app-warning)" : "var(--app-primary)",
@@ -213,7 +211,7 @@ function Header({
           </div>
         ) : (
           <button
-            onClick={onOpenLogin}
+            onClick={openLogin}
             className="glass-control px-4 py-2 rounded-lg"
             style={{
               color: "var(--app-text)",

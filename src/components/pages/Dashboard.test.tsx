@@ -11,8 +11,14 @@ vi.mock("@/lib/use-date-formatter", () => ({ useDateFormatter: () => ({ formatRe
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }))
 // Dashboard 用 useGlobalStore((s) => s.tasks) 选择器形式;返回空对象即「无 WebSocket 更新」
 vi.mock("@/store/global-store", () => ({ useGlobalStore: () => ({}) }))
-vi.mock("@/components/layout/Header", () => ({ default: () => null }))
-vi.mock("@/components/layout/Sidebar", () => ({ default: () => null }))
+vi.mock("@/store/ui-store", () => ({
+  useUIStore: (sel: (s: { openLogin: () => void; openNewTask: () => void }) => unknown) =>
+    sel({ openLogin: vi.fn(), openNewTask: vi.fn() }),
+}))
+vi.mock("@/store/auth-store", () => ({
+  useAuthStore: (sel: (s: { user: { name: string } | null }) => unknown) =>
+    sel({ user: { name: "Sean" } }),
+}))
 vi.mock("@/components/task/NewTaskCard", () => ({ default: () => null }))
 vi.mock("@/components/task/TaskCard", () => ({ default: () => <div>task-card</div> }))
 vi.mock("@/components/pages/PublicTaskList", () => ({ default: () => <div>public-task-list</div> }))
@@ -26,10 +32,11 @@ beforeEach(() => {
 describe("Dashboard 零任务软引导", () => {
   it("已登录 0 任务:嵌入探索列表 + 保留新建 CTA", async () => {
     mockClient.getTasks.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 5 })
-    render(<Dashboard isAuthenticated onOpenLogin={() => {}} onOpenNewTask={() => {}} />)
+    const { container } = render(<Dashboard />)
     await waitFor(() => expect(screen.getByText("public-task-list")).toBeInTheDocument())
     expect(screen.getByText("dashboard.exploreHint")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "dashboard.createTask" })).toBeInTheDocument()
+    expect(container.querySelector(".h-screen")).toBeNull()
   })
 
   it("已登录有任务:不嵌入探索列表", async () => {
@@ -39,7 +46,7 @@ describe("Dashboard 零任务软引导", () => {
       page: 1,
       page_size: 5,
     })
-    render(<Dashboard isAuthenticated onOpenLogin={() => {}} onOpenNewTask={() => {}} />)
+    render(<Dashboard />)
     await waitFor(() => expect(screen.getByText("task-card")).toBeInTheDocument())
     expect(screen.queryByText("public-task-list")).not.toBeInTheDocument()
   })
