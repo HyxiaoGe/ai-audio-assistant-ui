@@ -126,3 +126,22 @@ describe("Subscriptions 收藏视频加载/错误态", () => {
     );
   });
 });
+
+describe("Subscriptions 频道列表加载/错误态", () => {
+  it("频道列表首屏加载显示频道骨架", async () => {
+    mockClient.getYouTubeSubscriptions.mockImplementation(PENDING);
+    renderPage();
+    expect((await screen.findAllByTestId("channel-card-skeleton")).length).toBeGreaterThan(0);
+  });
+
+  it("频道列表加载失败显示 ErrorState 并可重试", async () => {
+    mockClient.getYouTubeSubscriptions.mockRejectedValue(new Error("boom"));
+    renderPage();
+    const retry = await screen.findByText("common.retry");
+    const before = mockClient.getYouTubeSubscriptions.mock.calls.length;
+    fireEvent.click(retry);
+    await waitFor(() =>
+      expect(mockClient.getYouTubeSubscriptions.mock.calls.length).toBeGreaterThan(before)
+    );
+  });
+});

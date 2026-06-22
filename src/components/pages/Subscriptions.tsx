@@ -17,7 +17,7 @@ import {
 import { useDateFormatter } from "@/lib/use-date-formatter";
 import EmptyState from "@/components/common/EmptyState";
 import ErrorState from "@/components/common/ErrorState";
-import { VideoGridSkeleton } from "@/components/youtube/SubscriptionSkeleton";
+import { ChannelListSkeleton, VideoGridSkeleton } from "@/components/youtube/SubscriptionSkeleton";
 import VideoCard from "@/components/youtube/VideoCard";
 import { ChannelCard } from "@/components/youtube/ChannelCard";
 import { ChannelSearchInput } from "@/components/youtube/ChannelSearchInput";
@@ -97,7 +97,7 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
 
   // Subscriptions list state
   const [subscriptions, setSubscriptions] = useState<YouTubeSubscriptionItem[]>([]);
-  const [subsLoading, setSubsLoading] = useState(false);
+  const [subsLoading, setSubsLoading] = useState(true);
   const [subsTotal, setSubsTotal] = useState(0);
   const [subsPage, setSubsPage] = useState(1);
   const [subsError, setSubsError] = useState<string | null>(null);
@@ -1201,12 +1201,13 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
                         </CardHeader>
                         <CardContent>
                           {subsError ? (
-                            <p
-                              className="text-sm text-center py-8"
-                              style={{ color: "var(--app-danger)" }}
-                            >
-                              {subsError}
-                            </p>
+                            <ErrorState
+                              type="network"
+                              description={subsError}
+                              onRetry={() => void loadSubscriptions(1, false)}
+                            />
+                          ) : subsLoading && subscriptions.length === 0 ? (
+                            <ChannelListSkeleton />
                           ) : subscriptions.length === 0 && !subsLoading ? (
                             <div className="text-center py-8">
                               <p
