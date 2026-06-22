@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import Header from "@/components/layout/Header";
-import Sidebar from "@/components/layout/Sidebar";
 import EmptyState from "@/components/common/EmptyState";
+import { useAuthStore } from "@/store/auth-store";
+import { useUIStore } from "@/store/ui-store";
 import { LabeledDateInput } from "@/components/common/LabeledDateInput";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,11 +25,6 @@ import {
 
 type TimeRangeOption = "today" | "week" | "month" | "all" | "custom";
 
-interface StatsProps {
-  isAuthenticated: boolean;
-  onOpenLogin: () => void;
-  onToggleTheme?: () => void;
-}
 
 type AppliedRange = {
   start: string;
@@ -112,21 +107,20 @@ const STAGE_ORDER_MAP = new Map(
 
 
 
-export default function Stats({
-  isAuthenticated,
-  onOpenLogin,
-  onToggleTheme = () => {},
-}: StatsProps) {
+export default function Stats() {
   const client = useAPIClient();
   const { t, locale } = useI18n();
+  const authUser = useAuthStore((s) => s.user);
+  const isAuthenticated = !!authUser;
+  const openLogin = useUIStore((s) => s.openLogin);
 
-  // 始终保存最新的 onOpenLogin / t，但不让它们成为下方统计拉取 effect 的依赖。
-  // 否则父组件重渲染（开关登录弹窗、切主题）会重建 onOpenLogin 身份、切语言会重建 t，
+  // 始终保存最新的 openLogin / t，但不让它们成为下方统计拉取 effect 的依赖。
+  // 否则父组件重渲染（开关登录弹窗、切主题）会重建 openLogin 身份、切语言会重建 t，
   // 导致 fetchStats 身份变化、effect 重跑，并发重复拉取两个统计接口，造成无谓请求。
-  const onOpenLoginRef = useRef(onOpenLogin);
+  const onOpenLoginRef = useRef(openLogin);
   const tRef = useRef(t);
   useEffect(() => {
-    onOpenLoginRef.current = onOpenLogin;
+    onOpenLoginRef.current = openLogin;
     tRef.current = t;
   });
 
@@ -391,17 +385,7 @@ export default function Stats({
   const hasData = !!serviceOverview || !!taskOverview;
 
   return (
-    <div className="h-screen flex flex-col" style={{ background: "var(--app-bg)" }}>
-      <Header
-        isAuthenticated={isAuthenticated}
-        onOpenLogin={onOpenLogin}
-        onToggleTheme={onToggleTheme}
-      />
-
-      <div className="flex-1 flex overflow-hidden">
-        <Sidebar />
-
-        <main className="flex-1 overflow-y-auto px-8 py-6" style={{ background: "var(--app-bg)" }}>
+    <div className="px-8 py-6">
           <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
             <div>
               <h2 className="text-h2" style={{ color: "var(--app-text)" }}>
@@ -420,7 +404,7 @@ export default function Stats({
               description={t("stats.loginRequiredDesc")}
               action={{
                 label: t("dashboard.goLogin"),
-                onClick: onOpenLogin,
+                onClick: openLogin,
                 variant: "primary",
               }}
             />
@@ -963,8 +947,6 @@ export default function Stats({
               </section>
             </>
           )}
-        </main>
-      </div>
     </div>
   );
 }
