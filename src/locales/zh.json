@@ -188,6 +188,10 @@
     "statusCounts": "成功 {success} / 失败 {failure} / 处理中 {processing} / 排队 {pending}",
     "statusChartAria": "任务状态分布",
     "stageChartAria": "各阶段平均耗时",
+    "asrProviderChartAria": "ASR 服务商占比",
+    "llmProviderChartAria": "LLM 服务商占比",
+    "providerOthers": "其它",
+    "callCountLabel": "调用数",
     "serviceType": {
       "asr": "语音识别",
       "llm": "大模型"

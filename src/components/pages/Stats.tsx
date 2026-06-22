@@ -27,6 +27,7 @@ import {
   DonutChart,
   HorizontalBarChart,
   CHART_PALETTE,
+  bucketTopSlices,
   type DonutSlice,
   type BarDatum,
 } from "@/components/stats/StatsCharts";
@@ -384,6 +385,27 @@ export default function Stats() {
     color: CHART_PALETTE[index % CHART_PALETTE.length],
   }));
 
+  const buildProviderSlices = (
+    usage: typeof asrProviderUsage,
+    othersLabel: string
+  ): DonutSlice[] => {
+    const raw = usage.map((item) => ({
+      key: item.provider || "unknown",
+      label: providerLabel(item.provider || "--"),
+      value: getItemCallCount(item),
+    }));
+    return bucketTopSlices(raw, 5, "__others__", othersLabel).map((s, index) => ({
+      ...s,
+      color:
+        s.key === "__others__"
+          ? "var(--app-text-muted)"
+          : CHART_PALETTE[index % CHART_PALETTE.length],
+    }));
+  };
+
+  const asrDonutSlices = buildProviderSlices(asrProviderUsage, t("stats.providerOthers"));
+  const llmDonutSlices = buildProviderSlices(llmProviderUsage, t("stats.providerOthers"));
+
   const totalServiceCalls = useMemo(() => {
     if (!serviceOverview) return 0;
     if (Number.isFinite(serviceOverview.total_calls)) {
@@ -694,73 +716,83 @@ export default function Stats() {
                         {asrProviderUsage.length === 0 ? (
                           <p className="text-xs text-[var(--app-text-muted)]">--</p>
                         ) : asrProvidersOpen ? (
-                          <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
-                            {asrProviderUsage.map((item, index) => (
-                              <div
-                                key={`${item.provider}-${index}`}
-                                className="rounded-xl border px-3 py-3 space-y-2"
-                                style={{ borderColor: "var(--app-glass-border)" }}
-                              >
-                                <div className="flex items-center justify-between text-xs">
-                                  <span
-                                    className="text-[var(--app-text)] truncate max-w-[180px]"
-                                    title={item.provider || "--"}
-                                  >
-                                    {providerLabel(item.provider || "--")}
-                                  </span>
-                                  <span className="text-[var(--app-text-muted)]">
-                                    {t("stats.callCount", {
-                                      count: getItemCallCount(item),
-                                    })}
-                                  </span>
-                                </div>
-                                <div className="flex flex-wrap gap-2 text-[11px] text-[var(--app-text-muted)]">
-                                  <span className="rounded-full bg-[var(--app-success-bg)] px-2 py-0.5 text-[var(--app-success)]">
-                                    {t("stats.successRate")} {formatPercentValue(getItemSuccessRate(item))}
-                                  </span>
-                                  <span className="rounded-full bg-[var(--app-danger-bg-soft)] px-2 py-0.5 text-[var(--app-danger-strong)]">
-                                    {t("stats.failureRate")} {formatPercentValue(getItemFailureRate(item))}
-                                  </span>
-                                </div>
-                                <div className="grid gap-1 text-[11px] text-[var(--app-text-muted)]">
-                                  <div className="flex items-center justify-between">
-                                    <span>{t("stats.avgStageSeconds")}</span>
-                                    <span className="text-[var(--app-text)]">
-                                      {formatSeconds(item.avg_stage_seconds)}
+                          <>
+                            {asrProviderTotal > 0 && (
+                              <DonutChart
+                                slices={asrDonutSlices}
+                                centerPrimary={String(asrProviderTotal)}
+                                centerSecondary={t("stats.callCountLabel")}
+                                ariaLabel={t("stats.asrProviderChartAria")}
+                              />
+                            )}
+                            <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
+                              {asrProviderUsage.map((item, index) => (
+                                <div
+                                  key={`${item.provider}-${index}`}
+                                  className="rounded-xl border px-3 py-3 space-y-2"
+                                  style={{ borderColor: "var(--app-glass-border)" }}
+                                >
+                                  <div className="flex items-center justify-between text-xs">
+                                    <span
+                                      className="text-[var(--app-text)] truncate max-w-[180px]"
+                                      title={item.provider || "--"}
+                                    >
+                                      {providerLabel(item.provider || "--")}
+                                    </span>
+                                    <span className="text-[var(--app-text-muted)]">
+                                      {t("stats.callCount", {
+                                        count: getItemCallCount(item),
+                                      })}
                                     </span>
                                   </div>
-                                  <div className="flex items-center justify-between">
-                                    <span>{t("stats.medianStageSeconds")}</span>
-                                    <span className="text-[var(--app-text)]">
-                                      {formatSeconds(item.median_stage_seconds)}
+                                  <div className="flex flex-wrap gap-2 text-[11px] text-[var(--app-text-muted)]">
+                                    <span className="rounded-full bg-[var(--app-success-bg)] px-2 py-0.5 text-[var(--app-success)]">
+                                      {t("stats.successRate")} {formatPercentValue(getItemSuccessRate(item))}
+                                    </span>
+                                    <span className="rounded-full bg-[var(--app-danger-bg-soft)] px-2 py-0.5 text-[var(--app-danger-strong)]">
+                                      {t("stats.failureRate")} {formatPercentValue(getItemFailureRate(item))}
                                     </span>
                                   </div>
-                                  {Number.isFinite(item.total_audio_duration_seconds) &&
-                                    (item.total_audio_duration_seconds ?? 0) > 0 && (
+                                  <div className="grid gap-1 text-[11px] text-[var(--app-text-muted)]">
                                     <div className="flex items-center justify-between">
-                                      <span>{t("stats.totalAudioDuration")}</span>
+                                      <span>{t("stats.avgStageSeconds")}</span>
                                       <span className="text-[var(--app-text)]">
-                                        {formatSeconds(item.total_audio_duration_seconds!)}
+                                        {formatSeconds(item.avg_stage_seconds)}
                                       </span>
                                     </div>
+                                    <div className="flex items-center justify-between">
+                                      <span>{t("stats.medianStageSeconds")}</span>
+                                      <span className="text-[var(--app-text)]">
+                                        {formatSeconds(item.median_stage_seconds)}
+                                      </span>
+                                    </div>
+                                    {Number.isFinite(item.total_audio_duration_seconds) &&
+                                      (item.total_audio_duration_seconds ?? 0) > 0 && (
+                                      <div className="flex items-center justify-between">
+                                        <span>{t("stats.totalAudioDuration")}</span>
+                                        <span className="text-[var(--app-text)]">
+                                          {formatSeconds(item.total_audio_duration_seconds!)}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                  {(item.success_count ||
+                                    item.failure_count ||
+                                    item.processing_count ||
+                                    item.pending_count) && (
+                                    <p className="text-[11px] text-[var(--app-text-muted)]">
+                                      {t("stats.statusCounts", {
+                                        success: item.success_count || 0,
+                                        failure: item.failure_count || 0,
+                                        processing: item.processing_count || 0,
+                                        pending: item.pending_count || 0,
+                                      })}
+                                    </p>
                                   )}
                                 </div>
-                                {(item.success_count ||
-                                  item.failure_count ||
-                                  item.processing_count ||
-                                  item.pending_count) && (
-                                  <p className="text-[11px] text-[var(--app-text-muted)]">
-                                    {t("stats.statusCounts", {
-                                      success: item.success_count || 0,
-                                      failure: item.failure_count || 0,
-                                      processing: item.processing_count || 0,
-                                      pending: item.pending_count || 0,
-                                    })}
-                                  </p>
-                                )}
-                              </div>
-                            ))}
-                          </div>
+                              ))}
+                            </div>
+                          </>
                         ) : null}
                       </div>
 
@@ -791,64 +823,74 @@ export default function Stats() {
                         {llmProviderUsage.length === 0 ? (
                           <p className="text-xs text-[var(--app-text-muted)]">--</p>
                         ) : llmProvidersOpen ? (
-                          <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
-                            {llmProviderUsage.map((item, index) => (
-                              <div
-                                key={`${item.provider}-${index}`}
-                                className="rounded-xl border px-3 py-3 space-y-2"
-                                style={{ borderColor: "var(--app-glass-border)" }}
-                              >
-                                <div className="flex items-center justify-between text-xs">
-                                  <span
-                                    className="text-[var(--app-text)] truncate max-w-[180px]"
-                                    title={item.provider || "--"}
-                                  >
-                                    {providerLabel(item.provider || "--")}
-                                  </span>
-                                  <span className="text-[var(--app-text-muted)]">
-                                    {t("stats.callCount", {
-                                      count: getItemCallCount(item),
-                                    })}
-                                  </span>
-                                </div>
-                                <div className="flex flex-wrap gap-2 text-[11px] text-[var(--app-text-muted)]">
-                                  <span className="rounded-full bg-[var(--app-success-bg)] px-2 py-0.5 text-[var(--app-success)]">
-                                    {t("stats.successRate")} {formatPercentValue(getItemSuccessRate(item))}
-                                  </span>
-                                  <span className="rounded-full bg-[var(--app-danger-bg-soft)] px-2 py-0.5 text-[var(--app-danger-strong)]">
-                                    {t("stats.failureRate")} {formatPercentValue(getItemFailureRate(item))}
-                                  </span>
-                                </div>
-                                <div className="grid gap-1 text-[11px] text-[var(--app-text-muted)]">
-                                  <div className="flex items-center justify-between">
-                                    <span>{t("stats.avgStageSeconds")}</span>
-                                    <span className="text-[var(--app-text)]">
-                                      {formatSeconds(item.avg_stage_seconds)}
+                          <>
+                            {llmProviderTotal > 0 && (
+                              <DonutChart
+                                slices={llmDonutSlices}
+                                centerPrimary={String(llmProviderTotal)}
+                                centerSecondary={t("stats.callCountLabel")}
+                                ariaLabel={t("stats.llmProviderChartAria")}
+                              />
+                            )}
+                            <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
+                              {llmProviderUsage.map((item, index) => (
+                                <div
+                                  key={`${item.provider}-${index}`}
+                                  className="rounded-xl border px-3 py-3 space-y-2"
+                                  style={{ borderColor: "var(--app-glass-border)" }}
+                                >
+                                  <div className="flex items-center justify-between text-xs">
+                                    <span
+                                      className="text-[var(--app-text)] truncate max-w-[180px]"
+                                      title={item.provider || "--"}
+                                    >
+                                      {providerLabel(item.provider || "--")}
+                                    </span>
+                                    <span className="text-[var(--app-text-muted)]">
+                                      {t("stats.callCount", {
+                                        count: getItemCallCount(item),
+                                      })}
                                     </span>
                                   </div>
-                                  <div className="flex items-center justify-between">
-                                    <span>{t("stats.medianStageSeconds")}</span>
-                                    <span className="text-[var(--app-text)]">
-                                      {formatSeconds(item.median_stage_seconds)}
+                                  <div className="flex flex-wrap gap-2 text-[11px] text-[var(--app-text-muted)]">
+                                    <span className="rounded-full bg-[var(--app-success-bg)] px-2 py-0.5 text-[var(--app-success)]">
+                                      {t("stats.successRate")} {formatPercentValue(getItemSuccessRate(item))}
+                                    </span>
+                                    <span className="rounded-full bg-[var(--app-danger-bg-soft)] px-2 py-0.5 text-[var(--app-danger-strong)]">
+                                      {t("stats.failureRate")} {formatPercentValue(getItemFailureRate(item))}
                                     </span>
                                   </div>
+                                  <div className="grid gap-1 text-[11px] text-[var(--app-text-muted)]">
+                                    <div className="flex items-center justify-between">
+                                      <span>{t("stats.avgStageSeconds")}</span>
+                                      <span className="text-[var(--app-text)]">
+                                        {formatSeconds(item.avg_stage_seconds)}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                      <span>{t("stats.medianStageSeconds")}</span>
+                                      <span className="text-[var(--app-text)]">
+                                        {formatSeconds(item.median_stage_seconds)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  {(item.success_count ||
+                                    item.failure_count ||
+                                    item.processing_count ||
+                                    item.pending_count) && (
+                                    <p className="text-[11px] text-[var(--app-text-muted)]">
+                                      {t("stats.statusCounts", {
+                                        success: item.success_count || 0,
+                                        failure: item.failure_count || 0,
+                                        processing: item.processing_count || 0,
+                                        pending: item.pending_count || 0,
+                                      })}
+                                    </p>
+                                  )}
                                 </div>
-                                {(item.success_count ||
-                                  item.failure_count ||
-                                  item.processing_count ||
-                                  item.pending_count) && (
-                                  <p className="text-[11px] text-[var(--app-text-muted)]">
-                                    {t("stats.statusCounts", {
-                                      success: item.success_count || 0,
-                                      failure: item.failure_count || 0,
-                                      processing: item.processing_count || 0,
-                                      pending: item.pending_count || 0,
-                                    })}
-                                  </p>
-                                )}
-                              </div>
-                            ))}
-                          </div>
+                              ))}
+                            </div>
+                          </>
                         ) : null}
                       </div>
                     </div>

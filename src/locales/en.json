@@ -188,6 +188,10 @@
     "statusCounts": "Success {success} / Failed {failure} / Processing {processing} / Pending {pending}",
     "statusChartAria": "Task status distribution",
     "stageChartAria": "Average time per stage",
+    "asrProviderChartAria": "ASR provider share",
+    "llmProviderChartAria": "LLM provider share",
+    "providerOthers": "Others",
+    "callCountLabel": "Calls",
     "serviceType": {
       "asr": "ASR",
       "llm": "LLM"

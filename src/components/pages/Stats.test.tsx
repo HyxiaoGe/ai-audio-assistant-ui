@@ -73,3 +73,28 @@ describe("Stats 任务统计图表", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("Stats 服务统计供应商图表", () => {
+  it("有供应商数据时,展开态渲染 ASR 与 LLM 占比环形图", async () => {
+    mockClient.getTaskStatsOverview.mockResolvedValue(taskOverview);
+    mockClient.getServiceStatsOverview.mockResolvedValue({
+      time_range: { start: "", end: "" },
+      total_calls: 12,
+      usage_by_service_type: [],
+      asr_usage_by_provider: [
+        { service_type: "asr", provider: "tencent", call_count: 8, success_rate: 100, failure_rate: 0 },
+      ],
+      llm_usage_by_provider: [
+        { service_type: "llm", provider: "deepseek", call_count: 4, success_rate: 100, failure_rate: 0 },
+      ],
+    });
+    render(<Stats />);
+    // 两个供应商卡默认 open(asrProvidersOpen/llmProvidersOpen 初值 true)
+    expect(
+      await screen.findByRole("img", { name: "stats.asrProviderChartAria" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: "stats.llmProviderChartAria" })
+    ).toBeInTheDocument();
+  });
+});
