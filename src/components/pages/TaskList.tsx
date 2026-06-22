@@ -2,9 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Header from '@/components/layout/Header';
 import { Pagination } from '@/components/common/Pagination';
-import Sidebar from '@/components/layout/Sidebar';
 import TaskCard from '@/components/task/TaskCard';
 import { TaskSearchInput } from '@/components/task/TaskSearchInput';
 import { SearchSnippet } from '@/components/task/SearchSnippet';
@@ -17,20 +15,14 @@ import type { TaskListItem, TaskSearchHit, TaskStatus } from '@/types/api';
 import { useI18n } from '@/lib/i18n-context';
 import { notifyError, notifySuccess } from '@/lib/notify';
 import { useGlobalStore } from '@/store/global-store';
+import { useAuthStore } from '@/store/auth-store';
+import { useUIStore } from '@/store/ui-store';
 
-interface TaskListProps {
-  isAuthenticated: boolean;
-  onOpenLogin: () => void;
-  onOpenNewTask?: () => void;
-  onToggleTheme?: () => void;
-}
-
-export default function TaskList({
-  isAuthenticated,
-  onOpenLogin,
-  onOpenNewTask,
-  onToggleTheme = () => {}
-}: TaskListProps) {
+export default function TaskList() {
+  const authUser = useAuthStore((s) => s.user);
+  const isAuthenticated = !!authUser;
+  const openLogin = useUIStore((s) => s.openLogin);
+  const openNewTask = useUIStore((s) => s.openNewTask);
   const router = useRouter();
   // 搜索态的 source of truth 提升到 URL(?q=):列表与详情是两个独立 route segment,互跳必卸载、
   // 本地 state 丢失。把搜索词放进 URL 后,「详情返回 / 浏览器后退」都能据此还原(与详情 ?t= 深链同范式)。
@@ -73,13 +65,13 @@ export default function TaskList({
     (t) => t.status === 'completed' || t.status === 'failed'
   ).length;
 
-  // 保存最新的 onOpenLogin / t，但不让它们进入下方拉取 effect 的依赖——
-  // 否则父组件每次重渲染（如开关弹窗）重建 onOpenLogin 身份，就会触发列表与
+  // 保存最新的 openLogin / t，但不让它们进入下方拉取 effect 的依赖——
+  // 否则 zustand selector 引用变化会触发列表与
   // 状态计数反复 getTasks（一次开关多打 5 个请求）。
-  const onOpenLoginRef = useRef(onOpenLogin);
+  const onOpenLoginRef = useRef(openLogin);
   const tRef = useRef(t);
   useEffect(() => {
-    onOpenLoginRef.current = onOpenLogin;
+    onOpenLoginRef.current = openLogin;
     tRef.current = t;
   });
 
@@ -253,12 +245,10 @@ export default function TaskList({
 
   const handleNewTask = () => {
     if (!isAuthenticated) {
-      onOpenLogin();
+      openLogin();
       return;
     }
-    if (onOpenNewTask) {
-      onOpenNewTask();
-    }
+    openNewTask();
   };
 
   const handleRetryTask = useCallback(async (taskId: string) => {
@@ -354,21 +344,7 @@ export default function TaskList({
   };
 
   return (
-    <div className="h-screen flex flex-col" style={{ background: "var(--app-bg)" }}>
-      {/* Header */}
-      <Header 
-        isAuthenticated={isAuthenticated} 
-        onOpenLogin={onOpenLogin}
-        onToggleTheme={onToggleTheme}
-      />
-
-      {/* 主体：Sidebar + 主内容区 */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar */}
-        <Sidebar />
-
-        {/* 主内容区 */}
-        <main className="flex-1 overflow-y-auto p-8">
+    <div className="p-8">
           {/* 标题区域 */}
           <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
             <div>
@@ -443,7 +419,7 @@ export default function TaskList({
                   description={t("tasks.loginToViewDescription")}
                   action={{
                     label: t("dashboard.goLogin"),
-                    onClick: onOpenLogin,
+                    onClick: openLogin,
                     variant: 'primary'
                   }}
                 />
@@ -524,11 +500,7 @@ export default function TaskList({
                 description={filterStatus === 'all' ? t("tasks.noTaskDescriptionAll") : t("tasks.noTaskDescriptionFiltered")}
                 action={filterStatus === 'all' ? {
                   label: t("dashboard.createTask"),
-                  onClick: () => {
-                    if (onOpenNewTask) {
-                      onOpenNewTask()
-                    }
-                  },
+                  onClick: () => openNewTask(),
                   variant: 'primary'
                 } : {
                   label: t("tasks.viewAll"),
@@ -560,8 +532,6 @@ export default function TaskList({
               </p>
             </div>
           )}
-        </main>
-      </div>
     </div>
   );
 }

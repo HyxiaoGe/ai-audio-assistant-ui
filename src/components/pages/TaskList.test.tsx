@@ -45,8 +45,15 @@ vi.mock("@/lib/notify", () => ({
   notifySuccess: vi.fn(),
 }))
 
-vi.mock("@/components/layout/Header", () => ({ default: () => null }))
-vi.mock("@/components/layout/Sidebar", () => ({ default: () => null }))
+vi.mock("@/store/ui-store", () => ({
+  useUIStore: (sel: (s: { openLogin: () => void; openNewTask: () => void }) => unknown) =>
+    sel({ openLogin: vi.fn(), openNewTask: vi.fn() }),
+}))
+
+vi.mock("@/store/auth-store", () => ({
+  useAuthStore: (sel: (s: { user: { id: string } | null; status: string }) => unknown) =>
+    sel({ user: { id: "u1" }, status: "authenticated" }),
+}))
 
 vi.mock("@/components/task/TaskCard", () => ({
   default: ({
@@ -98,7 +105,8 @@ describe("TaskList retry refetch", () => {
   })
 
   it("refetches the task list after a successful retry", async () => {
-    render(<TaskList isAuthenticated onOpenLogin={vi.fn()} />)
+    const { container } = render(<TaskList />)
+    expect(container.querySelector(".h-screen")).toBeNull()
 
     await screen.findByTestId("retry-t1")
     await waitFor(() => expect(mockClient.getTasks).toHaveBeenCalled())
@@ -146,7 +154,7 @@ describe("TaskList 实时订阅 store——处理中卡片随 WS 刷新", () => 
   })
 
   it("卡片的状态与标题随 store 更新即时刷新,且不重新拉取列表", async () => {
-    render(<TaskList isAuthenticated onOpenLogin={vi.fn()} />)
+    render(<TaskList />)
 
     const card = await screen.findByTestId("task-p1")
     expect(card).toHaveTextContent("处理中任务")
@@ -168,7 +176,7 @@ describe("TaskList 实时订阅 store——处理中卡片随 WS 刷新", () => 
   })
 
   it("已知任务进入终态时重新拉取权威状态计数", async () => {
-    render(<TaskList isAuthenticated onOpenLogin={vi.fn()} />)
+    render(<TaskList />)
 
     await screen.findByTestId("task-p1")
     await waitFor(() => expect(mockClient.getTaskStatusCounts).toHaveBeenCalled())
@@ -184,7 +192,7 @@ describe("TaskList 实时订阅 store——处理中卡片随 WS 刷新", () => 
   })
 
   it("WS 未携带标题时不以 undefined 覆盖已有标题", async () => {
-    render(<TaskList isAuthenticated onOpenLogin={vi.fn()} />)
+    render(<TaskList />)
 
     const card = await screen.findByTestId("task-p1")
     expect(card).toHaveTextContent("处理中任务")
@@ -244,7 +252,7 @@ describe("TaskList 服务端转写搜索（替换纯客户端标题过滤）", (
   })
 
   it("输入查询后向服务端发起转写搜索并渲染带高亮片段的命中", async () => {
-    render(<TaskList isAuthenticated onOpenLogin={vi.fn()} />)
+    render(<TaskList />)
     await screen.findByTestId("task-list-1")
 
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "谷歌" } })
@@ -259,7 +267,7 @@ describe("TaskList 服务端转写搜索（替换纯客户端标题过滤）", (
   })
 
   it("点击命中深链到 /tasks/{id}?t={start_time}&q={来源词} 以便跳播并让详情返回时恢复搜索态", async () => {
-    render(<TaskList isAuthenticated onOpenLogin={vi.fn()} />)
+    render(<TaskList />)
     await screen.findByTestId("task-list-1")
 
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "谷歌" } })
@@ -273,7 +281,7 @@ describe("TaskList 服务端转写搜索（替换纯客户端标题过滤）", (
   })
 
   it("空白查询不打服务端，回落正常任务列表", async () => {
-    render(<TaskList isAuthenticated onOpenLogin={vi.fn()} />)
+    render(<TaskList />)
     await screen.findByTestId("task-list-1")
 
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "   " } })
@@ -286,7 +294,7 @@ describe("TaskList 服务端转写搜索（替换纯客户端标题过滤）", (
 
   it("查询无命中时显示空状态，不渲染任何命中卡片", async () => {
     mockClient.searchTranscripts.mockResolvedValue({ query: "不存在", hits: [] })
-    render(<TaskList isAuthenticated onOpenLogin={vi.fn()} />)
+    render(<TaskList />)
     await screen.findByTestId("task-list-1")
 
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "不存在" } })
@@ -300,7 +308,7 @@ describe("TaskList 服务端转写搜索（替换纯客户端标题过滤）", (
   // 防抖 effect 据此自动重查，关键词+结果一并回来，无需用户重新输入。
   it("挂载时从 URL ?q= 恢复搜索词并自动重查", async () => {
     searchParamsMock.current = new URLSearchParams("q=谷歌")
-    render(<TaskList isAuthenticated onOpenLogin={vi.fn()} />)
+    render(<TaskList />)
 
     // 输入框回填来源词
     await waitFor(() =>
@@ -315,7 +323,7 @@ describe("TaskList 服务端转写搜索（替换纯客户端标题过滤）", (
   })
 
   it("输入查询时把搜索词写进 URL(?q=) 用 replace(不灌历史栈)；清空回纯 /tasks", async () => {
-    render(<TaskList isAuthenticated onOpenLogin={vi.fn()} />)
+    render(<TaskList />)
     await screen.findByTestId("task-list-1")
 
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "谷歌" } })
