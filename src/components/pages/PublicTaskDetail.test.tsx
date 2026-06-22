@@ -32,8 +32,6 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
   useParams: () => ({ id: "t1" }),
 }))
-vi.mock("@/components/layout/Header", () => ({ default: () => null }))
-vi.mock("@/components/layout/Sidebar", () => ({ default: () => null }))
 // MarkdownContent 走 next/dynamic 惰性加载。
 // 同 TaskDetail.progressive.test 教训:需同时 mock next/dynamic(同步解析 loader)
 // + mock MarkdownContent 模块(返回纯文本桩),两者配合才能在 waitFor 内同步拿到渲染结果。
@@ -159,7 +157,8 @@ beforeEach(() => {
 describe("PublicTaskDetail 公开详情页", () => {
   it("渲染标题/摘要/转写", async () => {
     mockHappyPath()
-    render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
+    const { container } = render(<PublicTaskDetail />)
+    expect(container.querySelector(".h-screen")).toBeNull()
     await waitFor(() => {
       expect(screen.getByText("公开详情标题")).toBeInTheDocument()
       expect(screen.getByText("这是公开摘要正文")).toBeInTheDocument()
@@ -178,7 +177,7 @@ describe("PublicTaskDetail 公开详情页", () => {
     })
     mockClient.getPublicTranscript.mockResolvedValue(TRANSCRIPT_OK)
     mockClient.getPublicSummary.mockResolvedValue(SUMMARY_OK)
-    render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
+    render(<PublicTaskDetail />)
     // 名称经 publishedBy 署名;头像走同源代理;时间与署名同条
     expect(await screen.findByText(/发布者甲/)).toBeInTheDocument()
     expect(screen.getByAltText("发布者甲").getAttribute("src")).toContain("/api/v1/users/avatar")
@@ -187,7 +186,7 @@ describe("PublicTaskDetail 公开详情页", () => {
 
   it("详情无发布者(owner 缺失)只回退「发布于 时间」,不渲染名称", async () => {
     mockHappyPath()
-    render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
+    render(<PublicTaskDetail />)
     await screen.findByText("公开详情标题")
     expect(screen.queryByText(/发布者甲/)).not.toBeInTheDocument()
     // 退回普通发布署名(explore.publishedAt 前缀 + 日期)
@@ -199,7 +198,7 @@ describe("PublicTaskDetail 公开详情页", () => {
     // 转写永不 resolve → 左栏停在 loading;骨架(标题/页签)必须已可见,不被转写拖住。
     mockClient.getPublicTranscript.mockReturnValue(new Promise(() => {}))
     mockClient.getPublicSummary.mockResolvedValue(SUMMARY_OK)
-    render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
+    render(<PublicTaskDetail />)
     await waitFor(() => {
       expect(screen.getByText("公开详情标题")).toBeInTheDocument()
       // 三页签来自 TabSwitch 真渲染
@@ -213,7 +212,7 @@ describe("PublicTaskDetail 公开详情页", () => {
     mockClient.getPublicTask.mockResolvedValue(DETAIL_YOUTUBE)
     mockClient.getPublicTranscript.mockRejectedValueOnce(new Error("network"))
     mockClient.getPublicSummary.mockResolvedValue(SUMMARY_OK)
-    render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
+    render(<PublicTaskDetail />)
     // 左栏局部错误(TranscriptList 内建 task.transcriptLoadFailed)+ 右栏内容并存
     await waitFor(() => {
       expect(screen.getByText("task.transcriptLoadFailed")).toBeInTheDocument()
@@ -237,7 +236,7 @@ describe("PublicTaskDetail 公开详情页", () => {
     mockClient.getPublicTask.mockResolvedValue(DETAIL_YOUTUBE)
     mockClient.getPublicTranscript.mockResolvedValue(TRANSCRIPT_OK)
     mockClient.getPublicSummary.mockRejectedValue(new Error("boom"))
-    render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
+    render(<PublicTaskDetail />)
     await waitFor(() => {
       expect(screen.getByText("explore.summaryLoadFailed")).toBeInTheDocument()
       expect(screen.getByText("转写第一段")).toBeInTheDocument()
@@ -247,7 +246,7 @@ describe("PublicTaskDetail 公开详情页", () => {
 
   it("页签切换:从摘要切到要点显示要点正文", async () => {
     mockHappyPath()
-    render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
+    render(<PublicTaskDetail />)
     await waitFor(() => expect(screen.getByText("这是公开摘要正文")).toBeInTheDocument(), { timeout: 3000 })
     fireEvent.click(screen.getByRole("tab", { name: "task.tabs.keypoints" }))
     await waitFor(() => expect(screen.getByText("这是关键要点正文")).toBeInTheDocument(), { timeout: 3000 })
@@ -255,7 +254,7 @@ describe("PublicTaskDetail 公开详情页", () => {
 
   it("缺失的节显示空态文案(行动项无数据)", async () => {
     mockHappyPath()
-    render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
+    render(<PublicTaskDetail />)
     await waitFor(() => expect(screen.getByText("这是公开摘要正文")).toBeInTheDocument(), { timeout: 3000 })
     fireEvent.click(screen.getByRole("tab", { name: "task.tabs.actions" }))
     await waitFor(() => expect(screen.getByText("task.actionItemsEmpty")).toBeInTheDocument(), { timeout: 3000 })
@@ -275,7 +274,7 @@ describe("PublicTaskDetail 公开详情页", () => {
     })
     mockClient.getPublicTranscript.mockResolvedValue(TRANSCRIPT_OK)
     mockClient.getPublicSummary.mockResolvedValue(SUMMARY_OK)
-    render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
+    render(<PublicTaskDetail />)
     await waitFor(() => {
       expect(screen.getByText("某频道")).toBeInTheDocument()
     }, { timeout: 3000 })
@@ -299,7 +298,7 @@ describe("PublicTaskDetail 公开详情页", () => {
     })
     mockClient.getPublicTranscript.mockResolvedValue(TRANSCRIPT_OK)
     mockClient.getPublicSummary.mockResolvedValue(SUMMARY_OK)
-    render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
+    render(<PublicTaskDetail />)
     await waitFor(() => expect(screen.getByText("公开详情标题")).toBeInTheDocument(), { timeout: 3000 })
     // channel_title null → 降级 common.unknown;绝无任何指向 /channel/null 的链接
     const channelNullLinks = screen
@@ -313,7 +312,7 @@ describe("PublicTaskDetail 公开详情页", () => {
     mockClient.getPublicTask.mockResolvedValue(DETAIL_YOUTUBE) // 无 youtube_info 字段
     mockClient.getPublicTranscript.mockResolvedValue(TRANSCRIPT_OK)
     mockClient.getPublicSummary.mockResolvedValue(SUMMARY_OK)
-    render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
+    render(<PublicTaskDetail />)
     await waitFor(() => expect(screen.getByText("公开详情标题")).toBeInTheDocument(), { timeout: 3000 })
     const link = screen.getByRole("link", { name: "explore.viewSource" })
     expect(link).toHaveAttribute("href", "https://www.youtube.com/watch?v=test123")
@@ -336,7 +335,7 @@ describe("PublicTaskDetail 公开详情页", () => {
     })
     mockClient.getPublicTranscript.mockResolvedValue({ task_id: "t1", total: 0, items: [] })
     mockClient.getPublicSummary.mockResolvedValue({ task_id: "t1", total: 0, items: [] })
-    render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
+    render(<PublicTaskDetail />)
     await waitFor(() => expect(screen.getByText("上传任务")).toBeInTheDocument(), { timeout: 3000 })
     expect(screen.queryByRole("link", { name: "explore.viewSource" })).not.toBeInTheDocument()
   })
@@ -345,7 +344,7 @@ describe("PublicTaskDetail 公开详情页", () => {
     mockClient.getPublicTask.mockRejectedValue(new ApiError(40401, "TASK_NOT_FOUND", ""))
     mockClient.getPublicTranscript.mockResolvedValue({ task_id: "t1", total: 0, items: [] })
     mockClient.getPublicSummary.mockResolvedValue({ task_id: "t1", total: 0, items: [] })
-    render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
+    render(<PublicTaskDetail />)
     await waitFor(() => expect(screen.getByText("explore.notFoundTitle")).toBeInTheDocument())
   })
 
@@ -353,7 +352,7 @@ describe("PublicTaskDetail 公开详情页", () => {
     mockClient.getPublicTask.mockRejectedValue(new Error("network"))
     mockClient.getPublicTranscript.mockResolvedValue({ task_id: "t1", total: 0, items: [] })
     mockClient.getPublicSummary.mockResolvedValue({ task_id: "t1", total: 0, items: [] })
-    render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
+    render(<PublicTaskDetail />)
     await waitFor(() => expect(screen.getByText("explore.loadFailed")).toBeInTheDocument())
     expect(screen.getByText("explore.retry")).toBeInTheDocument()
   })
@@ -378,7 +377,7 @@ describe("PublicTaskDetail 公开详情页", () => {
     mockClient.getPublicTask.mockResolvedValue({ ...DETAIL_UPLOAD_BASE, audio_direct_url: DIRECT_AUDIO })
     mockClient.getPublicTranscript.mockResolvedValue(TRANSCRIPT_OK)
     mockClient.getPublicSummary.mockResolvedValue(SUMMARY_OK)
-    render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
+    render(<PublicTaskDetail />)
     await waitFor(() => expect(screen.getByTestId("player-bar")).toBeInTheDocument(), { timeout: 3000 })
 
     fireEvent.click(screen.getByTestId("player-bar"))
@@ -397,7 +396,7 @@ describe("PublicTaskDetail 公开详情页", () => {
     mockClient.getPublicTask.mockResolvedValue(DETAIL_UPLOAD_BASE)
     mockClient.getPublicTranscript.mockResolvedValue(TRANSCRIPT_OK)
     mockClient.getPublicSummary.mockResolvedValue(SUMMARY_OK)
-    render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
+    render(<PublicTaskDetail />)
     await waitFor(() => expect(screen.getByTestId("player-bar")).toBeInTheDocument(), { timeout: 3000 })
 
     fireEvent.click(screen.getByTestId("player-bar"))
@@ -416,7 +415,7 @@ describe("PublicTaskDetail 公开详情页", () => {
     mockClient.getPublicTask.mockResolvedValue({ ...DETAIL_UPLOAD_BASE, audio_direct_url: DIRECT_AUDIO })
     mockClient.getPublicTranscript.mockResolvedValue(TRANSCRIPT_OK)
     mockClient.getPublicSummary.mockResolvedValue(SUMMARY_OK)
-    render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
+    render(<PublicTaskDetail />)
     await waitFor(() => expect(screen.getByTestId("player-bar")).toBeInTheDocument(), { timeout: 3000 })
 
     fireEvent.click(screen.getByTestId("player-bar"))
@@ -460,7 +459,7 @@ describe("PublicTaskDetail 公开详情页", () => {
         },
       ],
     })
-    render(<PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} />)
+    render(<PublicTaskDetail />)
 
     await waitFor(() => {
       expect(screen.getAllByTestId("streaming-image")).toHaveLength(2)
@@ -478,8 +477,6 @@ describe("PublicTaskDetail 公开详情页", () => {
     mockClient.getPublicTranscript.mockResolvedValue(TRANSCRIPT_OK)
     render(
       <PublicTaskDetail
-        isAuthenticated={false}
-        onOpenLogin={() => {}}
         initialDetail={DETAIL_YOUTUBE}
         initialSummary={SUMMARY_OK}
       />
@@ -500,7 +497,7 @@ describe("PublicTaskDetail 公开详情页", () => {
     mockClient.getPublicTranscript.mockResolvedValue(TRANSCRIPT_OK)
     mockClient.getPublicSummary.mockResolvedValue(SUMMARY_OK)
     render(
-      <PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} initialDetail={DETAIL_YOUTUBE} />
+      <PublicTaskDetail initialDetail={DETAIL_YOUTUBE} />
     )
     expect(screen.getByText("公开详情标题")).toBeInTheDocument()
     await waitFor(() => {
@@ -515,7 +512,7 @@ describe("PublicTaskDetail 公开详情页", () => {
     mockClient.getPublicTask.mockResolvedValue(DETAIL_YOUTUBE)
     mockClient.getPublicTranscript.mockResolvedValue(TRANSCRIPT_OK)
     render(
-      <PublicTaskDetail isAuthenticated={false} onOpenLogin={() => {}} initialSummary={SUMMARY_OK} />
+      <PublicTaskDetail initialSummary={SUMMARY_OK} />
     )
     await waitFor(() => {
       expect(screen.getByText("这是公开摘要正文")).toBeInTheDocument()
