@@ -228,7 +228,34 @@
   --app-sidebar-active-glow: 0 14px 28px rgba(96, 165, 250, 0.22);
 }
 
+@utility text-h1 {
+  font-size: 1.875rem;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+@utility text-h2 {
+  font-size: 1.5rem;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+@utility text-h3 {
+  font-size: 1.125rem;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
 @layer base {
+  /* 无障碍：自定义交互元素的焦点环基线。
+     shadcn 原语自带 outline-none(utilities 层优先于 base 层)→ 原语保持自有 ring 不双环；
+     无 outline-none 的自定义元素(如 .sidebar-item)才吃到这条 outline。 */
+  :focus-visible {
+    outline: 2px solid var(--app-primary);
+    outline-offset: 2px;
+  }
   * {
     @apply border-border outline-ring/50;
   }
