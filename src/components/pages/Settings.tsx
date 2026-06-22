@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Header from '@/components/layout/Header';
-import Sidebar from '@/components/layout/Sidebar';
+import { useAuthStore } from '@/store/auth-store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -32,11 +31,6 @@ import {
   CheckCircle2
 } from 'lucide-react';
 
-interface SettingsProps {
-  isAuthenticated?: boolean;
-  onOpenLogin?: () => void;
-  onToggleTheme?: () => void;
-}
 
 type LocalSettings = {
   emailNotifications: boolean;
@@ -90,11 +84,9 @@ const loadLocalSettings = (): LocalSettings => {
   }
 };
 
-export default function Settings({ 
-  isAuthenticated = false, 
-  onOpenLogin = () => {},
-  onToggleTheme = () => {}
-}: SettingsProps) {
+export default function Settings() {
+  const authUser = useAuthStore((s) => s.user);
+  const isAuthenticated = !!authUser;
   const {
     locale,
     theme: currentTheme,
@@ -485,21 +477,7 @@ export default function Settings({
   };
 
   return (
-    <div className="h-screen flex flex-col" style={{ background: "var(--app-bg)" }}>
-      {/* Header */}
-      <Header 
-        isAuthenticated={isAuthenticated} 
-        onOpenLogin={onOpenLogin}
-        onToggleTheme={onToggleTheme}
-      />
-
-      {/* 主体：Sidebar + 主内容区 */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar */}
-        <Sidebar />
-
-        {/* 主内容区 */}
-        <main className="flex-1 overflow-y-auto p-8">
+    <div className="p-8">
           {/* 页面标题和保存按钮 */}
           <div className="flex items-center justify-between mb-8">
             <h2 
@@ -937,8 +915,6 @@ export default function Settings({
               </CardContent>
             </Card>
           </div>
-        </main>
-      </div>
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
