@@ -43,10 +43,9 @@ export function DonutChart({
 
   return (
     <div role="img" aria-label={ariaLabel} className="space-y-3">
-      <div className="relative mx-auto h-[180px] w-full max-w-[220px]">
-        <ChartContainer config={config} className="aspect-square h-[180px]">
+      <div className="relative mx-auto h-[180px] w-[180px]">
+        <ChartContainer config={config} className="aspect-square h-[180px] w-[180px]">
           <PieChart>
-            <ChartTooltip content={<ChartTooltipContent nameKey="key" hideLabel />} />
             <Pie
               data={slices}
               dataKey="value"
