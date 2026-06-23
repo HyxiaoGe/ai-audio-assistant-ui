@@ -654,3 +654,13 @@
     font-size: 0.875rem;
   }
 }
+
+/* UX-32:尊重系统「减少动效」偏好——全局把动画/过渡降到接近 0(author !important 压过组件 inline 动画) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
