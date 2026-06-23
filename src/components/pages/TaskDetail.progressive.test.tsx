@@ -485,6 +485,46 @@ describe("TaskDetail — progressive disclosure", () => {
   }, 20000)
 })
 
+describe("TaskDetail — 头部特征锁定(三分支)", () => {
+  it("失败态渲染返回按钮 + 标题", async () => {
+    apiMock.getTask.mockResolvedValue(task({ status: "failed", error_message: "boom" }))
+    const { ApiError } = await import("@/types/api")
+    apiMock.getSummary.mockRejectedValue(new ApiError(40401, "not found", "tr"))
+    render(<TaskDetail />)
+    await waitFor(
+      () => { expect(screen.getByText("task.error.processingFailed")).toBeInTheDocument() },
+      { timeout: 5000 }
+    )
+    expect(screen.getByText("common.back")).toBeInTheDocument()
+    expect(screen.getByText("演示任务")).toBeInTheDocument()
+  })
+
+  it("处理态渲染返回按钮 + 标题", async () => {
+    apiMock.getTask.mockResolvedValue(task({ status: "extracting", progress: 20 }))
+    const { ApiError } = await import("@/types/api")
+    apiMock.getSummary.mockRejectedValue(new ApiError(40401, "not found", "tr"))
+    render(<TaskDetail />)
+    await waitFor(
+      () => { expect(screen.getByText("task.error.processingTips")).toBeInTheDocument() },
+      { timeout: 5000 }
+    )
+    expect(screen.getByText("common.back")).toBeInTheDocument()
+    expect(screen.getAllByText("演示任务").length).toBeGreaterThanOrEqual(1)
+  })
+
+  it("主分支头部渲染返回 + 删除 + 导出动作", async () => {
+    apiMock.getTask.mockResolvedValue(task({ status: "completed", progress: 100 }))
+    apiMock.getSummary.mockResolvedValue(summaryResp())
+    render(<TaskDetail />)
+    await waitFor(
+      () => { expect(screen.getByText("common.back")).toBeInTheDocument() },
+      { timeout: 5000 }
+    )
+    expect(screen.getByText("common.delete")).toBeInTheDocument()
+    expect(screen.getByText("task.export")).toBeInTheDocument()
+  })
+})
+
 describe("TaskDetail — loadTask 三请求并发", () => {
   it("getTask 尚未返回时 transcript/summary 已同拍发出(无串行瀑布)", async () => {
     // getTask 受控挂起:断言它 resolve 前另两路已发出 = 三请求并发,而非旧的串行瀑布

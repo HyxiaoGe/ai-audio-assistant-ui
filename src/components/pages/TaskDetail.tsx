@@ -5,7 +5,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useAuthStore } from '@/store/auth-store';
 import { notifyError, notifySuccess } from '@/lib/notify';
-import { AlertCircle, ArrowLeft, FileText, Info, Lightbulb, Music } from 'lucide-react';
+import { AlertCircle, FileText, Info, Lightbulb, Music } from 'lucide-react';
 import { useUIStore } from '@/store/ui-store';
 import { Button } from '@/components/ui/button';
 import {
@@ -24,6 +24,7 @@ import { type ActionItem, parseActionItems, parseSummaryLines } from '@/lib/summ
 import { ActionItemToggle } from '@/components/task/ActionItemToggle';
 import { ExportMenu } from '@/components/task/ExportMenu';
 import { TaskVisibilityToggle } from '@/components/task/TaskVisibilityToggle';
+import { TaskDetailHeader } from '@/components/task/TaskDetailHeader';
 import { resolveSummaryStreamBaseUrl, attachSseServerErrorListener, createSummaryStreamErrorHandler } from '@/lib/summary-stream';
 import { createStreamThrottle } from '@/lib/stream-throttle';
 import ProcessingState from '@/components/common/ProcessingState';
@@ -1863,28 +1864,11 @@ export default function TaskDetail() {
   if (task.status === 'failed') {
     return (
       <div className="h-full flex flex-col overflow-hidden">
-            {/* Title Bar */}
-            <div
-              className="flex items-center justify-between px-6 border-b"
-              style={{ height: '64px', borderColor: 'var(--app-glass-border)' }}
-            >
-              {/* Left: Back Button */}
-              <button
-                onClick={handleBackToTasks}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer text-[var(--app-text-muted)] transition-all duration-150 hover:bg-[var(--app-surface-alt)] hover:text-[var(--app-text)] active:scale-95 active:bg-[var(--app-primary-soft)]"
-              >
-                <ArrowLeft className="w-5 h-5" />
-                <span className="text-sm" style={{ fontWeight: 500 }}>{t("common.back")}</span>
-              </button>
-
-              {/* Center: Title */}
-              <h1 className="text-xl" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
-                {task.title}
-              </h1>
-
-              {/* Right: Empty space for balance */}
-              <div style={{ width: '140px' }}></div>
-            </div>
+            <TaskDetailHeader
+              title={task.title}
+              onBack={handleBackToTasks}
+              right={<div style={{ width: '140px' }} />}
+            />
 
             <div className="flex-1 flex flex-col items-center justify-center px-6 py-8">
               <div
@@ -1922,32 +1906,12 @@ export default function TaskDetail() {
   if (isProcessingTask) {
     return (
       <div className="h-full flex flex-col overflow-hidden" style={{ background: 'var(--app-page-gradient)' }}>
-            {/* Title Bar */}
-            <div
-              className="flex items-center justify-between px-6 border-b"
-              style={{ 
-                height: '64px', 
-                borderColor: 'var(--app-glass-border)',
-                background: 'var(--app-glass-bg)'
-              }}
-            >
-              {/* Left: Back Button */}
-              <button
-                onClick={handleBackToTasks}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer text-[var(--app-text-muted)] transition-all duration-150 hover:bg-[var(--app-surface-alt)] hover:text-[var(--app-text)] active:scale-95 active:bg-[var(--app-primary-soft)]"
-              >
-                <ArrowLeft className="w-5 h-5" />
-                <span className="text-sm" style={{ fontWeight: 500 }}>{t("common.back")}</span>
-              </button>
-
-              {/* Center: Title */}
-              <h1 className="text-xl" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
-                {task.title}
-              </h1>
-
-              {/* Right: Empty space for balance */}
-              <div style={{ width: '100px' }}></div>
-            </div>
+            <TaskDetailHeader
+              withBackground
+              title={task.title}
+              onBack={handleBackToTasks}
+              right={<div style={{ width: '100px' }} />}
+            />
 
             {/* Main Content with gradient background */}
             <div className="flex-1 flex flex-col items-center justify-center px-6 py-8">
@@ -2023,53 +1987,37 @@ export default function TaskDetail() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-          {/* Title Bar */}
-          <div
-            className="flex items-center justify-between px-6 border-b"
-            style={{ height: '64px', borderColor: 'var(--app-glass-border)' }}
-          >
-            {/* Left: Back Button */}
-            <button
-              onClick={handleBackToTasks}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer text-[var(--app-text-muted)] transition-all duration-150 hover:bg-[var(--app-surface-alt)] hover:text-[var(--app-text)] active:scale-95 active:bg-[var(--app-primary-soft)]"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              <span className="text-sm" style={{ fontWeight: 500 }}>{t("common.back")}</span>
-            </button>
-
-            {/* Center: Title */}
-            <h1 className="text-xl" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
-              {task.title}
-            </h1>
-
-            <div className="flex items-center gap-3">
-              <TaskVisibilityToggle
-                taskId={task.id}
-                status={task.status}
-                isPublic={Boolean(task.is_public)}
-                onChanged={(isPublic, publishedAt) =>
-                  setTask((prev) => (prev ? { ...prev, is_public: isPublic, published_at: publishedAt } : prev))
-                }
-              />
-              <button
-                onClick={() => setDeleteOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors hover:bg-[var(--app-danger-bg-soft)]"
-                style={{ borderColor: 'var(--app-danger-border)', color: 'var(--app-danger)' }}
-              >
-                <span className="text-sm" style={{ fontWeight: 500 }}>{t("common.delete")}</span>
-              </button>
-
-              {/* Right: Export */}
-              <ExportMenu
-                label={t("task.export")}
-                items={[
-                  { key: "pdf", label: t("task.exportPdf") },
-                  { key: "word", label: t("task.exportWord") },
-                  { key: "markdown", label: t("task.exportMarkdown") },
-                ]}
-              />
-            </div>
-          </div>
+          <TaskDetailHeader
+            title={task.title}
+            onBack={handleBackToTasks}
+            right={
+              <div className="flex items-center gap-3">
+                <TaskVisibilityToggle
+                  taskId={task.id}
+                  status={task.status}
+                  isPublic={Boolean(task.is_public)}
+                  onChanged={(isPublic, publishedAt) =>
+                    setTask((prev) => (prev ? { ...prev, is_public: isPublic, published_at: publishedAt } : prev))
+                  }
+                />
+                <button
+                  onClick={() => setDeleteOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors hover:bg-[var(--app-danger-bg-soft)]"
+                  style={{ borderColor: 'var(--app-danger-border)', color: 'var(--app-danger)' }}
+                >
+                  <span className="text-sm" style={{ fontWeight: 500 }}>{t("common.delete")}</span>
+                </button>
+                <ExportMenu
+                  label={t("task.export")}
+                  items={[
+                    { key: "pdf", label: t("task.exportPdf") },
+                    { key: "word", label: t("task.exportWord") },
+                    { key: "markdown", label: t("task.exportMarkdown") },
+                  ]}
+                />
+              </div>
+            }
+          />
 
           {/* Player Section - 进度条逐帧订阅 currentTime，下沉到 PlayerBarContainer 叶子组件，避免父组件每秒重渲染 */}
           <PlayerBarContainer
