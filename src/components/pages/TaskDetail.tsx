@@ -7,15 +7,13 @@ import { useAuthStore } from '@/store/auth-store';
 import { notifyError, notifySuccess } from '@/lib/notify';
 import { FileText, Lightbulb } from 'lucide-react';
 import { useUIStore } from '@/store/ui-store';
-import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
-  DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { DeleteTaskDialog } from '@/components/task/DeleteTaskDialog';
 import TabSwitch from '@/components/task/TabSwitch';
 import { PlayerBarContainer } from '@/components/task/PlayerBarContainer';
 import { TranscriptList } from '@/components/task/TranscriptList';
@@ -2350,47 +2348,13 @@ export default function TaskDetail() {
               </Dialog>
             </div>
           </div>
-      <Dialog
+      <DeleteTaskDialog
         open={deleteOpen}
-        onOpenChange={(open) => {
-          if (!open && !isDeleting) {
-            setDeleteOpen(false);
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("task.deleteConfirmTitle")}</DialogTitle>
-            <DialogDescription>
-              {t("task.deleteConfirmDesc")}
-              {task?.title && (
-                <span
-                  className="mt-2 block text-sm font-medium"
-                  style={{ color: "var(--app-text)" }}
-                >
-                  {task.title}
-                </span>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="secondary"
-              onClick={() => setDeleteOpen(false)}
-              disabled={isDeleting}
-            >
-              {t("common.cancel")}
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteTask}
-              disabled={isDeleting}
-            >
-              {isDeleting ? t("task.deleteProcessing") : t("common.delete")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        isDeleting={isDeleting}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={handleDeleteTask}
+        title={task.title}
+      />
       {showCleanupToast && (
         <RetryCleanupToast
           failedCount={failedTaskIds.length}

@@ -806,3 +806,20 @@ describe("TaskDetail — 处理态内容特征锁定", () => {
     expect(screen.getAllByText("演示任务").length).toBeGreaterThanOrEqual(2)
   })
 })
+
+describe("TaskDetail — 删除确认弹窗特征锁定", () => {
+  it("点击删除按钮后弹出确认弹窗", async () => {
+    apiMock.getTask.mockResolvedValue(task({ status: "completed", progress: 100 }))
+    apiMock.getSummary.mockResolvedValue(summaryResp())
+    render(<TaskDetail />)
+    await waitFor(
+      () => { expect(screen.getByText("common.delete")).toBeInTheDocument() },
+      { timeout: 5000 }
+    )
+    fireEvent.click(screen.getByText("common.delete"))
+    await waitFor(() => {
+      expect(screen.getByText("task.deleteConfirmTitle")).toBeInTheDocument()
+    })
+    expect(screen.getByText("task.deleteConfirmDesc")).toBeInTheDocument()
+  })
+})
