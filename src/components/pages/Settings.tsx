@@ -26,25 +26,19 @@ import type { AsrUserFreeQuotaResponse, UserPreferences, UserPreferencesUpdateRe
 import {
   Globe,
   Palette,
-  Bell,
   Save,
-  CheckCircle2
+  CheckCircle2,
+  Loader2
 } from 'lucide-react';
 
 
 type LocalSettings = {
-  emailNotifications: boolean;
-  pushNotifications: boolean;
   defaultLanguage: string;
-  summaryDetail: string;
   playbackBehavior: "keep" | "switch" | "auto";
 };
 
 const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
-  emailNotifications: true,
-  pushNotifications: false,
   defaultLanguage: "auto",
-  summaryDetail: "medium",
   playbackBehavior: "keep",
 };
 
@@ -54,10 +48,7 @@ const loadLocalSettings = (): LocalSettings => {
   if (!saved) return DEFAULT_LOCAL_SETTINGS;
   try {
     const parsed = JSON.parse(saved) as Partial<LocalSettings> & {
-      emailNotifications?: boolean;
-      pushNotifications?: boolean;
       defaultLanguage?: string;
-      summaryDetail?: string;
       playbackBehavior?: "keep" | "switch" | "auto";
     };
     const normalizedDefaultLanguage =
@@ -67,16 +58,7 @@ const loadLocalSettings = (): LocalSettings => {
           ? "en"
           : parsed.defaultLanguage;
     return {
-      emailNotifications:
-        typeof parsed.emailNotifications === "boolean"
-          ? parsed.emailNotifications
-          : DEFAULT_LOCAL_SETTINGS.emailNotifications,
-      pushNotifications:
-        typeof parsed.pushNotifications === "boolean"
-          ? parsed.pushNotifications
-          : DEFAULT_LOCAL_SETTINGS.pushNotifications,
       defaultLanguage: normalizedDefaultLanguage || DEFAULT_LOCAL_SETTINGS.defaultLanguage,
-      summaryDetail: parsed.summaryDetail || DEFAULT_LOCAL_SETTINGS.summaryDetail,
       playbackBehavior: parsed.playbackBehavior || DEFAULT_LOCAL_SETTINGS.playbackBehavior,
     };
   } catch {
@@ -98,7 +80,7 @@ export default function Settings() {
     setHourCycle,
   } = useSettings();
   const [localSettings, setLocalSettings] = useState<LocalSettings>(() => loadLocalSettings());
-  const [saved, setSaved] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<"clearTasks" | "deleteAccount" | "resetSettings" | null>(null);
   const [accountStats, setAccountStats] = useState<{
@@ -131,10 +113,7 @@ export default function Settings() {
   const timeZoneState = timeZone;
   const hourCycleState = hourCycle;
   const {
-    emailNotifications,
-    pushNotifications,
     defaultLanguage: defaultLanguageState,
-    summaryDetail: summaryDetailState,
     playbackBehavior,
   } = localSettings;
 
@@ -250,13 +229,15 @@ export default function Settings() {
     applyPreferencesRef.current = applyPreferences;
   });
 
-  const updatePreferences = useCallback(async (payload: UserPreferencesUpdateRequest) => {
-    if (!isAuthenticated) return;
+  const updatePreferences = useCallback(async (payload: UserPreferencesUpdateRequest): Promise<boolean> => {
+    if (!isAuthenticated) return false;
     try {
       const updated = await client.updateUserPreferences(payload);
       applyPreferences(updated);
+      return true;
     } catch {
       notifyError(t("settings.preferencesSaveFailed"));
+      return false;
     }
   }, [applyPreferences, client, isAuthenticated, t]);
 
@@ -390,20 +371,6 @@ export default function Settings() {
     });
   };
 
-  const handleSummaryDetailChange = (value: string) => {
-    setLocalSettings((prev) => ({ ...prev, summaryDetail: value }));
-    persistLocalSettings({ summaryDetail: value });
-    const label =
-      value === "brief"
-        ? t("settings.summaryBrief")
-        : value === "detailed"
-          ? t("settings.summaryDetailed")
-          : t("settings.summaryMedium");
-    notifyInfo(t("settings.summaryDetailSelected", { value: label }), {
-      persist: false,
-    });
-  };
-
   const handlePlaybackBehaviorChange = (value: "keep" | "switch" | "auto") => {
     setLocalSettings((prev) => ({ ...prev, playbackBehavior: value }));
     persistLocalSettings({ playbackBehavior: value });
@@ -425,35 +392,14 @@ export default function Settings() {
     });
   };
 
-  const handleEmailToggle = (checked: boolean) => {
-    setLocalSettings((prev) => ({ ...prev, emailNotifications: checked }));
-    persistLocalSettings({ emailNotifications: checked });
-    notifyInfo(
-      checked ? t("settings.emailNotificationsEnabled") : t("settings.emailNotificationsDisabled"),
-      { persist: false }
-    );
-  };
-
-  const handlePushToggle = (checked: boolean) => {
-    setLocalSettings((prev) => ({ ...prev, pushNotifications: checked }));
-    persistLocalSettings({ pushNotifications: checked });
-    notifyInfo(
-      checked ? t("settings.pushNotificationsEnabled") : t("settings.pushNotificationsDisabled"),
-      { persist: false }
-    );
-  };
-
-  const handleSave = () => {
-    // 保存设置到localStorage
+  const handleSave = async () => {
+    // 本地外观立即应用（纯客户端态，不被服务端阻塞）
     localStorage.setItem('settings', JSON.stringify({
       language: languageState,
       theme: themeState,
       timeZone: timeZoneState,
       hourCycle: hourCycleState,
-      emailNotifications,
-      pushNotifications,
       defaultLanguage: defaultLanguageState,
-      summaryDetail: summaryDetailState,
       playbackBehavior
     }));
     setLocale(languageState);
@@ -461,7 +407,14 @@ export default function Settings() {
     setTimeZone(timeZoneState);
     setHourCycle(hourCycleState as "auto" | "h12" | "h23");
 
-    void updatePreferences({
+    if (!isAuthenticated) {
+      setSaveState("success");
+      setTimeout(() => setSaveState("idle"), 3000);
+      return;
+    }
+
+    setSaveState("saving");
+    const ok = await updatePreferences({
       task_defaults: {
         language: defaultLanguageState as "auto" | "zh" | "en",
         enable_speaker_diarization: speakerDiarizationEnabled,
@@ -471,9 +424,8 @@ export default function Settings() {
         timezone: timeZoneState,
       },
     });
-    
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+    setSaveState(ok ? "success" : "error");
+    setTimeout(() => setSaveState("idle"), 3000);
   };
 
   return (
@@ -488,18 +440,31 @@ export default function Settings() {
             </h2>
             <Button
               onClick={handleSave}
-              disabled={saved}
+              disabled={saveState === "saving" || saveState === "success"}
               style={{
-                background: saved
-                  ? "var(--app-success)"
-                  : "var(--app-action-gradient)"
+                background:
+                  saveState === "success"
+                    ? "var(--app-success)"
+                    : saveState === "error"
+                      ? "var(--app-danger)"
+                      : "var(--app-action-gradient)"
               }}
               className="text-white hover:opacity-90 transition-opacity"
             >
-              {saved ? (
+              {saveState === "saving" ? (
+                <>
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                  {t("common.saving")}
+                </>
+              ) : saveState === "success" ? (
                 <>
                   <CheckCircle2 className="w-5 h-5 mr-2" />
                   {t("common.saved")}
+                </>
+              ) : saveState === "error" ? (
+                <>
+                  <Save className="w-5 h-5 mr-2" />
+                  {t("settings.saveActionFailed")}
                 </>
               ) : (
                 <>
@@ -601,50 +566,6 @@ export default function Settings() {
             </div>
               </CardContent>
             </Card>
-            {/* Notification Settings */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Bell className="w-5 h-5" />
-                  {t("settings.notificationsTitle")}
-                </CardTitle>
-                <CardDescription>
-                  {t("settings.notificationsDesc")}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <Label htmlFor="email-notifications">{t("settings.emailNotifications")}</Label>
-                    <p className="text-sm text-[var(--app-text-muted)]">
-                      {t("settings.emailNotificationsDesc")}
-                    </p>
-                  </div>
-                  <Switch
-                    id="email-notifications"
-                    checked={emailNotifications}
-                    onCheckedChange={handleEmailToggle}
-                  />
-                </div>
-
-                <Separator />
-
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <Label htmlFor="push-notifications">{t("settings.pushNotifications")}</Label>
-                    <p className="text-sm text-[var(--app-text-muted)]">
-                      {t("settings.pushNotificationsDesc")}
-                    </p>
-                  </div>
-                  <Switch
-                    id="push-notifications"
-                    checked={pushNotifications}
-                    onCheckedChange={handlePushToggle}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
             {/* Processing Settings */}
             <Card>
               <CardHeader>
@@ -689,24 +610,6 @@ export default function Settings() {
                   />
                 </div>
 
-                <Separator />
-
-                <div className="space-y-2">
-                  <Label>{t("settings.summaryDetail")}</Label>
-                  <Select value={summaryDetailState} onValueChange={handleSummaryDetailChange}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="brief">{t("settings.summaryBrief")}</SelectItem>
-                      <SelectItem value="medium">{t("settings.summaryMedium")}</SelectItem>
-                      <SelectItem value="detailed">{t("settings.summaryDetailed")}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-sm text-[var(--app-text-muted)]">
-                    {t("settings.summaryDetailDesc")}
-                  </p>
-                </div>
               </CardContent>
             </Card>
 

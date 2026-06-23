@@ -526,6 +526,7 @@
   "settings": {
     "title": "Settings",
     "saveAction": "Save settings",
+    "saveActionFailed": "Save failed",
     "appearanceTitle": "Appearance",
     "appearanceDesc": "Customize language and theme",
     "languageLabel": "Language",
