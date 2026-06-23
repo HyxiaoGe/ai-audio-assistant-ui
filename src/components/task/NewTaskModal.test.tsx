@@ -278,3 +278,24 @@ describe("NewTaskModal a11y (controls)", () => {
     expect(panel).toHaveAttribute("aria-labelledby", "tab-upload")
   })
 })
+
+describe("NewTaskModal advanced 折叠 aria", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockClient.getLLMModels.mockResolvedValue({ models: [] })
+    mockClient.getSummaryStyles.mockResolvedValue({ styles: [] })
+    mockClient.getUserPreferences.mockResolvedValue({ task_defaults: {} })
+  })
+
+  it("折叠按钮 aria-expanded 随 showAdvanced 切换,aria-controls 指向折叠区", async () => {
+    render(<NewTaskModal isOpen={true} onClose={() => {}} />)
+    const toggle = await screen.findByRole("button", { name: "newTask.advancedOptions" })
+    // 默认 showAdvanced=true
+    expect(toggle).toHaveAttribute("aria-expanded", "true")
+    expect(toggle).toHaveAttribute("aria-controls", "newtask-advanced-panel")
+    expect(document.getElementById("newtask-advanced-panel")).not.toBeNull()
+    // 点击收起
+    fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute("aria-expanded", "false")
+  })
+})

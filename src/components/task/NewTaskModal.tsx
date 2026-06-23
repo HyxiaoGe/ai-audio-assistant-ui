@@ -547,6 +547,8 @@ export default function NewTaskModal({
             <div className="space-y-4">
               <button
                 onClick={() => setShowAdvanced(!showAdvanced)}
+                aria-expanded={showAdvanced}
+                aria-controls="newtask-advanced-panel"
                 className="flex items-center gap-2 text-sm hover:opacity-70 transition-opacity"
                 style={{ color: 'var(--app-text-muted)' }}
               >
@@ -559,7 +561,7 @@ export default function NewTaskModal({
               </button>
 
               {showAdvanced && (
-                <div className="border rounded-lg p-6 space-y-4" style={{ borderColor: 'var(--app-glass-border)', background: 'var(--app-glass-bg)' }}>
+                <div id="newtask-advanced-panel" className="border rounded-lg p-6 space-y-4" style={{ borderColor: 'var(--app-glass-border)', background: 'var(--app-glass-bg)' }}>
                   {/* Summary Model */}
                   <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                     <label className="text-sm sm:w-32" style={{ color: 'var(--app-text-muted)' }}>
