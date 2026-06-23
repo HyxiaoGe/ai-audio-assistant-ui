@@ -791,3 +791,18 @@ describe("TaskDetail — 失败卡片体特征锁定", () => {
     expect(screen.getByText("task.retryProcessing")).toBeInTheDocument()
   })
 })
+
+describe("TaskDetail — 处理态内容特征锁定", () => {
+  it("处理态渲染文件信息卡与处理提示", async () => {
+    apiMock.getTask.mockResolvedValue(task({ status: "extracting", progress: 20 }))
+    const { ApiError } = await import("@/types/api")
+    apiMock.getSummary.mockRejectedValue(new ApiError(40401, "not found", "tr"))
+    render(<TaskDetail />)
+    await waitFor(
+      () => { expect(screen.getByText("task.error.processingTips")).toBeInTheDocument() },
+      { timeout: 5000 }
+    )
+    // 标题在头部 h1 + 文件信息卡 h3 各一处
+    expect(screen.getAllByText("演示任务").length).toBeGreaterThanOrEqual(2)
+  })
+})

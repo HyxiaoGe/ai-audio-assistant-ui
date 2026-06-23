@@ -5,7 +5,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useAuthStore } from '@/store/auth-store';
 import { notifyError, notifySuccess } from '@/lib/notify';
-import { FileText, Info, Lightbulb, Music } from 'lucide-react';
+import { FileText, Lightbulb } from 'lucide-react';
 import { useUIStore } from '@/store/ui-store';
 import { Button } from '@/components/ui/button';
 import {
@@ -28,7 +28,7 @@ import { TaskDetailHeader } from '@/components/task/TaskDetailHeader';
 import { TaskFailedPanel } from '@/components/task/TaskFailedPanel';
 import { resolveSummaryStreamBaseUrl, attachSseServerErrorListener, createSummaryStreamErrorHandler } from '@/lib/summary-stream';
 import { createStreamThrottle } from '@/lib/stream-throttle';
-import ProcessingState from '@/components/common/ProcessingState';
+import { TaskProcessingPanel } from '@/components/task/TaskProcessingPanel';
 import ErrorState from '@/components/common/ErrorState';
 import { ProvenanceBadge } from '@/components/common/ProvenanceBadge';
 import { formatAsrProvenance } from '@/lib/provenance';
@@ -1886,69 +1886,12 @@ export default function TaskDetail() {
               right={<div style={{ width: '100px' }} />}
             />
 
-            {/* Main Content with gradient background */}
-            <div className="flex-1 flex flex-col items-center justify-center px-6 py-8">
-              {/* 文件信息卡片 */}
-              <div 
-                className="w-full mb-6 p-4 rounded-lg border"
-                style={{
-                  maxWidth: '480px',
-                  background: 'var(--app-glass-bg)',
-                  backdropFilter: 'blur(10px)',
-                  borderColor: 'var(--app-glass-border)'
-                }}
-              >
-                <div className="flex items-start gap-3">
-                  <div 
-                    className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center"
-                    style={{ background: 'var(--app-primary-soft-2)' }}
-                  >
-                    <Music className="w-5 h-5" style={{ color: 'var(--app-primary)' }} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-sm truncate" style={{ fontWeight: 600, color: 'var(--app-text-strong)' }}>
-                      {task.title}
-                    </h3>
-                    {infoItems.length > 0 && (
-                      <div className="flex items-center gap-3 mt-1">
-                        {infoItems.map((item, index) => (
-                          <span key={`${item}-${index}`} className="text-xs flex items-center gap-3" style={{ color: 'var(--app-text-subtle)' }}>
-                            {item}
-                            {index < infoItems.length - 1 && (
-                              <span className="text-xs" style={{ color: 'var(--app-text-faint)' }}>·</span>
-                            )}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Processing State */}
-              <ProcessingState
-                progress={progress}
-                estimatedTime={getEstimatedTime()}
-                status={task?.status}
-                sourceType={task?.source_type}
-              />
-
-              {/* 底部提示信息 */}
-              <div 
-                className="w-full mt-6 text-center"
-                style={{ maxWidth: '480px' }}
-              >
-                <div 
-                  className="flex items-start gap-2 p-4 rounded-lg"
-                  style={{ background: 'var(--app-primary-soft-2)' }}
-                >
-                  <Info className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: 'var(--app-primary)' }} />
-                  <p className="text-xs text-left" style={{ color: 'var(--app-text-muted)', lineHeight: '1.5' }}>
-                    {t("task.error.processingTips")}
-                  </p>
-                </div>
-              </div>
-            </div>
+            <TaskProcessingPanel
+              task={task}
+              infoItems={infoItems}
+              progress={progress}
+              estimatedTime={getEstimatedTime()}
+            />
       </div>
     );
   }
