@@ -42,4 +42,19 @@ describe("RetryCleanupToast", () => {
     expect(onCleanup).toHaveBeenCalledTimes(1)
     expect(onDismiss).toHaveBeenCalledTimes(1)
   })
+
+  it("用 lucide 图标(AlertTriangle + X)而非手写 svg", () => {
+    const { container } = render(
+      <RetryCleanupToast
+        failedCount={2}
+        isCleaning={false}
+        onCleanup={() => {}}
+        onDismiss={() => {}}
+      />
+    )
+    // 警示三角 + 关闭 X 两个 lucide 图标
+    expect(container.querySelectorAll("svg.lucide")).toHaveLength(2)
+    // 不再有手写三角路径
+    expect(container.querySelector('path[d^="M10.29"]')).toBeNull()
+  })
 })

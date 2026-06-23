@@ -5,7 +5,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useAuthStore } from '@/store/auth-store';
 import { notifyError, notifySuccess } from '@/lib/notify';
-import { ArrowLeft, FileText, Lightbulb } from 'lucide-react';
+import { AlertCircle, ArrowLeft, FileText, Info, Lightbulb, Music } from 'lucide-react';
 import { useUIStore } from '@/store/ui-store';
 import { Button } from '@/components/ui/button';
 import {
@@ -1896,11 +1896,7 @@ export default function TaskDetail() {
                     className="w-12 h-12 rounded-full flex items-center justify-center"
                     style={{ background: 'var(--app-danger-bg)', color: 'var(--app-danger)' }}
                   >
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="12" r="10" />
-                      <line x1="12" y1="8" x2="12" y2="12" />
-                      <line x1="12" y1="16" x2="12.01" y2="16" />
-                    </svg>
+                    <AlertCircle className="w-6 h-6" />
                   </div>
                 </div>
                 <h2 className="text-xl mb-2" style={{ fontWeight: 600, color: 'var(--app-danger-deep)' }}>
@@ -1970,9 +1966,7 @@ export default function TaskDetail() {
                     className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center"
                     style={{ background: 'var(--app-primary-soft-2)' }}
                   >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--app-primary)" strokeWidth="2">
-                      <path d="M9 18V5l12-2v13M9 13l12-2" />
-                    </svg>
+                    <Music className="w-5 h-5" style={{ color: 'var(--app-primary)' }} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="text-sm truncate" style={{ fontWeight: 600, color: 'var(--app-text-strong)' }}>
@@ -2011,19 +2005,7 @@ export default function TaskDetail() {
                   className="flex items-start gap-2 p-4 rounded-lg"
                   style={{ background: 'var(--app-primary-soft-2)' }}
                 >
-                  <svg 
-                    className="flex-shrink-0 mt-0.5"
-                    width="16" 
-                    height="16" 
-                    viewBox="0 0 24 24" 
-                    fill="none" 
-                    stroke="var(--app-primary)" 
-                    strokeWidth="2"
-                  >
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="16" x2="12" y2="12" />
-                    <line x1="12" y1="8" x2="12.01" y2="8" />
-                  </svg>
+                  <Info className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: 'var(--app-primary)' }} />
                   <p className="text-xs text-left" style={{ color: 'var(--app-text-muted)', lineHeight: '1.5' }}>
                     {t("task.error.processingTips")}
                   </p>
