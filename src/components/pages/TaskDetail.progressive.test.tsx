@@ -779,6 +779,9 @@ describe("TaskDetail — 模型对比 SSE 特征锁定", () => {
     await waitFor(() => expect(apiMock.activateSummary).toHaveBeenCalledWith(expect.anything(), "s-g"));
     // activate 成功后 getSummary 被再次调用(回写 buildSummaryState),且退出对比模式(对比视图消失)
     await waitFor(() => expect(apiMock.getSummary.mock.calls.length).toBeGreaterThanOrEqual(2));
+    // 退出对比断言:compareMode→false 后 renderCompareView 卸载,activate 按钮消失于 DOM
+    // task.compareActivate 仅在 renderCompareView 内(TaskDetail.tsx:1573),不存在于对比视图外
+    await waitFor(() => expect(screen.queryByText("task.compareActivate")).not.toBeInTheDocument());
   });
 })
 
