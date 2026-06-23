@@ -1010,27 +1010,19 @@ describe("TaskDetail — 摘要面板抽取特征锁定", () => {
 
 describe("TaskDetail — 摘要重生 SSE 特征锁定", () => {
   let restoreEventSource: () => void;
-  let originalScrollTo: typeof Element.prototype.scrollTo;
 
   beforeEach(() => {
     restoreEventSource = installFakeEventSource();
-    // jsdom 未实现 Element.prototype.scrollTo,但 regenerateSummary 在重置时调用
-    // summaryScrollRef.current?.scrollTo(...)——对已挂载 DOM 元素,?.scrollTo 是 undefined
-    // 调用 undefined() → TypeError。scrollSummaryToBottom 也在 rAF 回调里调同一 API;rAF
-    // 可在 afterEach 之后才执行,届时若原型已还原(仍 undefined)同样 throw。
-    // 对策:beforeEach 装 no-op stub,afterEach 先排队一个 rAF——在所有在途 rAF(含
-    // scrollSummaryToBottom)跑完后,下一帧才还原原型,确保 rAF 队列清空期间 scrollTo 有效。
-    originalScrollTo = Element.prototype.scrollTo;
+    // jsdom 未实现 Element.prototype.scrollTo;regenerateSummary 同步调 summaryScrollRef.current?.scrollTo(...)、
+    // scrollSummaryToBottom 又在 rAF 回调里再调一次。装一个 no-op 桩即可(本文件用例不对 scrollTo 做断言)。
+    // 【不】在 afterEach 还原:还原成 jsdom 原值(undefined)会让在途 rAF 回调 undefined() throw 出 unhandled
+    // rejection,而本 describe 不用 fake timers、rAF 是真实的不会被丢弃。本 describe 是文件内最后一个,且
+    // vitest 按测试文件隔离 global,留 no-op 桩不会泄漏到其它文件;每个 beforeEach 重新赋值,幂等安全。
     Element.prototype.scrollTo = vi.fn() as unknown as typeof Element.prototype.scrollTo;
   });
 
   afterEach(() => {
     restoreEventSource?.();
-    // 先排队一帧,让所有在途 rAF(scrollSummaryToBottom 等)在 no-op scrollTo 下跑完,
-    // 再还原原型,避免「还原后仍有 rAF 回调在 undefined() 上 throw」的 unhandled rejection。
-    requestAnimationFrame(() => {
-      Element.prototype.scrollTo = originalScrollTo;
-    });
   });
 
   const oneModel = {
@@ -1043,7 +1035,7 @@ describe("TaskDetail — 摘要重生 SSE 特征锁定", () => {
   async function clickRegenerateOverview() {
     const btn = await screen.findByText("task.summaryRetry");
     await waitFor(() => expect(btn.closest("button")).not.toBeDisabled());
-    fireEvent.click(btn);
+    fireEvent.click(btn.closest("button")!);
   }
 
   it("含图 happy:connected→regenerate POST 一次→started/delta/completed(has_images)文本完成但流保持开→images.* 后关流", async () => {
