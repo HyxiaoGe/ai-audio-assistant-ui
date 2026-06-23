@@ -133,6 +133,7 @@ const apiMock = vi.hoisted(() => ({
   compareSummaries: vi.fn(),
   getSummaryComparison: vi.fn(),
   activateSummary: vi.fn(),
+  regenerateSummary: vi.fn(),
 }))
 vi.mock("@/lib/use-api-client", () => ({
   useAPIClient: () => apiMock,
@@ -223,6 +224,8 @@ beforeEach(() => {
   apiMock.compareSummaries.mockReset()
   apiMock.getSummaryComparison.mockReset()
   apiMock.activateSummary.mockReset()
+  apiMock.regenerateSummary.mockReset()
+  apiMock.regenerateSummary.mockResolvedValue({})
 })
 
 afterEach(() => {
@@ -1002,5 +1005,156 @@ describe("TaskDetail — 摘要面板抽取特征锁定", () => {
     const actionsTabBtn = screen.getByRole("tab", { name: "task.tabs.actions" });
     fireEvent.click(actionsTabBtn);
     expect((await screen.findAllByText("task.tabs.actions")).length).toBeGreaterThan(0);
+  });
+})
+
+describe("TaskDetail — 摘要重生 SSE 特征锁定", () => {
+  let restoreEventSource: () => void;
+
+  beforeEach(() => {
+    restoreEventSource = installFakeEventSource();
+    // jsdom 未实现 Element.prototype.scrollTo;regenerateSummary 同步调 summaryScrollRef.current?.scrollTo(...)、
+    // scrollSummaryToBottom 又在 rAF 回调里再调一次。装一个 no-op 桩即可(本文件用例不对 scrollTo 做断言)。
+    // 【不】在 afterEach 还原:还原成 jsdom 原值(undefined)会让在途 rAF 回调 undefined() throw 出 unhandled
+    // rejection,而本 describe 不用 fake timers、rAF 是真实的不会被丢弃。本 describe 是文件内最后一个,且
+    // vitest 按测试文件隔离 global,留 no-op 桩不会泄漏到其它文件;每个 beforeEach 重新赋值,幂等安全。
+    Element.prototype.scrollTo = vi.fn() as unknown as typeof Element.prototype.scrollTo;
+  });
+
+  afterEach(() => {
+    restoreEventSource?.();
+  });
+
+  const oneModel = {
+    models: [
+      { provider: "gemini", model_id: "gemini-pro", display_name: "Gemini Pro", provider_display: "Google", is_available: true, is_recommended: true, cost_tier: null },
+    ],
+  };
+
+  // overview 重生按钮:非流式态文案 task.summaryRetry(SummaryTabPanel.tsx:168)。
+  async function clickRegenerateOverview() {
+    const btn = await screen.findByText("task.summaryRetry");
+    await waitFor(() => expect(btn.closest("button")).not.toBeDisabled());
+    fireEvent.click(btn.closest("button")!);
+  }
+
+  it("含图 happy:connected→regenerate POST 一次→started/delta/completed(has_images)文本完成但流保持开→images.* 后关流", async () => {
+    apiMock.getTask.mockResolvedValue(task({ status: "completed" }));
+    apiMock.getSummary.mockResolvedValue(summaryResp());
+    apiMock.getLLMModels.mockResolvedValue(oneModel);
+    apiMock.mintStreamTicket.mockResolvedValue({ token: "tkn" });
+
+    render(<TaskDetail />);
+    await clickRegenerateOverview();
+
+    // resolveStreamToken→mintStreamTicket→构造 EventSource(URL 含 task_id/summary_type/token)
+    await waitFor(() => expect(FakeEventSource.last()).toBeDefined());
+    const es = FakeEventSource.last()!;
+    expect(es.url).toContain("/summaries/task-1/stream");
+    expect(es.url).toContain("summary_type=overview");
+    expect(es.url).toContain("token=tkn");
+
+    // connected → triggerRegenerate → 后端 regenerate POST 恰一次
+    act(() => {
+      es.emit("connected");
+    });
+    await waitFor(() => expect(apiMock.regenerateSummary).toHaveBeenCalledTimes(1));
+    expect(apiMock.regenerateSummary).toHaveBeenCalledWith(
+      "task-1",
+      expect.objectContaining({ summary_type: "overview" })
+    );
+
+    // 文本流 + 完成(有图):文本阶段结束(按钮重新可用)但连接保持开等配图
+    act(() => {
+      es.emit("summary.started", {});
+      es.emit("summary.delta", { content: "流式片段" });
+      es.emit("summary.completed", { has_images: true });
+    });
+    // 两阶段完成:summary.completed(has_images) 后文本流结束 → 按钮回到可点(非 disabled),但流未关
+    await waitFor(() => expect(screen.getByText("task.summaryRetry").closest("button")).not.toBeDisabled());
+    expect(es.closed).toBe(false);
+    // completed 触发 getSummary 回写 buildSummaryState(初次 load 1 次 + completed 1 次)
+    await waitFor(() => expect(apiMock.getSummary.mock.calls.length).toBeGreaterThanOrEqual(2));
+
+    // 配图:processing→image.ready(success)把占位换成真图
+    act(() => {
+      es.emit("images.processing", { status: "generating", total: 1 });
+      es.emit("image.ready", {
+        placeholder: "{{IMAGE: 时间轴}}",
+        status: "success",
+        url: "https://img.example/x.png",
+        current: 1,
+        total: 1,
+      });
+    });
+    await waitFor(() =>
+      expect(document.querySelector('img[src*="https://img.example/x.png"]')).not.toBeNull()
+    );
+
+    // images.completed → 关流
+    act(() => {
+      es.emit("images.completed");
+    });
+    await waitFor(() => expect(es.closed).toBe(true));
+  });
+
+  it("无图 happy:summary.completed(has_images:false)→立即关流 + 文本完成 + getSummary 回写", async () => {
+    apiMock.getTask.mockResolvedValue(task({ status: "completed" }));
+    apiMock.getSummary.mockResolvedValue(summaryResp());
+    apiMock.getLLMModels.mockResolvedValue(oneModel);
+    apiMock.mintStreamTicket.mockResolvedValue({ token: "tkn" });
+
+    render(<TaskDetail />);
+    await clickRegenerateOverview();
+    await waitFor(() => expect(FakeEventSource.last()).toBeDefined());
+    const es = FakeEventSource.last()!;
+
+    act(() => {
+      es.emit("connected");
+    });
+    await waitFor(() => expect(apiMock.regenerateSummary).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      es.emit("summary.started", {});
+      es.emit("summary.delta", { content: "流式片段" });
+      es.emit("summary.completed", { has_images: false });
+    });
+    // 无图:summary.completed 立即关流
+    await waitFor(() => expect(es.closed).toBe(true));
+    await waitFor(() => expect(apiMock.getSummary.mock.calls.length).toBeGreaterThanOrEqual(2));
+    await waitFor(() => expect(screen.getByText("task.summaryRetry").closest("button")).not.toBeDisabled());
+  });
+
+  it("无票据兜底:mintStreamTicket 失败→直发 regenerate POST + 不构造 EventSource", async () => {
+    apiMock.getTask.mockResolvedValue(task({ status: "completed" }));
+    apiMock.getSummary.mockResolvedValue(summaryResp());
+    apiMock.getLLMModels.mockResolvedValue(oneModel);
+    apiMock.mintStreamTicket.mockRejectedValue(new Error("no ticket"));
+
+    render(<TaskDetail />);
+    await clickRegenerateOverview();
+
+    // token=null → else 分支:直接 HTTP regenerate + startPolling,绝不构造 EventSource
+    await waitFor(() => expect(apiMock.regenerateSummary).toHaveBeenCalledTimes(1));
+    expect(FakeEventSource.last()).toBeUndefined();
+  });
+
+  it("connected 前传输错误:handleStreamError 幂等补发 regenerate + 关流", async () => {
+    apiMock.getTask.mockResolvedValue(task({ status: "completed" }));
+    apiMock.getSummary.mockResolvedValue(summaryResp());
+    apiMock.getLLMModels.mockResolvedValue(oneModel);
+    apiMock.mintStreamTicket.mockResolvedValue({ token: "tkn" });
+
+    render(<TaskDetail />);
+    await clickRegenerateOverview();
+    await waitFor(() => expect(FakeEventSource.last()).toBeDefined());
+    const es = FakeEventSource.last()!;
+
+    // 流在 connected 之前 onerror:错误处理器先幂等补发 triggerRegenerate 再轮询并关流
+    act(() => {
+      es.emitTransportError();
+    });
+    await waitFor(() => expect(apiMock.regenerateSummary).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(es.closed).toBe(true));
   });
 })
