@@ -2,19 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
-import dynamic from 'next/dynamic';
 import { useAuthStore } from '@/store/auth-store';
 import { notifyError, notifySuccess } from '@/lib/notify';
-import { Lightbulb } from 'lucide-react';
 import { useUIStore } from '@/store/ui-store';
 import { DeleteTaskDialog } from '@/components/task/DeleteTaskDialog';
 import { CompareModelDialog } from '@/components/task/CompareModelDialog';
-import TabSwitch from '@/components/task/TabSwitch';
 import { PlayerBarContainer } from '@/components/task/PlayerBarContainer';
 import { TranscriptList } from '@/components/task/TranscriptList';
 import type { DisplayTranscriptSegment } from '@/lib/transcript-mapping';
 import { type ActionItem, parseActionItems, parseSummaryLines } from '@/lib/summary-parse';
-import { ActionItemToggle } from '@/components/task/ActionItemToggle';
 import { ExportMenu } from '@/components/task/ExportMenu';
 import { TaskVisibilityToggle } from '@/components/task/TaskVisibilityToggle';
 import { TaskDetailHeader } from '@/components/task/TaskDetailHeader';
@@ -27,7 +23,6 @@ import ErrorState from '@/components/common/ErrorState';
 import { ProvenanceBadge } from '@/components/common/ProvenanceBadge';
 import { formatAsrProvenance } from '@/lib/provenance';
 import RetryCleanupToast from '@/components/task/RetryCleanupToast';
-import { SummaryModelSelect } from '@/components/task/SummaryModelSelect';
 import { useAPIClient } from '@/lib/use-api-client';
 import { useGlobalStore } from '@/store/global-store';
 import { setEnsureCurrentMedia, useAudioStore } from '@/store/audio-store';
@@ -63,6 +58,7 @@ import {
 import { useI18n } from '@/lib/i18n-context';
 import { useDateFormatter } from '@/lib/use-date-formatter';
 import { mapApiTranscript as mapApiTranscriptUtil } from '@/lib/transcript-mapping';
+import { SummaryTabPanel } from '@/components/task/SummaryTabPanel';
 
 // 摘要 SSE 流 / 轮询的时间参数（毫秒）。原先散落为魔数，抽成命名常量便于核对与统一。
 const SUMMARY_POLL_INTERVAL_MS = 2000; // 轮询 getSummary 检测版本号变化的间隔
@@ -71,25 +67,6 @@ const SUMMARY_CONNECTION_TIMEOUT_MS = 3000; // 等 SSE connected 事件，超时
 const SUMMARY_IMAGE_TIMEOUT_MS = 90000; // summary 完成后等 images.completed 的上限（60s/张 + 30s 缓冲）
 const SUMMARY_IMAGE_RECONCILE_INTERVAL_MS = 4000; // completed 后图集对账重拉间隔（补 WS image_ready 漏收）
 const SUMMARY_OVERALL_TIMEOUT_MS = 120000; // 整个摘要 / 对比流程的兜底总超时
-
-// MarkdownContent 内含 react-markdown + remark-gfm + rehype-sanitize(约百 KB 级)。
-// 摘要/要点/行动项内容均由异步 API 闸门(首屏渲染时为空、走空状态文案),故这里改 next/dynamic
-// 把这组依赖移出 /tasks/[id] 首屏 JS;懒 chunk 在 API 拉取延迟期并行下载,内容就绪时通常已加载,
-// 无可见闪烁。ssr:false:内容仅在浏览器异步获取后才有,无需服务端渲染。
-const MarkdownContent = dynamic(
-  () => import('@/components/task/MarkdownContent').then((m) => m.MarkdownContent),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex items-center justify-center py-16">
-        <div
-          className="size-4 border-2 rounded-full animate-spin"
-          style={{ borderColor: 'var(--app-primary) transparent var(--app-primary) var(--app-primary)' }}
-        />
-      </div>
-    ),
-  }
-);
 
 interface KeyPoint {
   text: string;
@@ -1963,310 +1940,57 @@ export default function TaskDetail() {
             </div>
 
             {/* Right Column: Summary Panel */}
-            <div className="flex-1 flex flex-col" style={{ maxWidth: '50%' }}>
-              {/* Tab Switch */}
-              <div className="flex justify-center border-b" style={{ borderColor: 'var(--app-glass-border)' }}>
-                <TabSwitch
-                  tabs={summaryTabs}
-                  activeTab={activeTab}
-                  onTabChange={setActiveTab}
+            <SummaryTabPanel
+              tabs={summaryTabs}
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+              scrollRef={summaryScrollRef}
+              llmModels={llmModels}
+              summaryModelUsed={summaryModelUsed}
+              summaryModelSelection={summaryModelSelection}
+              onModelSelectionChange={(type, value) =>
+                setSummaryModelSelection((prev) => ({ ...prev, [type]: value }))
+              }
+              summaryStreaming={summaryStreaming}
+              summaryStreamContent={summaryStreamContent}
+              summaryOverviewMarkdown={summaryOverviewMarkdown}
+              keyPointsMarkdown={keyPointsMarkdown}
+              actionItemsMarkdown={actionItemsMarkdown}
+              keyPoints={keyPoints}
+              actionItems={actionItems}
+              detectedStyleName={detectedStyleName}
+              transcriptStageReached={transcriptStageReached}
+              summaryError={summaryError}
+              imageModelUsed={imageModelUsed}
+              streamingImages={streamingImages}
+              mediaToken={mediaToken}
+              compareMode={compareMode}
+              compareSummaryType={compareSummaryType}
+              renderCompareView={renderCompareView}
+              renderModelProvenance={renderModelProvenance}
+              onRegenerate={regenerateSummary}
+              onOpenCompare={openCompareDialog}
+              onTimeClick={handleTimeClick}
+              onToggleActionItem={toggleActionItem}
+              getSummaryEmptyText={getSummaryEmptyText}
+              t={t}
+              compareDialog={
+                <CompareModelDialog
+                  open={compareDialogOpen}
+                  onOpenChange={setCompareDialogOpen}
+                  modelGroups={modelGroups}
+                  selectedModels={compareSelectedModels}
+                  onToggleModel={toggleCompareModel}
+                  compareError={compareError}
+                  compareLoading={compareLoading}
+                  onStart={() => {
+                    setCompareDialogOpen(false);
+                    startCompare();
+                  }}
+                  t={t}
                 />
-              </div>
-
-              {/* Tab Content */}
-              <div
-                ref={summaryScrollRef}
-                role="tabpanel"
-                id={`tabpanel-${activeTab}`}
-                aria-labelledby={`tab-${activeTab}`}
-                tabIndex={0}
-                className="flex-1 overflow-y-auto p-6"
-              >
-                {/* Summary Tab */}
-                {activeTab === 'summary' && (
-                  <div className="space-y-6">
-                    <div>
-                      <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
-                        <div>
-                          <h3 className="text-lg" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
-                            {t("task.summaryOverview")}
-                          </h3>
-                          <div className="flex items-center gap-2 mt-1">
-                            <p className="text-xs flex items-center gap-1.5" style={{ color: 'var(--app-text-subtle)' }}>
-                              {t("task.summaryModelLabel")}
-                              {renderModelProvenance(summaryModelUsed.overview)}
-                            </p>
-                            <button
-                              onClick={openCompareDialog}
-                              disabled={llmModels.filter((model) => model.is_available).length < 2}
-                              className="text-xs px-2 py-0.5 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                              style={{
-                                background: 'var(--app-glass-bg-strong)',
-                                color: 'var(--app-text)',
-                                border: '1px solid var(--app-glass-border)',
-                              }}
-                            >
-                              {t("task.compareModels")}
-                            </button>
-                          </div>
-                          {detectedStyleName && (
-                            <p className="text-xs mt-1" style={{ color: 'var(--app-text-subtle)' }}>
-                              {t("task.detectedStyle", { style: detectedStyleName })}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <SummaryModelSelect
-                            models={llmModels}
-                            value={summaryModelSelection.overview ?? null}
-                            onChange={(value) =>
-                              setSummaryModelSelection((prev) => ({
-                                ...prev,
-                                overview: value,
-                              }))
-                            }
-                            disabled={summaryStreaming.overview || llmModels.length === 0}
-                            className="text-xs"
-                          />
-                          <button
-                            onClick={() => regenerateSummary('overview')}
-                            disabled={summaryStreaming.overview}
-                            className="text-xs px-3 py-1 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            style={{ background: 'var(--app-primary-soft)', color: 'var(--app-primary)' }}
-                          >
-                            {summaryStreaming.overview ? t("task.summaryRetrying") : t("task.summaryRetry")}
-                          </button>
-                        </div>
-                      </div>
-                      {transcriptStageReached && !summaryOverviewMarkdown && !summaryStreaming.overview ? (
-                        <p className="text-base leading-7" style={{ color: 'var(--app-text-subtle)' }}>
-                          {t("task.summaryGenerating")}
-                        </p>
-                      ) : summaryError && !summaryOverviewMarkdown ? (
-                        // 仅在「尚无已落地的摘要正文」时展示右栏错误。已成功展示过 overview 后，
-                        // 一次瞬时重载错误（如 completed 重载时 getSummary 抖动）不应把已展示内容连带抹掉，
-                        // 与转写「失败不连带已展示内容」同一语义。
-                        <p className="text-base leading-7" style={{ color: 'var(--app-danger)' }}>
-                          {summaryError}
-                        </p>
-                      ) : summaryStreaming.overview && summaryStreamContent.overview ? (
-                        <MarkdownContent content={summaryStreamContent.overview} imageModel={imageModelUsed} streamingImages={streamingImages} mediaToken={mediaToken} />
-                      ) : compareMode && compareSummaryType === "overview" ? (
-                        renderCompareView()
-                      ) : summaryOverviewMarkdown ? (
-                        <MarkdownContent content={summaryOverviewMarkdown} imageModel={imageModelUsed} streamingImages={streamingImages} mediaToken={mediaToken} />
-                      ) : (
-                        <p className="text-base leading-7" style={{ color: 'var(--app-text-subtle)' }}>
-                          {getSummaryEmptyText("overview", "task.summaryEmpty")}
-                        </p>
-                      )}
-                    </div>
-
-                  </div>
-                )}
-
-                {/* Key Points Tab */}
-                {activeTab === 'keypoints' && (
-                  <div className="space-y-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <h3 className="text-lg" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
-                          {t("task.keyPointsTitle")}
-                        </h3>
-                        <div className="flex items-center gap-2 mt-1">
-                          <p className="text-xs flex items-center gap-1.5" style={{ color: 'var(--app-text-subtle)' }}>
-                            {t("task.summaryModelLabel")}
-                            {renderModelProvenance(summaryModelUsed.key_points)}
-                          </p>
-                          <button
-                            onClick={openCompareDialog}
-                            disabled={llmModels.filter((model) => model.is_available).length < 2}
-                            className="text-xs px-2 py-0.5 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            style={{
-                              background: 'var(--app-glass-bg-strong)',
-                              color: 'var(--app-text)',
-                              border: '1px solid var(--app-glass-border)',
-                            }}
-                          >
-                            {t("task.compareModels")}
-                          </button>
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <SummaryModelSelect
-                          models={llmModels}
-                          value={summaryModelSelection.key_points ?? null}
-                          onChange={(value) =>
-                            setSummaryModelSelection((prev) => ({
-                              ...prev,
-                              key_points: value,
-                            }))
-                          }
-                          disabled={summaryStreaming.key_points || llmModels.length === 0}
-                          className="text-xs"
-                        />
-                        <button
-                          onClick={() => regenerateSummary('key_points')}
-                          disabled={summaryStreaming.key_points}
-                          className="text-xs px-3 py-1 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          style={{ background: 'var(--app-primary-soft)', color: 'var(--app-primary)' }}
-                        >
-                          {summaryStreaming.key_points ? t("task.summaryRetrying") : t("task.summaryRetry")}
-                        </button>
-                      </div>
-                    </div>
-                    {summaryStreaming.key_points && summaryStreamContent.key_points ? (
-                      <MarkdownContent content={summaryStreamContent.key_points} streamingImages={streamingImages} mediaToken={mediaToken} />
-                    ) : compareMode && compareSummaryType === "key_points" ? (
-                      renderCompareView()
-                    ) : keyPointsMarkdown ? (
-                      // V1.2 format: Render full Markdown content
-                      <MarkdownContent content={keyPointsMarkdown} streamingImages={streamingImages} mediaToken={mediaToken} />
-                    ) : keyPoints.length > 0 ? (
-                      // Old format with time references
-                      keyPoints.map((point, index) => (
-                          <div key={index} className="flex items-start gap-3">
-                            <div className="flex-shrink-0 mt-1">
-                              <Lightbulb className="w-5 h-5" style={{ color: 'var(--app-warning)' }} />
-                            </div>
-                            <div className="flex-1">
-                              <p className="text-base mb-1" style={{ color: 'var(--app-text)' }}>
-                                {point.text}
-                              </p>
-                              <button
-                                onClick={() => handleTimeClick(point.timeReference)}
-                                className="text-sm hover:underline"
-                                style={{ color: 'var(--app-primary)' }}
-                              >
-                                ↗{point.timeReference} {t("task.keyPointDetail")}
-                              </button>
-                            </div>
-                          </div>
-                        ))
-                    ) : (
-                      <p className="text-base leading-7" style={{ color: 'var(--app-text-subtle)' }}>
-                        {getSummaryEmptyText("key_points", "task.keyPointsEmpty")}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {/* Action Items Tab */}
-                {activeTab === 'actions' && (
-                  <div className="space-y-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <h3 className="text-lg" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
-                          {t("task.tabs.actions")}
-                        </h3>
-                        <div className="flex items-center gap-2 mt-1">
-                          <p className="text-xs flex items-center gap-1.5" style={{ color: 'var(--app-text-subtle)' }}>
-                            {t("task.summaryModelLabel")}
-                            {renderModelProvenance(summaryModelUsed.action_items)}
-                          </p>
-                          <button
-                            onClick={openCompareDialog}
-                            disabled={llmModels.filter((model) => model.is_available).length < 2}
-                            className="text-xs px-2 py-0.5 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            style={{
-                              background: 'var(--app-glass-bg-strong)',
-                              color: 'var(--app-text)',
-                              border: '1px solid var(--app-glass-border)',
-                            }}
-                          >
-                            {t("task.compareModels")}
-                          </button>
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <SummaryModelSelect
-                          models={llmModels}
-                          value={summaryModelSelection.action_items ?? null}
-                          onChange={(value) =>
-                            setSummaryModelSelection((prev) => ({
-                              ...prev,
-                              action_items: value,
-                            }))
-                          }
-                          disabled={summaryStreaming.action_items || llmModels.length === 0}
-                          className="text-xs"
-                        />
-                        <button
-                          onClick={() => regenerateSummary('action_items')}
-                          disabled={summaryStreaming.action_items}
-                          className="text-xs px-3 py-1 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          style={{ background: 'var(--app-primary-soft)', color: 'var(--app-primary)' }}
-                        >
-                          {summaryStreaming.action_items ? t("task.summaryRetrying") : t("task.summaryRetry")}
-                        </button>
-                      </div>
-                    </div>
-                    {summaryStreaming.action_items && summaryStreamContent.action_items ? (
-                      <MarkdownContent content={summaryStreamContent.action_items} streamingImages={streamingImages} mediaToken={mediaToken} />
-                    ) : compareMode && compareSummaryType === "action_items" ? (
-                      renderCompareView()
-                    ) : actionItemsMarkdown ? (
-                      // V1.2 format: Render full Markdown content
-                      <MarkdownContent content={actionItemsMarkdown} streamingImages={streamingImages} mediaToken={mediaToken} />
-                    ) : actionItems.length > 0 ? (
-                      // Old format with task/assignee/deadline structure
-                      actionItems.map((item) => (
-                        <div
-                          key={item.id}
-                          className="flex items-start gap-3 p-3 rounded-lg border transition-colors"
-                          style={{
-                            borderColor: 'var(--app-glass-border)',
-                            background: item.completed ? 'var(--app-glass-bg-strong)' : 'var(--app-glass-bg)'
-                          }}
-                        >
-                          <ActionItemToggle
-                            completed={item.completed}
-                            label={item.task}
-                            onToggle={() => toggleActionItem(item.id)}
-                          />
-                          <div className="flex-1">
-                            <p
-                              className="text-base mb-1"
-                              style={{
-                                color: item.completed ? 'var(--app-text-subtle)' : 'var(--app-text)',
-                                textDecoration: item.completed ? 'line-through' : 'none'
-                              }}
-                            >
-                              {item.task}
-                            </p>
-                            <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--app-text-muted)' }}>
-                              <span>@{item.assignee}</span>
-                              <span>·</span>
-                              <span>{t("task.deadline", { date: item.deadline })}</span>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-base leading-7" style={{ color: 'var(--app-text-subtle)' }}>
-                        {getSummaryEmptyText("action_items", "task.actionItemsEmpty")}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-              </div>
-
-              <CompareModelDialog
-                open={compareDialogOpen}
-                onOpenChange={setCompareDialogOpen}
-                modelGroups={modelGroups}
-                selectedModels={compareSelectedModels}
-                onToggleModel={toggleCompareModel}
-                compareError={compareError}
-                compareLoading={compareLoading}
-                onStart={() => {
-                  setCompareDialogOpen(false);
-                  startCompare();
-                }}
-                t={t}
-              />
-            </div>
+              }
+            />
           </div>
       <DeleteTaskDialog
         open={deleteOpen}

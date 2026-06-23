@@ -859,3 +859,22 @@ describe("TaskDetail — 转写列头特征锁定", () => {
     )
   })
 })
+
+describe("TaskDetail — 摘要面板抽取特征锁定", () => {
+  it("completed 任务:概览 markdown 渲染 + tab 可切到要点/行动项", async () => {
+    apiMock.getTask.mockResolvedValue(task({ status: "completed" }));
+    apiMock.getSummary.mockResolvedValue(summaryResp({ content: "概览正文内容" }));
+    render(<TaskDetail />);
+
+    expect(await screen.findByText("task.tabs.summary")).toBeInTheDocument();
+    expect(await screen.findByText(/概览正文内容/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("task.tabs.keypoints"));
+    expect(await screen.findByText("task.keyPointsTitle")).toBeInTheDocument();
+
+    // actions tab 按钮(role=tab)点击后,至少有一处渲染 task.tabs.actions 文字
+    const actionsTabBtn = screen.getByRole("tab", { name: "task.tabs.actions" });
+    fireEvent.click(actionsTabBtn);
+    expect((await screen.findAllByText("task.tabs.actions")).length).toBeGreaterThan(0);
+  });
+})
