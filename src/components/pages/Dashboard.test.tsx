@@ -52,6 +52,16 @@ describe("Dashboard 零任务软引导", () => {
   })
 })
 
+describe("Dashboard 标题层级", () => {
+  it("页标题是页级 h1 且不含 👋", async () => {
+    mockClient.getTasks.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 5 });
+    render(<Dashboard />);
+    const h1 = screen.getByRole("heading", { level: 1 });
+    expect(h1.textContent).toContain("dashboard.welcome");
+    expect(h1.textContent).not.toContain("👋");
+  });
+});
+
 describe("Dashboard 三态", () => {
   beforeEach(() => { vi.clearAllMocks(); })
 

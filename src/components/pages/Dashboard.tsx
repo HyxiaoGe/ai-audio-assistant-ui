@@ -152,12 +152,12 @@ export default function Dashboard() {
     <div className="p-8">
       {/* 欢迎区域 */}
       <div className="mb-8">
-        <h2
-          className="text-h2"
+        <h1
+          className="text-h1"
           style={{ color: "var(--app-text)" }}
         >
-          {t("dashboard.welcome")}{userName ? `，${userName}` : `，${t("dashboard.friend")}`} 👋
-        </h2>
+          {t("dashboard.welcome")}{userName ? `，${userName}` : `，${t("dashboard.friend")}`}
+        </h1>
       </div>
 
       {/* 新建任务卡片 */}

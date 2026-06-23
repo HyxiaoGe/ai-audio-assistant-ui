@@ -338,6 +338,20 @@ describe("TaskList 服务端转写搜索（替换纯客户端标题过滤）", (
   })
 })
 
+describe("TaskList 标题层级", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockClient.getTasks.mockResolvedValue({ items: [], total: 0 });
+    mockClient.getTaskStatusCounts.mockResolvedValue({ all: 0, processing: 0, completed: 0, failed: 0 });
+  });
+
+  it("页标题是页级 h1", () => {
+    render(<TaskList />);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toContain("tasks.pageTitle");
+  });
+});
+
 describe("TaskList 三态", () => {
   beforeEach(() => {
     vi.clearAllMocks();

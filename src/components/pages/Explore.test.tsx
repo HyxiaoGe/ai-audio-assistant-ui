@@ -33,6 +33,14 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
+describe("Explore 标题层级", () => {
+  it("页标题是页级 h1", async () => {
+    mockClient.getPublicTasks.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 });
+    render(<Explore />);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toContain("explore.pageTitle");
+  });
+});
+
 describe("Explore 公开列表页", () => {
   it("渲染公开任务卡片", async () => {
     mockClient.getPublicTasks.mockResolvedValue({
