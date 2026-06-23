@@ -5,17 +5,13 @@ import { notifyError, notifySuccess } from '@/lib/notify';
 import { resolveStreamToken } from '@/lib/stream-ticket';
 import { resolveSummaryStreamBaseUrl, attachSseServerErrorListener } from '@/lib/summary-stream';
 import { ApiError } from '@/types/api';
+import { SUMMARY_POLL_INTERVAL_MS, SUMMARY_OVERALL_TIMEOUT_MS } from '@/lib/summary-constants';
 import type {
   ComparisonResult,
   SummaryItem,
   SummaryRegenerateType,
   LLMModel,
 } from '@/types/api';
-
-// 与 TaskDetail.tsx 同源的摘要 SSE 流时间参数(毫秒)。本切片为最小爆炸半径,
-// 在此复制两个常量(regenerate 路径的常量声明保持不动,不跨簇改);DRY 合并待 regenerate 切片统一。
-const SUMMARY_POLL_INTERVAL_MS = 2000; // 轮询 getSummaryComparison 间隔
-const SUMMARY_OVERALL_TIMEOUT_MS = 120000; // 对比流程兜底总超时
 
 export interface UseSummaryCompareParams {
   taskId: string | undefined;
