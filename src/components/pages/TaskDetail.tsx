@@ -15,8 +15,6 @@ import { ExportMenu } from '@/components/task/ExportMenu';
 import { TaskVisibilityToggle } from '@/components/task/TaskVisibilityToggle';
 import { TaskDetailHeader } from '@/components/task/TaskDetailHeader';
 import { TaskFailedPanel } from '@/components/task/TaskFailedPanel';
-import { resolveSummaryStreamBaseUrl, attachSseServerErrorListener, createSummaryStreamErrorHandler } from '@/lib/summary-stream';
-import { createStreamThrottle } from '@/lib/stream-throttle';
 import { TaskProcessingPanel } from '@/components/task/TaskProcessingPanel';
 import { TranscriptColumnHeader } from '@/components/task/TranscriptColumnHeader';
 import ErrorState from '@/components/common/ErrorState';
@@ -26,7 +24,6 @@ import RetryCleanupToast from '@/components/task/RetryCleanupToast';
 import { useAPIClient } from '@/lib/use-api-client';
 import { useGlobalStore } from '@/store/global-store';
 import { setEnsureCurrentMedia, useAudioStore } from '@/store/audio-store';
-import { resolveStreamToken } from '@/lib/stream-ticket';
 import { useMediaToken } from '@/lib/media-url';
 import { ApiError } from '@/types/api';
 import { formatDuration } from '@/lib/utils';
@@ -37,14 +34,9 @@ import type {
   SummaryRegenerateType,
   LLMModel,
   StreamingImage,
-  SSEImageReadyEvent,
   SummaryStyleItem,
   TaskStatus,
 } from '@/types/api';
-import {
-  extractPlaceholderDescription,
-  findImagePlaceholders,
-} from '@/lib/image-placeholder';
 import {
   buildStreamingImagesFromSummary,
   buildStreamingImagesFromSummaryOrSeed,
@@ -59,13 +51,10 @@ import { useDateFormatter } from '@/lib/use-date-formatter';
 import { mapApiTranscript as mapApiTranscriptUtil } from '@/lib/transcript-mapping';
 import { SummaryTabPanel } from '@/components/task/SummaryTabPanel';
 import { useSummaryCompare } from '@/hooks/use-summary-compare';
+import { useSummaryRegeneration } from '@/hooks/use-summary-regeneration';
 import {
-  SUMMARY_POLL_INTERVAL_MS,
-  SUMMARY_STREAM_FLUSH_MS,
-  SUMMARY_CONNECTION_TIMEOUT_MS,
   SUMMARY_IMAGE_TIMEOUT_MS,
   SUMMARY_IMAGE_RECONCILE_INTERVAL_MS,
-  SUMMARY_OVERALL_TIMEOUT_MS,
 } from '@/lib/summary-constants';
 
 interface KeyPoint {
@@ -131,47 +120,11 @@ export default function TaskDetail() {
     action_items: null,
   });
   const [imageModelUsed, setImageModelUsed] = useState<string | null>(null);
-  const [summaryStreaming, setSummaryStreaming] = useState({
-    overview: false,
-    key_points: false,
-    action_items: false,
-  });
-  const [summaryStreamContent, setSummaryStreamContent] = useState<Record<SummaryRegenerateType, string>>({
-    overview: "",
-    key_points: "",
-    action_items: "",
-  });
   const [summaryVersions, setSummaryVersions] = useState<Record<SummaryRegenerateType, number>>({
     overview: 0,
     key_points: 0,
     action_items: 0,
   });
-  const summaryStreamRef = useRef<Record<SummaryRegenerateType, EventSource | null>>({
-    overview: null,
-    key_points: null,
-    action_items: null,
-  });
-  const summaryBufferRef = useRef<Record<SummaryRegenerateType, string>>({
-    overview: '',
-    key_points: '',
-    action_items: '',
-  });
-  const summaryPollRef = useRef<Record<SummaryRegenerateType, number | null>>({
-    overview: null,
-    key_points: null,
-    action_items: null,
-  });
-  // SSE 流式 delta 帧合并节流器:useState 惰性初始化成单例(整个生命周期同一张定时器表,
-  // 卸载清理 effect 可统一 cancelAll,故须在该 effect 之前声明)。flush 实现依赖下方才定义的
-  // updateSummaryFromStream,经 ref 转发——定时器到点时总是调到最新闭包;真正的 flush 语义
-  // 与动机见 flushSummaryStream 定义处。
-  const flushSummaryStreamRef = useRef<(summaryType: SummaryRegenerateType) => void>(() => {});
-  const [summaryStreamThrottle] = useState(() =>
-    createStreamThrottle<SummaryRegenerateType>(
-      (summaryType) => flushSummaryStreamRef.current(summaryType),
-      SUMMARY_STREAM_FLUSH_MS
-    )
-  );
   // State for streaming images in summary (for overview only)
   const [streamingImages, setStreamingImages] = useState<Map<string, StreamingImage>>(new Map());
   const imagesTimeoutRef = useRef<number | null>(null);
@@ -282,6 +235,25 @@ export default function TaskDetail() {
     getModelKey, getCompareStatus, getModelCompareLabel,
     setCompareDialogOpen, setCompareActiveModel,
   } = useSummaryCompare({ taskId: id, llmModels, activeTab, buildSummaryState });
+
+  const { summaryStreaming, summaryStreamContent, regenerateSummary } = useSummaryRegeneration({
+    taskId: id,
+    llmModels,
+    summaryModelSelection,
+    summaryVersions,
+    actionItemLabels,
+    buildSummaryState,
+    setStreamingImages,
+    imagesTimeoutRef,
+    setSummaryError,
+    summaryScrollRef,
+    summaryAutoScrollRef,
+    setSummaryOverviewMarkdown,
+    setKeyPointsMarkdown,
+    setKeyPoints,
+    setActionItemsMarkdown,
+    setActionItems,
+  });
 
   // opts.silentTranscript：静默刷新转写——保留已显示的转写、不亮 loading spinner，待数据回来原位替换。
   // 仅 completed 同步重拉用（此时转写已显示，只需把原始版换成润色版，不应整列清空+闪 spinner）；
@@ -463,381 +435,17 @@ export default function TaskDetail() {
     client,
   ]);
 
+  // 决策 A:配图 imagesTimeoutRef 的卸载清理保持现状死 no-op(mount 时快照恒 null,守卫永假),
+  // 整套配图泄漏延到专门泄漏切片真修。SSE 流 / 轮询 / 节流器的卸载清理已随 regenerate 簇移入
+  // useSummaryRegeneration 的内部 cleanup effect。
   useEffect(() => {
-    const summaryStreams = summaryStreamRef.current;
-    const summaryPolls = summaryPollRef.current;
     const imagesTimeout = imagesTimeoutRef.current;
     return () => {
-      (Object.keys(summaryStreams) as SummaryRegenerateType[]).forEach((type) => {
-        summaryStreams[type]?.close();
-        if (summaryPolls[type]) {
-          window.clearInterval(summaryPolls[type] ?? undefined);
-        }
-      });
       if (imagesTimeout) {
         window.clearTimeout(imagesTimeout);
       }
-      // SSE delta 节流器的在途 flush 定时器一并丢弃(卸载后不得再 setState)。
-      summaryStreamThrottle.cancelAll();
     };
-  }, [summaryStreamThrottle]);
-
-  const updateSummaryFromStream = useCallback(
-    (summaryType: SummaryRegenerateType, content: string) => {
-      setSummaryStreamContent((prev) => ({ ...prev, [summaryType]: content }));
-      if (summaryType === 'overview') {
-        setSummaryOverviewMarkdown(content);
-      } else if (summaryType === 'key_points') {
-        setKeyPointsMarkdown(content);
-        const keyPointLines = parseSummaryLines(content);
-        setKeyPoints(keyPointLines.map((text) => ({
-          text,
-          timeReference: '--:--',
-        })));
-      } else if (summaryType === 'action_items') {
-        setActionItemsMarkdown(content);
-        setActionItems(parseActionItems(content, actionItemLabels));
-      }
-    },
-    [actionItemLabels]
-  );
-
-  // Scroll summary container to bottom (used during streaming)
-  const scrollSummaryToBottom = useCallback(() => {
-    const container = summaryScrollRef.current;
-    if (!container || !summaryAutoScrollRef.current) return;
-
-    requestAnimationFrame(() => {
-      container.scrollTo({
-        top: container.scrollHeight,
-        behavior: 'smooth'
-      });
-    });
   }, []);
-
-  // SSE 流式 delta 帧合并节流:每个 delta 都直接 setState 会让 2400+ 行的本组件整页重渲染、
-  // 右栏 MarkdownContent 对增长全文整篇重 parse(流式期间的主要成本)、左栏长转写整列 reconcile。
-  // 改为 delta 只追加 summaryBufferRef 并 schedule;每 SUMMARY_STREAM_FLUSH_MS 才把 buffer
-  // 全量 flush 进 state 一次(渲染次数砍 5-10x)。buffer 是唯一事实源、flush 取全量,绝不丢字;
-  // 流结束/出错时 flushNow 立即清余量。SSE 协议与轮询兜底不动。
-  const flushSummaryStream = useCallback((summaryType: SummaryRegenerateType) => {
-    const content = summaryBufferRef.current[summaryType];
-    updateSummaryFromStream(summaryType, content);
-    // Auto-scroll to follow new content
-    scrollSummaryToBottom();
-    // 占位符探测随 flush 搭车(原先每个 delta 都全文扫一遍;overview 才有配图)。
-    if (summaryType === 'overview') {
-      const placeholders = findImagePlaceholders(content);
-      setStreamingImages((prev) => {
-        const next = new Map(prev);
-        let changed = false;
-        for (const placeholder of placeholders) {
-          if (!next.has(placeholder)) {
-            next.set(placeholder, {
-              placeholder,
-              description: extractPlaceholderDescription(placeholder),
-              url: null,
-              status: 'pending',
-            });
-            changed = true;
-          }
-        }
-        return changed ? next : prev;
-      });
-    }
-  }, [scrollSummaryToBottom, updateSummaryFromStream]);
-
-  // 同步最新 flush 闭包进 ref(节流器声明在前、本闭包依赖的 updateSummaryFromStream 在后,
-  // 见 summaryStreamThrottle 声明处)。effect 在首个定时器可能到点之前必已跑过:SSE 流只会
-  // 在用户触发 regenerate 后才存在。
-  useEffect(() => {
-    flushSummaryStreamRef.current = flushSummaryStream;
-  }, [flushSummaryStream]);
-
-  const regenerateSummary = useCallback(
-    async (summaryType: SummaryRegenerateType) => {
-      if (!id) return;
-      if (summaryStreaming[summaryType]) return;
-      const selectedModelId = summaryModelSelection[summaryType] ?? null;
-      const selectedModel = selectedModelId
-        ? llmModels.find((model) =>
-            model.model_id ? model.model_id === selectedModelId : model.provider === selectedModelId
-          ) || null
-        : null;
-
-      summaryStreamRef.current[summaryType]?.close();
-      summaryStreamRef.current[summaryType] = null;
-      if (summaryPollRef.current[summaryType]) {
-        window.clearInterval(summaryPollRef.current[summaryType] ?? undefined);
-        summaryPollRef.current[summaryType] = null;
-      }
-      // buffer 即将重置:丢弃上一轮流的在途 flush 定时器,避免旧定时器立刻 flush 空串。
-      summaryStreamThrottle.cancel(summaryType);
-      summaryBufferRef.current[summaryType] = '';
-
-      // Reset streaming images state (only overview supports images)
-      if (summaryType === 'overview') {
-        setStreamingImages(new Map());
-        // 重新生成 overview 即清掉上一次的右栏摘要错误，避免重试成功后旧错误仍遮住新内容。
-        setSummaryError(null);
-        if (imagesTimeoutRef.current) {
-          window.clearTimeout(imagesTimeoutRef.current);
-          imagesTimeoutRef.current = null;
-        }
-      }
-
-      // Reset auto-scroll state and scroll to top to prepare for new content
-      summaryAutoScrollRef.current = true;
-      summaryScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-
-      setSummaryStreaming((prev) => ({ ...prev, [summaryType]: true }));
-      updateSummaryFromStream(summaryType, '');
-
-      try {
-        const previousVersion = summaryVersions[summaryType] || 0;
-        const startPolling = () => {
-          summaryPollRef.current[summaryType] = window.setInterval(async () => {
-            try {
-              const result = await client.getSummary(id);
-              const latest = result.items.find(
-                (item) => item.summary_type === summaryType && item.is_active
-              );
-              if (latest && latest.version > previousVersion) {
-                window.clearInterval(summaryPollRef.current[summaryType] ?? undefined);
-                summaryPollRef.current[summaryType] = null;
-                setSummaryStreaming((prev) => ({ ...prev, [summaryType]: false }));
-                buildSummaryState(result.items);
-              }
-            } catch {
-              // Ignore polling errors, keep trying
-            }
-          }, SUMMARY_POLL_INTERVAL_MS);
-
-          window.setTimeout(() => {
-            if (summaryPollRef.current[summaryType]) {
-              window.clearInterval(summaryPollRef.current[summaryType] ?? undefined);
-              summaryPollRef.current[summaryType] = null;
-              setSummaryStreaming((prev) => ({ ...prev, [summaryType]: false }));
-              notifyError(t("task.retryFailed"));
-            }
-          }, SUMMARY_OVERALL_TIMEOUT_MS);
-        };
-
-        const normalizedBaseUrl = resolveSummaryStreamBaseUrl();
-
-        // SSE 用短期 stream 票据（绑定 task_id+summary_type）拼进 ?token=；签票失败返回 null，
-        // 不回退长效 access JWT，转走下方 else 的 HTTP regenerate + 轮询兜底。
-        const token = await resolveStreamToken(client, id, summaryType);
-        if (token) {
-          const streamUrl = `${normalizedBaseUrl}/summaries/${id}/stream?summary_type=${summaryType}&token=${encodeURIComponent(token)}`;
-          const eventSource = new EventSource(streamUrl);
-          summaryStreamRef.current[summaryType] = eventSource;
-          let regenerateTriggered = false;
-          let connectedReceived = false;
-
-          const triggerRegenerate = async () => {
-            if (regenerateTriggered) return;
-            regenerateTriggered = true;
-            await client.regenerateSummary(id, {
-              summary_type: summaryType,
-              provider: selectedModel?.provider ?? null,
-              model_id: selectedModel?.model_id ?? null,
-            });
-          };
-
-          const connectionTimeout = window.setTimeout(() => {
-            if (!connectedReceived) {
-              triggerRegenerate().catch((err) => {
-                setSummaryStreaming((prev) => ({ ...prev, [summaryType]: false }));
-                if (err instanceof ApiError) {
-                  notifyError(err.message);
-                } else {
-                  notifyError(t("task.retryFailed"));
-                }
-              });
-            }
-          }, SUMMARY_CONNECTION_TIMEOUT_MS);
-
-          // 流在 connected 之前出错时，connected / connectionTimeout 都来不及触发 regenerate。
-          // 错误处理器先幂等补发 triggerRegenerate 再轮询，否则后端从未 regenerate，轮询空等。
-          const handleStreamError = createSummaryStreamErrorHandler({
-            cleanup: (message?: string) => {
-              // 出错收尾:先把 buffer 余量立即 flush,已收到的部分内容保持可见,绝不丢字。
-              summaryStreamThrottle.flushNow(summaryType);
-              window.clearTimeout(connectionTimeout);
-              eventSource.close();
-              summaryStreamRef.current[summaryType] = null;
-              setSummaryStreaming((prev) => ({ ...prev, [summaryType]: false }));
-              notifyError(message || t("task.retryFailed"));
-            },
-            triggerRegenerate,
-            startPolling,
-          });
-
-          eventSource.addEventListener("connected", () => {
-            connectedReceived = true;
-            window.clearTimeout(connectionTimeout);
-            triggerRegenerate().catch((err) => {
-              handleStreamError(err instanceof ApiError ? err.message : undefined);
-            });
-          });
-
-          eventSource.addEventListener("summary.started", (event) => {
-            try {
-              const payload = JSON.parse(event.data);
-              if (payload.summary_type && payload.summary_type !== summaryType) return;
-              summaryStreamThrottle.cancel(summaryType);
-              summaryBufferRef.current[summaryType] = '';
-              updateSummaryFromStream(summaryType, '');
-            } catch {
-              // Ignore malformed payloads
-            }
-          });
-
-          eventSource.addEventListener("summary.delta", (event) => {
-            try {
-              const payload = JSON.parse(event.data);
-              if (payload.summary_type && payload.summary_type !== summaryType) return;
-              if (typeof payload.content !== 'string') return;
-              // 帧合并:delta 只追加 buffer 并 schedule,每 ~100ms 才一次性 flush 进 state
-              //(state 写入/自动滚动/占位符探测都在 flushSummaryStream 里搭车执行)。
-              summaryBufferRef.current[summaryType] += payload.content;
-              summaryStreamThrottle.schedule(summaryType);
-            } catch {
-              // Ignore malformed payloads
-            }
-          });
-
-          // Handle images.processing event (overview only)
-          eventSource.addEventListener("images.processing", (event) => {
-            try {
-              const payload = JSON.parse(event.data);
-              if (summaryType !== 'overview') return;
-              // Update all pending placeholders to generating status
-              if (payload.status === 'generating' && payload.total > 0) {
-                setStreamingImages((prev) => {
-                  const next = new Map(prev);
-                  for (const [key, img] of next) {
-                    if (img.status === 'pending') {
-                      next.set(key, { ...img, status: 'generating' });
-                    }
-                  }
-                  return next;
-                });
-              }
-            } catch {
-              // Ignore malformed payloads
-            }
-          });
-
-          // Handle image.ready event (singular - one image at a time, overview only)
-          eventSource.addEventListener("image.ready", (event) => {
-            try {
-              const payload: SSEImageReadyEvent = JSON.parse(event.data);
-              if (summaryType !== 'overview') return;
-              // Update this single image's state
-              setStreamingImages((prev) => {
-                const next = new Map(prev);
-                next.set(payload.placeholder, {
-                  placeholder: payload.placeholder,
-                  description: extractPlaceholderDescription(payload.placeholder),
-                  url: payload.status === 'success' ? payload.url : null,
-                  status: payload.status === 'success' ? 'ready' : 'failed',
-                });
-                return next;
-              });
-              // Auto-scroll when image loads (content height may change)
-              scrollSummaryToBottom();
-              // Optional: could show progress like "2/3" using payload.current / payload.total
-            } catch {
-              // Ignore malformed payloads
-            }
-          });
-
-          // Handle images.completed event (all images done, overview only)
-          eventSource.addEventListener("images.completed", () => {
-            if (summaryType !== 'overview') return;
-            // Clear images timeout and close connection
-            if (imagesTimeoutRef.current) {
-              window.clearTimeout(imagesTimeoutRef.current);
-              imagesTimeoutRef.current = null;
-            }
-            eventSource.close();
-            summaryStreamRef.current[summaryType] = null;
-            client.getSummary(id).then((result) => {
-              buildSummaryState(result.items);
-            });
-          });
-
-          eventSource.addEventListener("summary.completed", (event) => {
-            // 流结束:立即 flush buffer 余量(全文),绝不丢字——等下方 getSummary 整版
-            // 经隧道回来之前,已收到的完整内容先显示完。
-            summaryStreamThrottle.flushNow(summaryType);
-            let hasImages = false;
-            try {
-              const payload = JSON.parse(event.data);
-              if (payload.summary_type && payload.summary_type !== summaryType) return;
-              hasImages = Boolean(payload.has_images);
-            } catch {
-              // Ignore malformed payloads
-            }
-
-            // If no images expected, close connection immediately
-            if (!hasImages) {
-              eventSource.close();
-              summaryStreamRef.current[summaryType] = null;
-              setSummaryStreaming((prev) => ({ ...prev, [summaryType]: false }));
-            } else {
-              // Keep connection open for image.ready and images.completed events
-              // Set a timeout to close if images.completed never arrives (90s = 60s per image + 30s buffer)
-              imagesTimeoutRef.current = window.setTimeout(() => {
-                eventSource.close();
-                summaryStreamRef.current[summaryType] = null;
-                setSummaryStreaming((prev) => ({ ...prev, [summaryType]: false }));
-                // Mark remaining generating images as failed
-                setStreamingImages((prev) => {
-                  const next = new Map(prev);
-                  for (const [key, img] of next) {
-                    if (img.status === 'pending' || img.status === 'generating') {
-                      next.set(key, { ...img, status: 'failed' });
-                    }
-                  }
-                  return next;
-                });
-              }, SUMMARY_IMAGE_TIMEOUT_MS);
-              // Mark text streaming as complete, but images may still be loading
-              setSummaryStreaming((prev) => ({ ...prev, [summaryType]: false }));
-            }
-
-            client.getSummary(id).then((result) => {
-              buildSummaryState(result.items);
-            });
-          });
-
-          attachSseServerErrorListener(eventSource, handleStreamError);
-
-          eventSource.onerror = () => {
-            handleStreamError();
-          };
-        } else {
-          await client.regenerateSummary(id, {
-            summary_type: summaryType,
-            provider: selectedModel?.provider ?? null,
-            model_id: selectedModel?.model_id ?? null,
-          });
-          startPolling();
-        }
-      } catch (err) {
-        setSummaryStreaming((prev) => ({ ...prev, [summaryType]: false }));
-        if (err instanceof ApiError) {
-          notifyError(err.message);
-        } else {
-          notifyError(t("task.retryFailed"));
-        }
-      }
-    },
-    [buildSummaryState, client, id, llmModels, scrollSummaryToBottom, summaryModelSelection, summaryStreaming, summaryStreamThrottle, summaryVersions, t, updateSummaryFromStream]
-  );
 
   useEffect(() => {
     if (authUser) {
