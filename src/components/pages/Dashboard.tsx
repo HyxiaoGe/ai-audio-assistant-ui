@@ -167,12 +167,12 @@ export default function Dashboard() {
 
       {/* 最近任务 */}
       <div>
-        <h3
-          className="text-h3 mb-4"
+        <h2
+          className="text-h2 mb-4"
           style={{ color: "var(--app-text)" }}
         >
           {t("dashboard.recentTasks")}
-        </h3>
+        </h2>
 
         {/* 任务列表 */}
         <div className="space-y-3">
