@@ -5,7 +5,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useAuthStore } from '@/store/auth-store';
 import { notifyError, notifySuccess } from '@/lib/notify';
-import { FileText, Lightbulb } from 'lucide-react';
+import { Lightbulb } from 'lucide-react';
 import { useUIStore } from '@/store/ui-store';
 import {
   Dialog,
@@ -27,6 +27,7 @@ import { TaskFailedPanel } from '@/components/task/TaskFailedPanel';
 import { resolveSummaryStreamBaseUrl, attachSseServerErrorListener, createSummaryStreamErrorHandler } from '@/lib/summary-stream';
 import { createStreamThrottle } from '@/lib/stream-throttle';
 import { TaskProcessingPanel } from '@/components/task/TaskProcessingPanel';
+import { TranscriptColumnHeader } from '@/components/task/TranscriptColumnHeader';
 import ErrorState from '@/components/common/ErrorState';
 import { ProvenanceBadge } from '@/components/common/ProvenanceBadge';
 import { formatAsrProvenance } from '@/lib/provenance';
@@ -1951,18 +1952,7 @@ export default function TaskDetail() {
           <div className="flex-1 flex overflow-hidden border-t" style={{ borderColor: 'var(--app-glass-border)' }}>
             {/* Left Column: Transcript */}
             <div className="flex-1 flex flex-col border-r" style={{ borderColor: 'var(--app-glass-border)' }}>
-              {/* Column Header */}
-              <div className="flex items-center gap-2 px-4 py-4 border-b" style={{ borderColor: 'var(--app-glass-border)' }}>
-                <FileText className="w-5 h-5" style={{ color: 'var(--app-text)' }} />
-                <h2 className="text-base" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
-                  {t("task.transcriptTitle")}
-                </h2>
-                {asrProviderName && (
-                  <span className="text-xs" style={{ color: 'var(--app-text-subtle)' }}>
-                    {t("task.transcribedByCaption", { provider: asrProviderName })}
-                  </span>
-                )}
-              </div>
+              <TranscriptColumnHeader title={t("task.transcriptTitle")} asrProviderName={asrProviderName ?? undefined} />
 
               {/* Transcript List - currentTime 逐帧订阅 + 高亮派生 + 自动滚动均封装在 TranscriptList 内，配合行级 memo 把逐帧重渲染限制在高亮行 */}
               <TranscriptList

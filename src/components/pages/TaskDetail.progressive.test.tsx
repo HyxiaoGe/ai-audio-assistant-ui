@@ -823,3 +823,15 @@ describe("TaskDetail — 删除确认弹窗特征锁定", () => {
     expect(screen.getByText("task.deleteConfirmDesc")).toBeInTheDocument()
   })
 })
+
+describe("TaskDetail — 转写列头特征锁定", () => {
+  it("主视图渲染转写列头标题", async () => {
+    apiMock.getTask.mockResolvedValue(task({ status: "completed", progress: 100 }))
+    apiMock.getSummary.mockResolvedValue(summaryResp())
+    render(<TaskDetail />)
+    await waitFor(
+      () => { expect(screen.getByText("task.transcriptTitle")).toBeInTheDocument() },
+      { timeout: 5000 }
+    )
+  })
+})
