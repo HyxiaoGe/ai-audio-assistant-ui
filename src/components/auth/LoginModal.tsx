@@ -88,16 +88,16 @@ export default function LoginModal({ isOpen, onClose, callbackUrl = '/tasks' }: 
             </button>
           </div>
 
-          {/* 底部协议文字 - Caption */}
+          {/* 底部协议文字 - Caption（纯文本,无对应页面故不做链接） */}
           <p className="text-caption text-center" style={{ color: "var(--app-text-subtle)" }}>
             {t("auth.agreementPrefix")}{' '}
-            <a href="#" className="hover:underline" style={{ color: "var(--app-primary)" }}>
+            <span style={{ color: "var(--app-primary)" }}>
               {t("auth.agreementLink")}
-            </a>
+            </span>
             {' '}{t("auth.agreementAnd")}{' '}
-            <a href="#" className="hover:underline" style={{ color: "var(--app-primary)" }}>
+            <span style={{ color: "var(--app-primary)" }}>
               {t("auth.privacyPolicy")}
-            </a>
+            </span>
           </p>
       </DialogContent>
     </Dialog>
