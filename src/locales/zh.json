@@ -526,6 +526,7 @@
   "settings": {
     "title": "设置",
     "saveAction": "保存设置",
+    "saveActionFailed": "保存失败",
     "appearanceTitle": "外观设置",
     "appearanceDesc": "自定义应用的语言和主题",
     "languageLabel": "界面语言",

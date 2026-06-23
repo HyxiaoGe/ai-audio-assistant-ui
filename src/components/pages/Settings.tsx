@@ -27,7 +27,8 @@ import {
   Globe,
   Palette,
   Save,
-  CheckCircle2
+  CheckCircle2,
+  Loader2
 } from 'lucide-react';
 
 
@@ -79,7 +80,7 @@ export default function Settings() {
     setHourCycle,
   } = useSettings();
   const [localSettings, setLocalSettings] = useState<LocalSettings>(() => loadLocalSettings());
-  const [saved, setSaved] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<"clearTasks" | "deleteAccount" | "resetSettings" | null>(null);
   const [accountStats, setAccountStats] = useState<{
@@ -228,13 +229,15 @@ export default function Settings() {
     applyPreferencesRef.current = applyPreferences;
   });
 
-  const updatePreferences = useCallback(async (payload: UserPreferencesUpdateRequest) => {
-    if (!isAuthenticated) return;
+  const updatePreferences = useCallback(async (payload: UserPreferencesUpdateRequest): Promise<boolean> => {
+    if (!isAuthenticated) return false;
     try {
       const updated = await client.updateUserPreferences(payload);
       applyPreferences(updated);
+      return true;
     } catch {
       notifyError(t("settings.preferencesSaveFailed"));
+      return false;
     }
   }, [applyPreferences, client, isAuthenticated, t]);
 
@@ -389,8 +392,8 @@ export default function Settings() {
     });
   };
 
-  const handleSave = () => {
-    // 保存设置到localStorage
+  const handleSave = async () => {
+    // 本地外观立即应用（纯客户端态，不被服务端阻塞）
     localStorage.setItem('settings', JSON.stringify({
       language: languageState,
       theme: themeState,
@@ -404,7 +407,14 @@ export default function Settings() {
     setTimeZone(timeZoneState);
     setHourCycle(hourCycleState as "auto" | "h12" | "h23");
 
-    void updatePreferences({
+    if (!isAuthenticated) {
+      setSaveState("success");
+      setTimeout(() => setSaveState("idle"), 3000);
+      return;
+    }
+
+    setSaveState("saving");
+    const ok = await updatePreferences({
       task_defaults: {
         language: defaultLanguageState as "auto" | "zh" | "en",
         enable_speaker_diarization: speakerDiarizationEnabled,
@@ -414,9 +424,8 @@ export default function Settings() {
         timezone: timeZoneState,
       },
     });
-    
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+    setSaveState(ok ? "success" : "error");
+    setTimeout(() => setSaveState("idle"), 3000);
   };
 
   return (
@@ -431,18 +440,31 @@ export default function Settings() {
             </h2>
             <Button
               onClick={handleSave}
-              disabled={saved}
+              disabled={saveState === "saving" || saveState === "success"}
               style={{
-                background: saved
-                  ? "var(--app-success)"
-                  : "var(--app-action-gradient)"
+                background:
+                  saveState === "success"
+                    ? "var(--app-success)"
+                    : saveState === "error"
+                      ? "var(--app-danger)"
+                      : "var(--app-action-gradient)"
               }}
               className="text-white hover:opacity-90 transition-opacity"
             >
-              {saved ? (
+              {saveState === "saving" ? (
+                <>
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                  {t("common.saving")}
+                </>
+              ) : saveState === "success" ? (
                 <>
                   <CheckCircle2 className="w-5 h-5 mr-2" />
                   {t("common.saved")}
+                </>
+              ) : saveState === "error" ? (
+                <>
+                  <Save className="w-5 h-5 mr-2" />
+                  {t("settings.saveActionFailed")}
                 </>
               ) : (
                 <>
