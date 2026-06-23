@@ -7,13 +7,8 @@ import { useAuthStore } from '@/store/auth-store';
 import { notifyError, notifySuccess } from '@/lib/notify';
 import { Lightbulb } from 'lucide-react';
 import { useUIStore } from '@/store/ui-store';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { DeleteTaskDialog } from '@/components/task/DeleteTaskDialog';
+import { CompareModelDialog } from '@/components/task/CompareModelDialog';
 import TabSwitch from '@/components/task/TabSwitch';
 import { PlayerBarContainer } from '@/components/task/PlayerBarContainer';
 import { TranscriptList } from '@/components/task/TranscriptList';
@@ -2257,85 +2252,20 @@ export default function TaskDetail() {
 
               </div>
 
-              {/* 对比弹窗：改用 Radix Dialog（焦点陷阱 / Esc / 焦点恢复 / role=dialog）。
-                  原本就用 glass-panel-strong + max-w-lg，与 DialogContent 默认基本一致，仅覆盖 grid→block 与圆角。 */}
-              <Dialog open={compareDialogOpen} onOpenChange={setCompareDialogOpen}>
-                <DialogContent className="block w-full max-w-lg sm:max-w-lg rounded-2xl space-y-4">
-                  <DialogTitle className="text-lg" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
-                    {t("task.compareTitle")}
-                  </DialogTitle>
-                  <DialogDescription className="text-sm" style={{ color: 'var(--app-text-subtle)' }}>
-                    {t("task.compareHint")}
-                  </DialogDescription>
-
-                    <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
-                      {modelGroups.map((group) => (
-                        <div key={group.label} className="space-y-2">
-                          <div className="text-xs uppercase tracking-wide" style={{ color: 'var(--app-text-muted)' }}>
-                            {group.label}
-                          </div>
-                          <div className="space-y-2">
-                            {group.models.map((model) => {
-                              const value = model.model_id || model.provider;
-                              const isChecked = compareSelectedModels.includes(value);
-                              const parts: string[] = [model.display_name || model.model_id || model.provider];
-                              if (model.cost_tier) {
-                                parts.push(t(`task.summaryModelCost${model.cost_tier.charAt(0).toUpperCase() + model.cost_tier.slice(1)}` as const));
-                              }
-                              if (!model.is_available) {
-                                parts.push(t("task.summaryModelUnavailable"));
-                              } else if (model.is_recommended) {
-                                parts.push(t("task.summaryModelRecommended"));
-                              }
-                              return (
-                                <label
-                                  key={value}
-                                  className="flex items-center gap-2 text-sm"
-                                  style={{ color: model.is_available ? 'var(--app-text)' : 'var(--app-text-subtle)' }}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    disabled={!model.is_available}
-                                    checked={isChecked}
-                                    onChange={() => toggleCompareModel(value)}
-                                  />
-                                  <span>{parts.join(" · ")}</span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {compareError && (
-                      <p className="text-sm" style={{ color: 'var(--app-danger)' }}>
-                        {compareError}
-                      </p>
-                    )}
-
-                    <div className="flex justify-end gap-2 pt-2">
-                      <button
-                        onClick={() => setCompareDialogOpen(false)}
-                        className="text-sm px-4 py-2 rounded-lg"
-                        style={{ background: 'var(--app-glass-bg-strong)', color: 'var(--app-text-muted)' }}
-                      >
-                        {t("common.cancel")}
-                      </button>
-                      <button
-                        onClick={() => {
-                          setCompareDialogOpen(false);
-                          startCompare();
-                        }}
-                        disabled={compareSelectedModels.length < 2 || compareLoading}
-                        className="text-sm px-4 py-2 rounded-lg disabled:opacity-50"
-                        style={{ background: 'var(--app-primary)', color: 'var(--app-button-primary-text)' }}
-                      >
-                        {compareLoading ? t("task.compareLoadingButton") : t("task.compareStart")}
-                      </button>
-                    </div>
-                </DialogContent>
-              </Dialog>
+              <CompareModelDialog
+                open={compareDialogOpen}
+                onOpenChange={setCompareDialogOpen}
+                modelGroups={modelGroups}
+                selectedModels={compareSelectedModels}
+                onToggleModel={toggleCompareModel}
+                compareError={compareError}
+                compareLoading={compareLoading}
+                onStart={() => {
+                  setCompareDialogOpen(false);
+                  startCompare();
+                }}
+                t={t}
+              />
             </div>
           </div>
       <DeleteTaskDialog

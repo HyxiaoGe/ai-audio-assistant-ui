@@ -635,6 +635,30 @@ describe("TaskDetail — detected summary style", () => {
   })
 })
 
+describe("TaskDetail — 对比弹窗特征锁定", () => {
+  it("已完成任务 + ≥2 可用模型,点击「对比模型」打开弹窗显示模型复选", async () => {
+    apiMock.getTask.mockResolvedValue(task({ status: "completed" }));
+    apiMock.getSummary.mockResolvedValue(summaryResp());
+    apiMock.getLLMModels.mockResolvedValue({
+      models: [
+        { provider: "gemini", model_id: "gemini-pro", display_name: "Gemini Pro", provider_display: "Google", is_available: true, is_recommended: true, cost_tier: null },
+        { provider: "deepseek", model_id: "deepseek-chat", display_name: "DeepSeek Chat", provider_display: "DeepSeek", is_available: true, is_recommended: false, cost_tier: null },
+      ],
+    });
+
+    render(<TaskDetail />);
+
+    // 等模型加载完成 → 概览 tab 的「对比模型」按钮启用
+    const compareBtn = await screen.findByText("task.compareModels");
+    await waitFor(() => expect(compareBtn.closest("button")).not.toBeDisabled());
+    fireEvent.click(compareBtn);
+
+    expect(await screen.findByText("task.compareTitle")).toBeInTheDocument();
+    expect(screen.getByText("Gemini Pro")).toBeInTheDocument();
+    expect(screen.getByText("DeepSeek Chat")).toBeInTheDocument();
+  });
+})
+
 // 从转写全文搜索命中跳转过来时，URL 带 ?t=<秒>。详情页须读取它并在媒体就绪后跳播到该时刻
 //（store.seek 即便音频元素未就绪也会落 currentTime，进而驱动 TranscriptList 滚动/高亮到该句）。
 // 只触发一次，避免页面内手动 seek 后被深链反复拉回。
