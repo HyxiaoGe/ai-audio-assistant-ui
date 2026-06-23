@@ -485,6 +485,46 @@ describe("TaskDetail — progressive disclosure", () => {
   }, 20000)
 })
 
+describe("TaskDetail — 头部特征锁定(三分支)", () => {
+  it("失败态渲染返回按钮 + 标题", async () => {
+    apiMock.getTask.mockResolvedValue(task({ status: "failed", error_message: "boom" }))
+    const { ApiError } = await import("@/types/api")
+    apiMock.getSummary.mockRejectedValue(new ApiError(40401, "not found", "tr"))
+    render(<TaskDetail />)
+    await waitFor(
+      () => { expect(screen.getByText("task.error.processingFailed")).toBeInTheDocument() },
+      { timeout: 5000 }
+    )
+    expect(screen.getByText("common.back")).toBeInTheDocument()
+    expect(screen.getByText("演示任务")).toBeInTheDocument()
+  })
+
+  it("处理态渲染返回按钮 + 标题", async () => {
+    apiMock.getTask.mockResolvedValue(task({ status: "extracting", progress: 20 }))
+    const { ApiError } = await import("@/types/api")
+    apiMock.getSummary.mockRejectedValue(new ApiError(40401, "not found", "tr"))
+    render(<TaskDetail />)
+    await waitFor(
+      () => { expect(screen.getByText("task.error.processingTips")).toBeInTheDocument() },
+      { timeout: 5000 }
+    )
+    expect(screen.getByText("common.back")).toBeInTheDocument()
+    expect(screen.getAllByText("演示任务").length).toBeGreaterThanOrEqual(1)
+  })
+
+  it("主分支头部渲染返回 + 删除 + 导出动作", async () => {
+    apiMock.getTask.mockResolvedValue(task({ status: "completed", progress: 100 }))
+    apiMock.getSummary.mockResolvedValue(summaryResp())
+    render(<TaskDetail />)
+    await waitFor(
+      () => { expect(screen.getByText("common.back")).toBeInTheDocument() },
+      { timeout: 5000 }
+    )
+    expect(screen.getByText("common.delete")).toBeInTheDocument()
+    expect(screen.getByText("task.export")).toBeInTheDocument()
+  })
+})
+
 describe("TaskDetail — loadTask 三请求并发", () => {
   it("getTask 尚未返回时 transcript/summary 已同拍发出(无串行瀑布)", async () => {
     // getTask 受控挂起:断言它 resolve 前另两路已发出 = 三请求并发,而非旧的串行瀑布
@@ -734,5 +774,64 @@ describe("TaskDetail — 返回按钮恢复搜索态 + 交互反馈", () => {
     const btn = back.closest("button")!
     expect(btn.className).toContain("cursor-pointer")
     expect(btn.className).toContain("active:scale-95")
+  })
+})
+
+describe("TaskDetail — 失败卡片体特征锁定", () => {
+  it("失败态渲染错误信息与重试按钮", async () => {
+    apiMock.getTask.mockResolvedValue(task({ status: "failed", error_message: "网络错误" }))
+    const { ApiError } = await import("@/types/api")
+    apiMock.getSummary.mockRejectedValue(new ApiError(40401, "not found", "tr"))
+    render(<TaskDetail />)
+    await waitFor(
+      () => { expect(screen.getByText("task.error.processingFailed")).toBeInTheDocument() },
+      { timeout: 5000 }
+    )
+    expect(screen.getByText("网络错误")).toBeInTheDocument()
+    expect(screen.getByText("task.retryProcessing")).toBeInTheDocument()
+  })
+})
+
+describe("TaskDetail — 处理态内容特征锁定", () => {
+  it("处理态渲染文件信息卡与处理提示", async () => {
+    apiMock.getTask.mockResolvedValue(task({ status: "extracting", progress: 20 }))
+    const { ApiError } = await import("@/types/api")
+    apiMock.getSummary.mockRejectedValue(new ApiError(40401, "not found", "tr"))
+    render(<TaskDetail />)
+    await waitFor(
+      () => { expect(screen.getByText("task.error.processingTips")).toBeInTheDocument() },
+      { timeout: 5000 }
+    )
+    // 标题在头部 h1 + 文件信息卡 h3 各一处
+    expect(screen.getAllByText("演示任务").length).toBeGreaterThanOrEqual(2)
+  })
+})
+
+describe("TaskDetail — 删除确认弹窗特征锁定", () => {
+  it("点击删除按钮后弹出确认弹窗", async () => {
+    apiMock.getTask.mockResolvedValue(task({ status: "completed", progress: 100 }))
+    apiMock.getSummary.mockResolvedValue(summaryResp())
+    render(<TaskDetail />)
+    await waitFor(
+      () => { expect(screen.getByText("common.delete")).toBeInTheDocument() },
+      { timeout: 5000 }
+    )
+    fireEvent.click(screen.getByText("common.delete"))
+    await waitFor(() => {
+      expect(screen.getByText("task.deleteConfirmTitle")).toBeInTheDocument()
+    })
+    expect(screen.getByText("task.deleteConfirmDesc")).toBeInTheDocument()
+  })
+})
+
+describe("TaskDetail — 转写列头特征锁定", () => {
+  it("主视图渲染转写列头标题", async () => {
+    apiMock.getTask.mockResolvedValue(task({ status: "completed", progress: 100 }))
+    apiMock.getSummary.mockResolvedValue(summaryResp())
+    render(<TaskDetail />)
+    await waitFor(
+      () => { expect(screen.getByText("task.transcriptTitle")).toBeInTheDocument() },
+      { timeout: 5000 }
+    )
   })
 })

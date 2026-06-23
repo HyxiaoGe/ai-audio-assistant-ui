@@ -5,17 +5,15 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useAuthStore } from '@/store/auth-store';
 import { notifyError, notifySuccess } from '@/lib/notify';
-import { AlertCircle, ArrowLeft, FileText, Info, Lightbulb, Music } from 'lucide-react';
+import { Lightbulb } from 'lucide-react';
 import { useUIStore } from '@/store/ui-store';
-import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
-  DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { DeleteTaskDialog } from '@/components/task/DeleteTaskDialog';
 import TabSwitch from '@/components/task/TabSwitch';
 import { PlayerBarContainer } from '@/components/task/PlayerBarContainer';
 import { TranscriptList } from '@/components/task/TranscriptList';
@@ -24,9 +22,12 @@ import { type ActionItem, parseActionItems, parseSummaryLines } from '@/lib/summ
 import { ActionItemToggle } from '@/components/task/ActionItemToggle';
 import { ExportMenu } from '@/components/task/ExportMenu';
 import { TaskVisibilityToggle } from '@/components/task/TaskVisibilityToggle';
+import { TaskDetailHeader } from '@/components/task/TaskDetailHeader';
+import { TaskFailedPanel } from '@/components/task/TaskFailedPanel';
 import { resolveSummaryStreamBaseUrl, attachSseServerErrorListener, createSummaryStreamErrorHandler } from '@/lib/summary-stream';
 import { createStreamThrottle } from '@/lib/stream-throttle';
-import ProcessingState from '@/components/common/ProcessingState';
+import { TaskProcessingPanel } from '@/components/task/TaskProcessingPanel';
+import { TranscriptColumnHeader } from '@/components/task/TranscriptColumnHeader';
 import ErrorState from '@/components/common/ErrorState';
 import { ProvenanceBadge } from '@/components/common/ProvenanceBadge';
 import { formatAsrProvenance } from '@/lib/provenance';
@@ -1863,58 +1864,13 @@ export default function TaskDetail() {
   if (task.status === 'failed') {
     return (
       <div className="h-full flex flex-col overflow-hidden">
-            {/* Title Bar */}
-            <div
-              className="flex items-center justify-between px-6 border-b"
-              style={{ height: '64px', borderColor: 'var(--app-glass-border)' }}
-            >
-              {/* Left: Back Button */}
-              <button
-                onClick={handleBackToTasks}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer text-[var(--app-text-muted)] transition-all duration-150 hover:bg-[var(--app-surface-alt)] hover:text-[var(--app-text)] active:scale-95 active:bg-[var(--app-primary-soft)]"
-              >
-                <ArrowLeft className="w-5 h-5" />
-                <span className="text-sm" style={{ fontWeight: 500 }}>{t("common.back")}</span>
-              </button>
+            <TaskDetailHeader
+              title={task.title}
+              onBack={handleBackToTasks}
+              right={<div style={{ width: '140px' }} />}
+            />
 
-              {/* Center: Title */}
-              <h1 className="text-xl" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
-                {task.title}
-              </h1>
-
-              {/* Right: Empty space for balance */}
-              <div style={{ width: '140px' }}></div>
-            </div>
-
-            <div className="flex-1 flex flex-col items-center justify-center px-6 py-8">
-              <div
-                className="w-full rounded-xl border p-10 text-center"
-                style={{ maxWidth: '480px', borderColor: 'var(--app-danger-border)', background: 'var(--app-danger-bg-soft)' }}
-              >
-                <div className="flex justify-center mb-4">
-                  <div
-                    className="w-12 h-12 rounded-full flex items-center justify-center"
-                    style={{ background: 'var(--app-danger-bg)', color: 'var(--app-danger)' }}
-                  >
-                    <AlertCircle className="w-6 h-6" />
-                  </div>
-                </div>
-                <h2 className="text-xl mb-2" style={{ fontWeight: 600, color: 'var(--app-danger-deep)' }}>
-                  {t("task.error.processingFailed")}
-                </h2>
-                <p className="text-sm mb-6" style={{ color: 'var(--app-danger-strong)' }}>
-                  {task.error_message || t("task.error.transcribeUnavailable")}
-                </p>
-                <button
-                  onClick={handleRetry}
-                  disabled={isRetrying}
-                  className="px-6 py-2 rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  style={{ background: 'var(--app-danger)', color: 'var(--app-button-primary-text)' }}
-                >
-                  {isRetrying ? t("common.processing") : t("task.retryProcessing")}
-                </button>
-              </div>
-            </div>
+            <TaskFailedPanel task={task} onRetry={handleRetry} isRetrying={isRetrying} />
       </div>
     );
   }
@@ -1922,96 +1878,19 @@ export default function TaskDetail() {
   if (isProcessingTask) {
     return (
       <div className="h-full flex flex-col overflow-hidden" style={{ background: 'var(--app-page-gradient)' }}>
-            {/* Title Bar */}
-            <div
-              className="flex items-center justify-between px-6 border-b"
-              style={{ 
-                height: '64px', 
-                borderColor: 'var(--app-glass-border)',
-                background: 'var(--app-glass-bg)'
-              }}
-            >
-              {/* Left: Back Button */}
-              <button
-                onClick={handleBackToTasks}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer text-[var(--app-text-muted)] transition-all duration-150 hover:bg-[var(--app-surface-alt)] hover:text-[var(--app-text)] active:scale-95 active:bg-[var(--app-primary-soft)]"
-              >
-                <ArrowLeft className="w-5 h-5" />
-                <span className="text-sm" style={{ fontWeight: 500 }}>{t("common.back")}</span>
-              </button>
+            <TaskDetailHeader
+              withBackground
+              title={task.title}
+              onBack={handleBackToTasks}
+              right={<div style={{ width: '100px' }} />}
+            />
 
-              {/* Center: Title */}
-              <h1 className="text-xl" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
-                {task.title}
-              </h1>
-
-              {/* Right: Empty space for balance */}
-              <div style={{ width: '100px' }}></div>
-            </div>
-
-            {/* Main Content with gradient background */}
-            <div className="flex-1 flex flex-col items-center justify-center px-6 py-8">
-              {/* 文件信息卡片 */}
-              <div 
-                className="w-full mb-6 p-4 rounded-lg border"
-                style={{
-                  maxWidth: '480px',
-                  background: 'var(--app-glass-bg)',
-                  backdropFilter: 'blur(10px)',
-                  borderColor: 'var(--app-glass-border)'
-                }}
-              >
-                <div className="flex items-start gap-3">
-                  <div 
-                    className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center"
-                    style={{ background: 'var(--app-primary-soft-2)' }}
-                  >
-                    <Music className="w-5 h-5" style={{ color: 'var(--app-primary)' }} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-sm truncate" style={{ fontWeight: 600, color: 'var(--app-text-strong)' }}>
-                      {task.title}
-                    </h3>
-                    {infoItems.length > 0 && (
-                      <div className="flex items-center gap-3 mt-1">
-                        {infoItems.map((item, index) => (
-                          <span key={`${item}-${index}`} className="text-xs flex items-center gap-3" style={{ color: 'var(--app-text-subtle)' }}>
-                            {item}
-                            {index < infoItems.length - 1 && (
-                              <span className="text-xs" style={{ color: 'var(--app-text-faint)' }}>·</span>
-                            )}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Processing State */}
-              <ProcessingState
-                progress={progress}
-                estimatedTime={getEstimatedTime()}
-                status={task?.status}
-                sourceType={task?.source_type}
-              />
-
-              {/* 底部提示信息 */}
-              <div 
-                className="w-full mt-6 text-center"
-                style={{ maxWidth: '480px' }}
-              >
-                <div 
-                  className="flex items-start gap-2 p-4 rounded-lg"
-                  style={{ background: 'var(--app-primary-soft-2)' }}
-                >
-                  <Info className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: 'var(--app-primary)' }} />
-                  <p className="text-xs text-left" style={{ color: 'var(--app-text-muted)', lineHeight: '1.5' }}>
-                    {t("task.error.processingTips")}
-                  </p>
-                </div>
-              </div>
-            </div>
+            <TaskProcessingPanel
+              task={task}
+              infoItems={infoItems}
+              progress={progress}
+              estimatedTime={getEstimatedTime()}
+            />
       </div>
     );
   }
@@ -2023,53 +1902,37 @@ export default function TaskDetail() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-          {/* Title Bar */}
-          <div
-            className="flex items-center justify-between px-6 border-b"
-            style={{ height: '64px', borderColor: 'var(--app-glass-border)' }}
-          >
-            {/* Left: Back Button */}
-            <button
-              onClick={handleBackToTasks}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer text-[var(--app-text-muted)] transition-all duration-150 hover:bg-[var(--app-surface-alt)] hover:text-[var(--app-text)] active:scale-95 active:bg-[var(--app-primary-soft)]"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              <span className="text-sm" style={{ fontWeight: 500 }}>{t("common.back")}</span>
-            </button>
-
-            {/* Center: Title */}
-            <h1 className="text-xl" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
-              {task.title}
-            </h1>
-
-            <div className="flex items-center gap-3">
-              <TaskVisibilityToggle
-                taskId={task.id}
-                status={task.status}
-                isPublic={Boolean(task.is_public)}
-                onChanged={(isPublic, publishedAt) =>
-                  setTask((prev) => (prev ? { ...prev, is_public: isPublic, published_at: publishedAt } : prev))
-                }
-              />
-              <button
-                onClick={() => setDeleteOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors hover:bg-[var(--app-danger-bg-soft)]"
-                style={{ borderColor: 'var(--app-danger-border)', color: 'var(--app-danger)' }}
-              >
-                <span className="text-sm" style={{ fontWeight: 500 }}>{t("common.delete")}</span>
-              </button>
-
-              {/* Right: Export */}
-              <ExportMenu
-                label={t("task.export")}
-                items={[
-                  { key: "pdf", label: t("task.exportPdf") },
-                  { key: "word", label: t("task.exportWord") },
-                  { key: "markdown", label: t("task.exportMarkdown") },
-                ]}
-              />
-            </div>
-          </div>
+          <TaskDetailHeader
+            title={task.title}
+            onBack={handleBackToTasks}
+            right={
+              <div className="flex items-center gap-3">
+                <TaskVisibilityToggle
+                  taskId={task.id}
+                  status={task.status}
+                  isPublic={Boolean(task.is_public)}
+                  onChanged={(isPublic, publishedAt) =>
+                    setTask((prev) => (prev ? { ...prev, is_public: isPublic, published_at: publishedAt } : prev))
+                  }
+                />
+                <button
+                  onClick={() => setDeleteOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors hover:bg-[var(--app-danger-bg-soft)]"
+                  style={{ borderColor: 'var(--app-danger-border)', color: 'var(--app-danger)' }}
+                >
+                  <span className="text-sm" style={{ fontWeight: 500 }}>{t("common.delete")}</span>
+                </button>
+                <ExportMenu
+                  label={t("task.export")}
+                  items={[
+                    { key: "pdf", label: t("task.exportPdf") },
+                    { key: "word", label: t("task.exportWord") },
+                    { key: "markdown", label: t("task.exportMarkdown") },
+                  ]}
+                />
+              </div>
+            }
+          />
 
           {/* Player Section - 进度条逐帧订阅 currentTime，下沉到 PlayerBarContainer 叶子组件，避免父组件每秒重渲染 */}
           <PlayerBarContainer
@@ -2089,18 +1952,7 @@ export default function TaskDetail() {
           <div className="flex-1 flex overflow-hidden border-t" style={{ borderColor: 'var(--app-glass-border)' }}>
             {/* Left Column: Transcript */}
             <div className="flex-1 flex flex-col border-r" style={{ borderColor: 'var(--app-glass-border)' }}>
-              {/* Column Header */}
-              <div className="flex items-center gap-2 px-4 py-4 border-b" style={{ borderColor: 'var(--app-glass-border)' }}>
-                <FileText className="w-5 h-5" style={{ color: 'var(--app-text)' }} />
-                <h2 className="text-base" style={{ fontWeight: 600, color: 'var(--app-text)' }}>
-                  {t("task.transcriptTitle")}
-                </h2>
-                {asrProviderName && (
-                  <span className="text-xs" style={{ color: 'var(--app-text-subtle)' }}>
-                    {t("task.transcribedByCaption", { provider: asrProviderName })}
-                  </span>
-                )}
-              </div>
+              <TranscriptColumnHeader title={t("task.transcriptTitle")} asrProviderName={asrProviderName ?? undefined} />
 
               {/* Transcript List - currentTime 逐帧订阅 + 高亮派生 + 自动滚动均封装在 TranscriptList 内，配合行级 memo 把逐帧重渲染限制在高亮行 */}
               <TranscriptList
@@ -2486,47 +2338,13 @@ export default function TaskDetail() {
               </Dialog>
             </div>
           </div>
-      <Dialog
+      <DeleteTaskDialog
         open={deleteOpen}
-        onOpenChange={(open) => {
-          if (!open && !isDeleting) {
-            setDeleteOpen(false);
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("task.deleteConfirmTitle")}</DialogTitle>
-            <DialogDescription>
-              {t("task.deleteConfirmDesc")}
-              {task?.title && (
-                <span
-                  className="mt-2 block text-sm font-medium"
-                  style={{ color: "var(--app-text)" }}
-                >
-                  {task.title}
-                </span>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="secondary"
-              onClick={() => setDeleteOpen(false)}
-              disabled={isDeleting}
-            >
-              {t("common.cancel")}
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteTask}
-              disabled={isDeleting}
-            >
-              {isDeleting ? t("task.deleteProcessing") : t("common.delete")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        isDeleting={isDeleting}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={handleDeleteTask}
+        title={task.title}
+      />
       {showCleanupToast && (
         <RetryCleanupToast
           failedCount={failedTaskIds.length}
