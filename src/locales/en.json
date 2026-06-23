@@ -136,7 +136,10 @@
     "summaryLoadFailed": "Failed to load summary",
     "sourceFile": "File",
     "newBadge": "NEW",
-    "publishedBy": "by {name}"
+    "publishedBy": "by {name}",
+    "guestCtaTitle": "Sign in to create your own transcript",
+    "guestCtaSubtitle": "Turn audio, video, and podcasts into structured summaries in one click",
+    "guestCtaButton": "Sign in / Sign up"
   },
   "stats": {
     "title": "Stats",
