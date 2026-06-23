@@ -16,14 +16,14 @@ interface ProcessStep {
 }
 
 export default function ProcessingState({
-  progress = 65,
+  progress,
   estimatedTime,
   status,
   sourceType = "upload"
 }: ProcessingStateProps) {
   const { t } = useI18n();
   const statusLabel = status ? t(`task.status.${status}`) : null;
-  const isDone = status === "completed" || progress >= 100;
+  const isDone = status === "completed" || (progress ?? 0) >= 100;
 
   // 判断是否为视频任务（YouTube/Bilibili）
   const isVideoTask = sourceType === "youtube";
@@ -118,7 +118,7 @@ export default function ProcessingState({
     const statusSteps = getStepsFromStatus(status);
     if (statusSteps) return statusSteps;
 
-    if (progress < 10) {
+    if ((progress ?? 0) < 10) {
       return [
         { label: t("processingState.pending"), status: 'processing' },
         { label: t("processingState.transcribing"), status: 'pending' },
@@ -127,16 +127,16 @@ export default function ProcessingState({
       ];
     }
 
-    if (progress < 60) {
+    if ((progress ?? 0) < 60) {
       return [
         { label: t("processingState.pending"), status: 'completed' },
-        { label: t("processingState.transcribing"), status: 'processing', progress: '2:30/5:00' },
+        { label: t("processingState.transcribing"), status: 'processing' },
         { label: t("processingState.summarizing"), status: 'pending' },
         { label: t("processing.stepFinalizing"), status: 'pending' }
       ];
     }
 
-    if (progress < 90) {
+    if ((progress ?? 0) < 90) {
       return [
         { label: t("processingState.pending"), status: 'completed' },
         { label: t("processingState.transcribing"), status: 'completed' },
@@ -145,7 +145,7 @@ export default function ProcessingState({
       ];
     }
 
-    if (progress < 100) {
+    if ((progress ?? 0) < 100) {
       return [
         { label: t("processingState.pending"), status: 'completed' },
         { label: t("processingState.transcribing"), status: 'completed' },
@@ -227,7 +227,7 @@ export default function ProcessingState({
             <div
               className="h-full transition-all duration-500 relative overflow-hidden"
               style={{
-                width: `${progress}%`,
+                width: `${progress ?? 0}%`,
                 background: "var(--app-action-gradient)"
               }}
             >
@@ -243,15 +243,17 @@ export default function ProcessingState({
         </div>
 
         {/* 进度百分比 */}
-        <p
-          className="text-center text-sm mb-4"
-          style={{
-            fontWeight: 500,
-            color: "var(--app-text-muted)"
-          }}
-        >
-          {progress}%
-        </p>
+        {typeof progress === "number" && (
+          <p
+            className="text-center text-sm mb-4"
+            style={{
+              fontWeight: 500,
+              color: "var(--app-text-muted)"
+            }}
+          >
+            {progress}%
+          </p>
+        )}
 
         {/* 预计时间 */}
         <p
