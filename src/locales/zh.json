@@ -136,7 +136,10 @@
     "summaryLoadFailed": "摘要加载失败",
     "sourceFile": "文件",
     "newBadge": "NEW",
-    "publishedBy": "{name} 发布"
+    "publishedBy": "{name} 发布",
+    "guestCtaTitle": "登录后创建你自己的转写",
+    "guestCtaSubtitle": "一键把音频、视频、播客转成结构化摘要",
+    "guestCtaButton": "登录 / 注册"
   },
   "stats": {
     "title": "统计",

@@ -14,6 +14,9 @@ import { proxiedAvatar } from '@/lib/avatar-url';
 import { useDateFormatter } from '@/lib/use-date-formatter';
 import { usePublicMediaToken } from '@/lib/media-url';
 import { useAudioStore } from '@/store/audio-store';
+import { useAuthStore } from '@/store/auth-store';
+import { useUIStore } from '@/store/ui-store';
+import GuestConversionCta from '@/components/common/GuestConversionCta';
 import { extractPlaceholderDescription } from '@/lib/image-placeholder';
 import { mapApiTranscript } from '@/lib/transcript-mapping';
 import type { DisplayTranscriptSegment } from '@/lib/transcript-mapping';
@@ -112,6 +115,8 @@ export default function PublicTaskDetail({
   const id = typeof params?.id === 'string' ? params.id : '';
   const client = useAPIClient();
   const mediaToken = usePublicMediaToken(id);
+  const authStatus = useAuthStore((s) => s.status);
+  const openLogin = useUIStore((s) => s.openLogin);
 
   // detail 单独成态:它回来即可渲染整页骨架,不再被转写/摘要拖住(拆瀑布的核心)。
   // 有服务端预取初值时直接以初值落地,loading 从 false 起步(无整页 spinner 阶段)。
@@ -520,6 +525,7 @@ export default function PublicTaskDetail({
           </div>
         </div>
       </div>
+      {authStatus === "unauthenticated" && <GuestConversionCta onLogin={openLogin} />}
     </>,
   );
 }

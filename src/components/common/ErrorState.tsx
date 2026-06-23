@@ -1,4 +1,5 @@
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, XCircle, AlertTriangle } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useI18n } from '@/lib/i18n-context';
 
 interface ErrorStateProps {
@@ -18,38 +19,32 @@ export default function ErrorState({
 }: ErrorStateProps) {
   const { t } = useI18n();
   // 默认配置
-  const configs = {
+  const configs: Record<NonNullable<ErrorStateProps['type']>, { icon: LucideIcon; defaultTitle: string; defaultDescription: string }> = {
     network: {
-      icon: '❌',
+      icon: XCircle,
       defaultTitle: t("errors.networkFailedTitle"),
       defaultDescription: t("errors.networkFailedDesc")
     },
     processing: {
-      icon: '⚠️',
+      icon: AlertTriangle,
       defaultTitle: t("errors.processFailedTitle"),
       defaultDescription: t("errors.processFailedDesc")
     },
     general: {
-      icon: '⚠️',
+      icon: AlertTriangle,
       defaultTitle: t("errors.unknownErrorTitle"),
       defaultDescription: t("errors.unknownError")
     }
   };
 
   const config = configs[type];
+  const Icon = config.icon;
 
   return (
     <div className="flex flex-col items-center justify-center py-16 px-4">
       {/* Icon */}
-      <div 
-        className="text-6xl mb-4"
-        style={{ 
-          fontSize: '64px',
-          lineHeight: '64px',
-          opacity: 0.6
-        }}
-      >
-        {config.icon}
+      <div className="mb-4" aria-hidden="true">
+        <Icon className="w-16 h-16" style={{ color: "var(--app-text-muted)", opacity: 0.6 }} />
       </div>
 
       {/* Title */}
