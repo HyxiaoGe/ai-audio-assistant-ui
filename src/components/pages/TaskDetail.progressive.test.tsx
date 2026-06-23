@@ -776,3 +776,18 @@ describe("TaskDetail — 返回按钮恢复搜索态 + 交互反馈", () => {
     expect(btn.className).toContain("active:scale-95")
   })
 })
+
+describe("TaskDetail — 失败卡片体特征锁定", () => {
+  it("失败态渲染错误信息与重试按钮", async () => {
+    apiMock.getTask.mockResolvedValue(task({ status: "failed", error_message: "网络错误" }))
+    const { ApiError } = await import("@/types/api")
+    apiMock.getSummary.mockRejectedValue(new ApiError(40401, "not found", "tr"))
+    render(<TaskDetail />)
+    await waitFor(
+      () => { expect(screen.getByText("task.error.processingFailed")).toBeInTheDocument() },
+      { timeout: 5000 }
+    )
+    expect(screen.getByText("网络错误")).toBeInTheDocument()
+    expect(screen.getByText("task.retryProcessing")).toBeInTheDocument()
+  })
+})
