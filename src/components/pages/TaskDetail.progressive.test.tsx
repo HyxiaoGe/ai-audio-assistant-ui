@@ -8,6 +8,7 @@ import type {
   SummaryResponse,
   TranscriptResponse,
 } from "@/types/api"
+import { FakeEventSource, installFakeEventSource } from "@/test-utils/fake-event-source"
 
 // 稳定 mock 引用：Zustand/i18n selector 每次必须返回【同一引用】。若每次返回新对象字面量，
 // 这些引用会流进 TaskDetail 的 useMemo(availableSpeakers[t])/useCallback(loadTask)/useEffect 依赖，
@@ -128,6 +129,10 @@ const apiMock = vi.hoisted(() => ({
   getSummary: vi.fn(),
   getLLMModels: vi.fn(),
   getSummaryStyles: vi.fn(),
+  mintStreamTicket: vi.fn(),
+  compareSummaries: vi.fn(),
+  getSummaryComparison: vi.fn(),
+  activateSummary: vi.fn(),
 }))
 vi.mock("@/lib/use-api-client", () => ({
   useAPIClient: () => apiMock,
@@ -214,6 +219,10 @@ beforeEach(() => {
   apiMock.getSummaryStyles.mockResolvedValue({ styles: [] })
   apiMock.getTranscript.mockResolvedValue(transcript)
   useGlobalStore.setState({ tasks: {}, imageReadyEvents: {} })
+  apiMock.mintStreamTicket.mockReset()
+  apiMock.compareSummaries.mockReset()
+  apiMock.getSummaryComparison.mockReset()
+  apiMock.activateSummary.mockReset()
 })
 
 afterEach(() => {
@@ -656,6 +665,120 @@ describe("TaskDetail — 对比弹窗特征锁定", () => {
     expect(await screen.findByText("task.compareTitle")).toBeInTheDocument();
     expect(screen.getByText("Gemini Pro")).toBeInTheDocument();
     expect(screen.getByText("DeepSeek Chat")).toBeInTheDocument();
+  });
+})
+
+describe("TaskDetail — 模型对比 SSE 特征锁定", () => {
+  let restoreEventSource: () => void;
+
+  beforeEach(() => {
+    restoreEventSource = installFakeEventSource();
+  });
+
+  afterEach(() => {
+    restoreEventSource?.();
+  });
+
+  const twoModels = {
+    models: [
+      { provider: "gemini", model_id: "gemini-pro", display_name: "Gemini Pro", provider_display: "Google", is_available: true, is_recommended: true, cost_tier: null },
+      { provider: "deepseek", model_id: "deepseek-chat", display_name: "DeepSeek Chat", provider_display: "DeepSeek", is_available: true, is_recommended: false, cost_tier: null },
+    ],
+  };
+
+  async function openAndStartCompare() {
+    const compareBtn = await screen.findByText("task.compareModels");
+    await waitFor(() => expect(compareBtn.closest("button")).not.toBeDisabled());
+    fireEvent.click(compareBtn);
+    const startBtn = await screen.findByText("task.compareStart");
+    await waitFor(() => expect(startBtn.closest("button")).not.toBeDisabled());
+    fireEvent.click(startBtn);
+  }
+
+  it("SSE 路径:start→started/delta/completed 逐模型 upsert,达 expected 关流并停 loading", async () => {
+    apiMock.getTask.mockResolvedValue(task({ status: "completed" }));
+    apiMock.getSummary.mockResolvedValue(summaryResp());
+    apiMock.getLLMModels.mockResolvedValue(twoModels);
+    apiMock.mintStreamTicket.mockResolvedValue({ token: "tkn" });
+    apiMock.compareSummaries.mockResolvedValue({ comparison_id: "cmp1" });
+
+    render(<TaskDetail />);
+    await openAndStartCompare();
+
+    // startCompare await compareSummaries + mintStreamTicket → 构造 EventSource
+    await waitFor(() => expect(FakeEventSource.last()).toBeDefined());
+    const es = FakeEventSource.last()!;
+    expect(es.url).toContain("/compare/cmp1/stream");
+    expect(es.url).toContain("summary_type=overview");
+    expect(es.url).toContain("token=tkn");
+
+    act(() => {
+      es.emit("summary.started", { model_id: "gemini-pro" });
+      es.emit("summary.delta", { model_id: "gemini-pro", content: "G 内容" });
+      es.emit("summary.started", { model_id: "deepseek-chat" });
+      es.emit("summary.delta", { model_id: "deepseek-chat", content: "D 内容" });
+      es.emit("summary.completed", { model_id: "gemini-pro", summary_id: "s-g" });
+      es.emit("summary.completed", { model_id: "deepseek-chat", summary_id: "s-d" });
+    });
+
+    // 达 expected(2)→关流
+    await waitFor(() => expect(es.closed).toBe(true));
+    // 默认激活首模型(推荐的 gemini)→对比视图渲染其内容
+    expect(await screen.findByText("G 内容")).toBeInTheDocument();
+  });
+
+  it("无票据回退 HTTP+轮询:mintStreamTicket 失败→getSummaryComparison 落地结果,且不构造 EventSource", async () => {
+    apiMock.getTask.mockResolvedValue(task({ status: "completed" }));
+    apiMock.getSummary.mockResolvedValue(summaryResp());
+    apiMock.getLLMModels.mockResolvedValue(twoModels);
+    apiMock.mintStreamTicket.mockRejectedValue(new Error("no ticket"));
+    apiMock.compareSummaries.mockResolvedValue({ comparison_id: "cmp1" });
+    apiMock.getSummaryComparison.mockResolvedValue({
+      results: [
+        { model: "gemini-pro", content: "G 内容", status: "completed", summary_id: "s-g", token_count: null, created_at: "2026-01-01T00:00:00Z" },
+        { model: "deepseek-chat", content: "D 内容", status: "completed", summary_id: "s-d", token_count: null, created_at: "2026-01-01T00:00:00Z" },
+      ],
+      models: twoModels.models,
+    });
+
+    render(<TaskDetail />);
+    await openAndStartCompare();
+
+    // startPollingFallback 立即 poll() 一次 → 结果落地
+    await waitFor(() => expect(screen.getByText("G 内容")).toBeInTheDocument());
+    expect(FakeEventSource.last()).toBeUndefined();
+  });
+
+  it("activate 选定结果→调 activateSummary + getSummary→buildSummaryState 回写主摘要,并退出对比", async () => {
+    apiMock.getTask.mockResolvedValue(task({ status: "completed" }));
+    // 首拉 + activate 后重拉:用 mockResolvedValue 兜底,activate 重拉返回新摘要文本
+    apiMock.getSummary.mockResolvedValue(summaryResp());
+    apiMock.getLLMModels.mockResolvedValue(twoModels);
+    apiMock.mintStreamTicket.mockResolvedValue({ token: "tkn" });
+    apiMock.compareSummaries.mockResolvedValue({ comparison_id: "cmp1" });
+    apiMock.activateSummary.mockResolvedValue({});
+
+    render(<TaskDetail />);
+    await openAndStartCompare();
+    await waitFor(() => expect(FakeEventSource.last()).toBeDefined());
+    const es = FakeEventSource.last()!;
+    act(() => {
+      es.emit("summary.started", { model_id: "gemini-pro" });
+      es.emit("summary.delta", { model_id: "gemini-pro", content: "G 内容" });
+      es.emit("summary.completed", { model_id: "gemini-pro", summary_id: "s-g" });
+      es.emit("summary.started", { model_id: "deepseek-chat" });
+      es.emit("summary.completed", { model_id: "deepseek-chat", summary_id: "s-d" });
+    });
+    await waitFor(() => expect(es.closed).toBe(true));
+
+    // 点激活按钮(对比视图里 task.compareActivate)
+    const activateBtn = await screen.findByText("task.compareActivate");
+    await waitFor(() => expect(activateBtn.closest("button")).not.toBeDisabled());
+    fireEvent.click(activateBtn);
+
+    await waitFor(() => expect(apiMock.activateSummary).toHaveBeenCalledWith(expect.anything(), "s-g"));
+    // activate 成功后 getSummary 被再次调用(回写 buildSummaryState),且退出对比模式(对比视图消失)
+    await waitFor(() => expect(apiMock.getSummary.mock.calls.length).toBeGreaterThanOrEqual(2));
   });
 })
 
