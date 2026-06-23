@@ -49,6 +49,14 @@ const surfaceMuted = readToken(root, "--app-surface-muted"); // #f8fafc
 const textSubtle = readToken(root, "--app-text-subtle");
 const textFaint = readToken(root, "--app-text-faint");
 
+// 取暗色（.dark）块：从 '.dark {' 到其后第一个行首 '}'。
+function darkBlock(source: string): string {
+  const start = source.indexOf(".dark {");
+  if (start === -1) throw new Error(".dark block not found");
+  const end = source.indexOf("\n}", start);
+  return source.slice(start, end === -1 ? undefined : end);
+}
+
 describe("globals.css light-mode muted text contrast (WCAG AA)", () => {
   it("--app-text-subtle meets AA normal text (>=4.5:1) on primary light surfaces", () => {
     expect(contrastRatio(textSubtle, surface)).toBeGreaterThanOrEqual(4.5);
@@ -62,5 +70,29 @@ describe("globals.css light-mode muted text contrast (WCAG AA)", () => {
 
   it("keeps faint lighter than subtle so the muted hierarchy is preserved", () => {
     expect(relativeLuminance(textFaint)).toBeGreaterThan(relativeLuminance(textSubtle));
+  });
+});
+
+describe("globals.css dark-mode muted text contrast (WCAG AA)", () => {
+  const dark = darkBlock(css);
+  const surface = readToken(dark, "--app-surface");        // #1e293b
+  const surfaceMuted = readToken(dark, "--app-surface-muted"); // #111827
+  const textMuted = readToken(dark, "--app-text-muted");
+  const textSubtle = readToken(dark, "--app-text-subtle");
+  const textFaint = readToken(dark, "--app-text-faint");
+
+  it("--app-text-subtle 暗色达 AA 正文 (>=4.5:1)", () => {
+    expect(contrastRatio(textSubtle, surface)).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(textSubtle, surfaceMuted)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("--app-text-faint 暗色达大字阈值 (>=3.0:1)", () => {
+    expect(contrastRatio(textFaint, surface)).toBeGreaterThanOrEqual(3.0);
+    expect(contrastRatio(textFaint, surfaceMuted)).toBeGreaterThanOrEqual(3.0);
+  });
+
+  it("暗色三档层级:faint 比 subtle 暗、subtle 比 muted 暗(方向与浅色相反)", () => {
+    expect(relativeLuminance(textFaint)).toBeLessThan(relativeLuminance(textSubtle));
+    expect(relativeLuminance(textSubtle)).toBeLessThan(relativeLuminance(textMuted));
   });
 });
