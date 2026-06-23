@@ -79,3 +79,18 @@ describe('TranscriptItem — readOnly mode', () => {
     expect(screen.getByText('common.edit')).toBeTruthy();
   });
 });
+
+// ──────────────────────────────────────────────────────────────
+// 键盘可达性(UX-13)
+// ──────────────────────────────────────────────────────────────
+describe('TranscriptItem — keyboard accessibility (UX-13)', () => {
+  it('编辑按钮始终在 DOM(无需 hover),保证纯键盘可达', () => {
+    renderItem(); // 不触发 mouseEnter
+    expect(screen.getByText('common.edit')).toBeTruthy();
+  });
+
+  it('readOnly 时仍不渲染编辑按钮', () => {
+    renderItem({ readOnly: true });
+    expect(screen.queryByText('common.edit')).toBeNull();
+  });
+});

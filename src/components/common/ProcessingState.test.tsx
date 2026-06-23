@@ -16,3 +16,16 @@ describe("ProcessingState (common)", () => {
     expect(screen.getByText("processingState.summarizing")).toBeInTheDocument()
   })
 })
+
+describe('ProcessingState — 诚实化(无假进度/假计时)', () => {
+  it('status=processing 且 progress=30 时不渲染硬编码假计时 2:30/5:00', () => {
+    const { container } = render(<ProcessingState status="processing" progress={30} />);
+    expect(container.textContent).not.toContain('2:30/5:00');
+    expect(container.textContent).not.toContain('2:30');
+  });
+
+  it('未传 progress 时不凭空显示 65%', () => {
+    const { container } = render(<ProcessingState status="processing" />);
+    expect(container.textContent).not.toContain('65%');
+  });
+});

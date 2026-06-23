@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react"
+import { act, fireEvent, render, screen, within } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { useAudioStore } from "@/store/audio-store"
 import { TranscriptList } from "./TranscriptList"
@@ -493,7 +493,8 @@ describe("TranscriptList", () => {
     // 第一行（id="a"）：hover 显出编辑按钮 → 进入编辑 → 改文本 → 保存
     const firstRow = container.querySelector("div.px-4.py-4") as HTMLElement
     fireEvent.mouseEnter(firstRow)
-    fireEvent.click(screen.getByText("common.edit"))
+    // UX-13 后编辑按钮始终渲染(每行都在 DOM),须把查询限定到当前行,否则多行命中报错。
+    fireEvent.click(within(firstRow).getByText("common.edit"))
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "edited text" } })
     fireEvent.click(screen.getByText("common.save"))
 

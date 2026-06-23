@@ -52,6 +52,25 @@ describe("Dashboard 零任务软引导", () => {
   })
 })
 
+describe("Dashboard 标题层级", () => {
+  it("页标题是页级 h1 且不含 👋", async () => {
+    mockClient.getTasks.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 5 });
+    render(<Dashboard />);
+    const h1 = screen.getByRole("heading", { level: 1 });
+    expect(h1.textContent).toContain("dashboard.welcome");
+    expect(h1.textContent).not.toContain("👋");
+  });
+
+  it("最近任务是 h2,不与页级 h1 跳级(避免 h1→h3)", async () => {
+    mockClient.getTasks.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 5 });
+    render(<Dashboard />);
+    // 页标题升 h1 后,区块标题须为 h2(下一级),否则 h1→h3 跳级违反标题层级
+    const recent = screen.getByRole("heading", { level: 2 });
+    expect(recent.textContent).toContain("dashboard.recentTasks");
+    expect(screen.queryByRole("heading", { level: 3 })).toBeNull();
+  });
+});
+
 describe("Dashboard 三态", () => {
   beforeEach(() => { vi.clearAllMocks(); })
 

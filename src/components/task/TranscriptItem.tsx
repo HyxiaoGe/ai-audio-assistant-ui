@@ -88,7 +88,7 @@ function TranscriptItem({
   return (
     <div
       data-testid="transcript-item"
-      className="px-4 py-4 transition-colors cursor-default border-b relative"
+      className="group px-4 py-4 transition-colors cursor-default border-b relative"
       style={{
         background: isEditing
           ? 'var(--app-glass-hover)'
@@ -169,16 +169,14 @@ function TranscriptItem({
             </button>
           </div>
         ) : (
-          isHovered && (
-            <button
-              onClick={handleStartEdit}
-              className="flex items-center gap-1 px-2 py-1 rounded hover:bg-[var(--app-glass-hover)] transition-colors"
-              style={{ color: 'var(--app-text-muted)' }}
-            >
-              <Edit2 className="w-3.5 h-3.5" />
-              <span className="text-xs">{t("common.edit")}</span>
-            </button>
-          )
+          <button
+            onClick={handleStartEdit}
+            className="flex items-center gap-1 px-2 py-1 rounded hover:bg-[var(--app-glass-hover)] transition-all opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
+            style={{ color: 'var(--app-text-muted)' }}
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+            <span className="text-xs">{t("common.edit")}</span>
+          </button>
         ))}
       </div>
 

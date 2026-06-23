@@ -17,9 +17,9 @@ export default function Explore({ initialItems, initialTotal }: ExploreProps) {
     <div className="p-8">
       <div className="flex items-center gap-3 mb-1">
         <Globe className="w-6 h-6" style={{ color: "var(--app-primary)" }} />
-        <h2 className="text-h2" style={{ color: "var(--app-text)" }}>
+        <h1 className="text-h1" style={{ color: "var(--app-text)" }}>
           {t("explore.pageTitle")}
-        </h2>
+        </h1>
       </div>
       <p className="text-base mt-2 mb-6" style={{ color: "var(--app-text-muted)" }}>
         {t("explore.pageSubtitle")}

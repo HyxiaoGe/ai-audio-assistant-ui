@@ -152,12 +152,12 @@ export default function Dashboard() {
     <div className="p-8">
       {/* 欢迎区域 */}
       <div className="mb-8">
-        <h2
-          className="text-h2"
+        <h1
+          className="text-h1"
           style={{ color: "var(--app-text)" }}
         >
-          {t("dashboard.welcome")}{userName ? `，${userName}` : `，${t("dashboard.friend")}`} 👋
-        </h2>
+          {t("dashboard.welcome")}{userName ? `，${userName}` : `，${t("dashboard.friend")}`}
+        </h1>
       </div>
 
       {/* 新建任务卡片 */}
@@ -167,12 +167,12 @@ export default function Dashboard() {
 
       {/* 最近任务 */}
       <div>
-        <h3
-          className="text-h3 mb-4"
+        <h2
+          className="text-h2 mb-4"
           style={{ color: "var(--app-text)" }}
         >
           {t("dashboard.recentTasks")}
-        </h3>
+        </h2>
 
         {/* 任务列表 */}
         <div className="space-y-3">

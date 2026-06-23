@@ -38,4 +38,13 @@ describe("LoginModal a11y", () => {
     fireEvent.click(screen.getByRole("button", { name: /close/i }))
     expect(onClose).toHaveBeenCalled()
   })
+
+  it("协议区不含 href=\"#\" 死链(条款/隐私渲染为纯文本)", () => {
+    render(<LoginModal isOpen={true} onClose={() => {}} />)
+    // Radix Dialog 将内容渲染到 document.body Portal，需用 document.body 查询
+    expect(document.body.querySelector('a[href="#"]')).toBeNull()
+    // 文案仍在
+    expect(screen.getByText("auth.agreementLink")).toBeTruthy()
+    expect(screen.getByText("auth.privacyPolicy")).toBeTruthy()
+  })
 })
