@@ -50,7 +50,6 @@ export function useSummaryImages({
   useEffect(() => {
     if (!taskId) return
     if (!imageReadyQueue || imageReadyQueue.length === 0) return
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setStreamingImages((prev) => {
       let next = prev
       for (const evt of imageReadyQueue) {
@@ -109,6 +108,20 @@ export function useSummaryImages({
       window.clearInterval(handle)
     }
   }, [taskId, taskStatus, streamingImages, client])
+
+  // 决策 A 泄漏真修:useSummaryRegeneration 的 SSE 路径会把 90s 配图超时句柄写进 imagesTimeoutRef.current。
+  // 卸载时必须读取【cleanup 执行那一刻】的最新 .current 才能清掉真实在途定时器——原 TaskDetail 的卸载
+  // effect 把 .current 拷进 mount 期变量(快照恒 null)致守卫永假、死 no-op、定时器泄漏到点空跑。
+  // exhaustive-deps 的「ref 在 cleanup 时可能已变」告警是针对 DOM 节点 ref 的启发式;此处 .current 是
+  // 计时器数字句柄(非 DOM 节点),读最新值正是本意,故抑制该告警。
+  useEffect(() => {
+    return () => {
+      if (imagesTimeoutRef.current) {
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        window.clearTimeout(imagesTimeoutRef.current)
+      }
+    }
+  }, [])
 
   return { streamingImages, setStreamingImages, imagesTimeoutRef }
 }

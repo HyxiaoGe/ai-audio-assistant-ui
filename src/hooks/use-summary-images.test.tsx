@@ -197,4 +197,23 @@ describe("useSummaryImages", () => {
     // taskStatus !== "completed" → 4s 早返回,getSummary 从未被调用
     expect(getSummary).not.toHaveBeenCalled()
   })
+
+  it("卸载时清掉 imagesTimeoutRef 写入的配图超时定时器(决策 A 泄漏真修)", () => {
+    vi.useFakeTimers()
+    const cb = vi.fn()
+    const client = makeClient(vi.fn())
+    const { result, unmount } = renderHook(() =>
+      useSummaryImages({ taskId: "t1", taskStatus: "completed", client })
+    )
+    // 模拟 regenerate SSE 路径在 mount 后写入 90s 配图超时句柄(原死 no-op 因读 mount 快照恒漏清)。
+    act(() => {
+      result.current.imagesTimeoutRef.current = window.setTimeout(cb, SUMMARY_IMAGE_TIMEOUT_MS)
+    })
+    unmount()
+    act(() => {
+      vi.advanceTimersByTime(SUMMARY_IMAGE_TIMEOUT_MS + 1000)
+    })
+    // 工作型 cleanup 在卸载时读最新 .current 清掉该定时器 → 回调永不空跑
+    expect(cb).not.toHaveBeenCalled()
+  })
 })
