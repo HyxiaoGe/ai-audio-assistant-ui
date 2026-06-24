@@ -575,6 +575,8 @@
     "notificationsDesc": "管理通知和提醒方式",
     "notificationsMasterLabel": "应用内通知",
     "notificationsMasterDesc": "在铃铛和通知中心接收提醒",
+    "notifTypesTitle": "通知类型",
+    "notifTypesDesc": "选择想要接收的通知类型",
     "notifType": {
       "task_completed": "任务完成",
       "task_failed": "任务失败",

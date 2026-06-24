@@ -62,4 +62,10 @@ describe("NotificationSettingsCard", () => {
     expect(screen.queryByText(/feishu/i)).toBeNull()
     expect(screen.queryByText(/飞书/)).toBeNull()
   })
+
+  it("渲染「通知类型」分组小标题(分组面板版式)", () => {
+    renderCard(defaultNotificationPreferences())
+    expect(screen.getByText("settings.notifTypesTitle")).toBeInTheDocument()
+    expect(screen.getByText("settings.notifTypesDesc")).toBeInTheDocument()
+  })
 })
