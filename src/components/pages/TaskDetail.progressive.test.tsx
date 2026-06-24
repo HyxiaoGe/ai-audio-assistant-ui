@@ -9,6 +9,7 @@ import type {
   TranscriptResponse,
 } from "@/types/api"
 import { FakeEventSource, installFakeEventSource } from "@/test-utils/fake-event-source"
+import { SUMMARY_IMAGE_TIMEOUT_MS } from "@/lib/summary-constants"
 
 // 稳定 mock 引用：Zustand/i18n selector 每次必须返回【同一引用】。若每次返回新对象字面量，
 // 这些引用会流进 TaskDetail 的 useMemo(availableSpeakers[t])/useCallback(loadTask)/useEffect 依赖，
@@ -1157,4 +1158,39 @@ describe("TaskDetail — 摘要重生 SSE 特征锁定", () => {
     await waitFor(() => expect(apiMock.regenerateSummary).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(es.closed).toBe(true));
   });
+})
+
+describe("TaskDetail — 配图 90s 兜底特征锁定(slice5)", () => {
+  it("全局-WS 漏收时:仍 pending 的占位符到点(90s)翻 failed 回退", async () => {
+    // 特征锁定:configured 任务首拉 summary 带 pending 配图(占位「等待生成...」),既不推送任何
+    // image_ready,DB 也恒返回 pending(对账轮询幂等无进展、不重置 90s 窗口),故 90s 兜底到点应把
+    // 占位符标记 failed → ImagePlaceholder 渲染纯文本回退 [图片：时间轴]。failed 是纯 <span> 无图加载器,
+    // fake timers 下断言稳健。
+    vi.useFakeTimers()
+    try {
+      apiMock.getTask.mockResolvedValue(task({ status: "completed" }))
+      apiMock.getSummary.mockResolvedValue(summaryResp()) // 恒 pending(默认 fixture)
+
+      render(<TaskDetail />)
+
+      // fake timers 下用 async advance 冲洗 loadTask 的 promise microtask + next/dynamic 动态解析,
+      // 让 pending 占位先渲染出来。
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200)
+      })
+      expect(screen.getByText("等待生成...")).toBeInTheDocument()
+
+      // 推进 90s:90s 兜底 setTimeout 到点 → markUnresolvedImagesFailed → pending 翻 failed。
+      // 期间 4s 对账每 4s 重拉一次 getSummary(恒 pending),streamingImagesEqual 命中保留原 Map 引用,
+      // 不重置 90s 窗口,故 90s 必到点。
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(SUMMARY_IMAGE_TIMEOUT_MS)
+      })
+
+      expect(screen.queryByText("等待生成...")).toBeNull()
+      expect(screen.getByText("[图片：时间轴]")).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
