@@ -573,6 +573,15 @@
     "playbackBehaviorAuto": "Switch and auto play new task",
     "notificationsTitle": "Notifications",
     "notificationsDesc": "Manage how you receive alerts",
+    "notificationsMasterLabel": "In-app notifications",
+    "notificationsMasterDesc": "Receive alerts in the bell and notification center",
+    "notifType": {
+      "task_completed": "Task completed",
+      "task_failed": "Task failed",
+      "quota_alert": "Quota alert",
+      "youtube_reauth_required": "YouTube re-authorization",
+      "visual_failed": "Visual generation failed"
+    },
     "emailNotifications": "Email notifications",
     "emailNotificationsDesc": "Send email when tasks finish",
     "emailNotificationsEnabled": "Email notifications enabled",

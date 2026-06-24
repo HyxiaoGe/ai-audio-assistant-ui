@@ -573,6 +573,15 @@
     "playbackBehaviorAuto": "切换并自动播放新任务",
     "notificationsTitle": "通知设置",
     "notificationsDesc": "管理通知和提醒方式",
+    "notificationsMasterLabel": "应用内通知",
+    "notificationsMasterDesc": "在铃铛和通知中心接收提醒",
+    "notifType": {
+      "task_completed": "任务完成",
+      "task_failed": "任务失败",
+      "quota_alert": "配额告警",
+      "youtube_reauth_required": "YouTube 重新授权",
+      "visual_failed": "配图失败"
+    },
     "emailNotifications": "邮件通知",
     "emailNotificationsDesc": "任务完成时发送邮件通知",
     "emailNotificationsEnabled": "已开启邮件通知",
