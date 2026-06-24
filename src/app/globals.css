@@ -265,6 +265,29 @@
     background: var(--app-page-gradient);
     color: var(--app-text);
   }
+
+  /* 光标手型基线:Tailwind v4 Preflight 移除了 v3 的 button{cursor:pointer},
+     导致所有 <button>/<Button>/role=button(卡片)默认是箭头。这里在 base 层补回。
+     这些元素本身不带 cursor 工具类,故 base 层即可生效;带 cursor-* 工具类的元素
+     (如 disabled:cursor-not-allowed)仍由优先级更高的 utilities 层覆盖。 */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  select:not(:disabled),
+  summary,
+  label[for] {
+    cursor: pointer;
+  }
+}
+
+/* radix 菜单项/下拉选项的手型。它们在 src/components/ui/(DO NOT MODIFY)里
+   显式带了 cursor-default 工具类,而 utilities 层优先级高于 @layer base,
+   故必须用「不入任何 @layer」的规则才能压过(unlayered > 所有 cascade layer)。
+   这样统一恢复手型,无需改动 ui/ 原语。 */
+[role="menuitem"]:not([data-disabled]),
+[role="menuitemcheckbox"]:not([data-disabled]),
+[role="menuitemradio"]:not([data-disabled]),
+[role="option"]:not([aria-disabled="true"]) {
+  cursor: pointer;
 }
 
 .sidebar-item {
