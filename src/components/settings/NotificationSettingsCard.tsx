@@ -45,18 +45,35 @@ export function NotificationSettingsCard({
 
         <Separator />
 
-        <div className="space-y-4">
-          {NOTIFICATION_TYPE_KEYS.map((key) => (
-            <div key={key} className="flex items-center justify-between">
-              <Label htmlFor={`notif-${key}`}>{t(`settings.notifType.${key}`)}</Label>
-              <Switch
-                id={`notif-${key}`}
-                checked={isTypeInAppOn(prefs, key)}
-                disabled={!masterOn}
-                onCheckedChange={(v) => onChangeType(key, v)}
-              />
-            </div>
-          ))}
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <h3 className="text-sm font-medium text-[var(--app-text)]">
+              {t("settings.notifTypesTitle")}
+            </h3>
+            <p className="text-sm text-[var(--app-text-muted)]">
+              {t("settings.notifTypesDesc")}
+            </p>
+          </div>
+
+          <div
+            className={`overflow-hidden rounded-xl border border-[var(--app-glass-border)] bg-[var(--app-glass-bg)] divide-y divide-[var(--app-glass-border)] transition-opacity ${
+              masterOn ? "" : "opacity-60"
+            }`}
+          >
+            {NOTIFICATION_TYPE_KEYS.map((key) => (
+              <div key={key} className="flex items-center justify-between px-3 py-3">
+                <Label htmlFor={`notif-${key}`} className="font-normal">
+                  {t(`settings.notifType.${key}`)}
+                </Label>
+                <Switch
+                  id={`notif-${key}`}
+                  checked={isTypeInAppOn(prefs, key)}
+                  disabled={!masterOn}
+                  onCheckedChange={(v) => onChangeType(key, v)}
+                />
+              </div>
+            ))}
+          </div>
         </div>
       </CardContent>
     </Card>

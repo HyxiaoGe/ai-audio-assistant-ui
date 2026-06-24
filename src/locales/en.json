@@ -575,6 +575,8 @@
     "notificationsDesc": "Manage how you receive alerts",
     "notificationsMasterLabel": "In-app notifications",
     "notificationsMasterDesc": "Receive alerts in the bell and notification center",
+    "notifTypesTitle": "Notification types",
+    "notifTypesDesc": "Choose which notifications to receive",
     "notifType": {
       "task_completed": "Task completed",
       "task_failed": "Task failed",
