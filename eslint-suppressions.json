@@ -1,0 +1,357 @@
+{
+  "src/app/(main)/loading.tsx": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/app/auth/callback/page.tsx": {
+    "no-restricted-syntax": {
+      "count": 5
+    }
+  },
+  "src/app/error.tsx": {
+    "no-restricted-syntax": {
+      "count": 4
+    }
+  },
+  "src/app/global-error.tsx": {
+    "no-restricted-syntax": {
+      "count": 6
+    }
+  },
+  "src/app/not-found.tsx": {
+    "no-restricted-syntax": {
+      "count": 5
+    }
+  },
+  "src/components/auth/LoginModal.tsx": {
+    "no-restricted-syntax": {
+      "count": 8
+    }
+  },
+  "src/components/common/EmptyState.tsx": {
+    "no-restricted-syntax": {
+      "count": 5
+    }
+  },
+  "src/components/common/ErrorState.tsx": {
+    "no-restricted-syntax": {
+      "count": 4
+    }
+  },
+  "src/components/common/FullPageLoader.tsx": {
+    "no-restricted-syntax": {
+      "count": 6
+    }
+  },
+  "src/components/common/GuestConversionCta.tsx": {
+    "no-restricted-syntax": {
+      "count": 5
+    }
+  },
+  "src/components/common/Pagination.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/components/common/ProcessingState.tsx": {
+    "no-restricted-syntax": {
+      "count": 16
+    }
+  },
+  "src/components/common/PublicTaskCardSkeleton.tsx": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/components/layout/AppShell.tsx": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/components/layout/Header.tsx": {
+    "no-restricted-syntax": {
+      "count": 10
+    }
+  },
+  "src/components/layout/HeaderMiniPlayer.tsx": {
+    "no-restricted-syntax": {
+      "count": 13
+    }
+  },
+  "src/components/layout/Sidebar.tsx": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/components/notifications/NotificationBell.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/components/notifications/NotificationList.tsx": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/components/pages/Admin.tsx": {
+    "no-restricted-syntax": {
+      "count": 36
+    }
+  },
+  "src/components/pages/Dashboard.tsx": {
+    "no-restricted-syntax": {
+      "count": 4
+    }
+  },
+  "src/components/pages/Explore.tsx": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "src/components/pages/Notifications.tsx": {
+    "no-restricted-syntax": {
+      "count": 4
+    }
+  },
+  "src/components/pages/PublicTaskCover.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/components/pages/PublicTaskDetail.tsx": {
+    "no-restricted-syntax": {
+      "count": 21
+    }
+  },
+  "src/components/pages/PublicTaskList.tsx": {
+    "no-restricted-syntax": {
+      "count": 11
+    }
+  },
+  "src/components/pages/Settings.tsx": {
+    "no-restricted-syntax": {
+      "count": 12
+    }
+  },
+  "src/components/pages/Stats.tsx": {
+    "no-restricted-syntax": {
+      "count": 12
+    }
+  },
+  "src/components/pages/Subscriptions.tsx": {
+    "no-restricted-syntax": {
+      "count": 32
+    }
+  },
+  "src/components/pages/TaskDetail.tsx": {
+    "no-restricted-syntax": {
+      "count": 20
+    }
+  },
+  "src/components/pages/TaskList.tsx": {
+    "no-restricted-syntax": {
+      "count": 9
+    }
+  },
+  "src/components/stats/StatsCharts.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/components/stats/TimeSeriesChart.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/components/task/ActionItemToggle.tsx": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/components/task/CompareModelDialog.tsx": {
+    "no-restricted-syntax": {
+      "count": 7
+    }
+  },
+  "src/components/task/DeleteTaskDialog.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/components/task/DiffContent.tsx": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "src/components/task/ExportMenu.tsx": {
+    "no-restricted-syntax": {
+      "count": 4
+    }
+  },
+  "src/components/task/ImagePlaceholder.tsx": {
+    "no-restricted-syntax": {
+      "count": 18
+    }
+  },
+  "src/components/task/MarkdownContent.tsx": {
+    "no-restricted-syntax": {
+      "count": 17
+    }
+  },
+  "src/components/task/NewTaskCard.tsx": {
+    "no-restricted-syntax": {
+      "count": 4
+    }
+  },
+  "src/components/task/NewTaskModal.tsx": {
+    "no-restricted-syntax": {
+      "count": 25
+    }
+  },
+  "src/components/task/PlayerBar.tsx": {
+    "no-restricted-syntax": {
+      "count": 10
+    }
+  },
+  "src/components/task/PlayerBarContainer.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/components/task/RetryCleanupToast.tsx": {
+    "no-restricted-syntax": {
+      "count": 7
+    }
+  },
+  "src/components/task/SummaryTabPanel.tsx": {
+    "no-restricted-syntax": {
+      "count": 27
+    }
+  },
+  "src/components/task/TabSwitch.tsx": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "src/components/task/TaskCard.tsx": {
+    "no-restricted-syntax": {
+      "count": 6
+    }
+  },
+  "src/components/task/TaskCardNew.tsx": {
+    "no-restricted-syntax": {
+      "count": 6
+    }
+  },
+  "src/components/task/TaskDetailHeader.tsx": {
+    "no-restricted-syntax": {
+      "count": 5
+    }
+  },
+  "src/components/task/TaskDetailProcessing.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/components/task/TaskFailedPanel.tsx": {
+    "no-restricted-syntax": {
+      "count": 5
+    }
+  },
+  "src/components/task/TaskProcessingPanel.tsx": {
+    "no-restricted-syntax": {
+      "count": 10
+    }
+  },
+  "src/components/task/TaskSearchInput.tsx": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "src/components/task/TaskVisibilityToggle.tsx": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/components/task/TranscriptColumnHeader.tsx": {
+    "no-restricted-syntax": {
+      "count": 4
+    }
+  },
+  "src/components/task/TranscriptItem.tsx": {
+    "no-restricted-syntax": {
+      "count": 12
+    }
+  },
+  "src/components/task/TranscriptList.tsx": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/components/task/UploadZone.tsx": {
+    "no-restricted-syntax": {
+      "count": 18
+    }
+  },
+  "src/components/task/YouTubePlayerCard.tsx": {
+    "no-restricted-syntax": {
+      "count": 15
+    }
+  },
+  "src/components/ui/chart.tsx": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/components/ui/progress.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/components/ui/sonner.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/components/upload/FileUploader.tsx": {
+    "no-restricted-syntax": {
+      "count": 5
+    }
+  },
+  "src/components/upload/UploadDialog.tsx": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "src/components/upload/UploadProgress.tsx": {
+    "no-restricted-syntax": {
+      "count": 8
+    }
+  },
+  "src/components/youtube/ChannelCard.tsx": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "src/components/youtube/ChannelDetailDialog.tsx": {
+    "no-restricted-syntax": {
+      "count": 7
+    }
+  },
+  "src/components/youtube/ChannelSearchInput.tsx": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "src/components/youtube/SubscriptionSkeleton.tsx": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/components/youtube/VideoCard.tsx": {
+    "no-restricted-syntax": {
+      "count": 6
+    }
+  }
+}
