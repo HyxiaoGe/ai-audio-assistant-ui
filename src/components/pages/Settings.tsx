@@ -22,7 +22,14 @@ import { useI18n } from '@/lib/i18n-context';
 import { notifyError, notifyInfo } from '@/lib/notify';
 import { useAPIClient } from '@/lib/use-api-client';
 import { useUserStore } from '@/store/user-store';
-import type { AsrUserFreeQuotaResponse, UserPreferences, UserPreferencesUpdateRequest } from '@/types/api';
+import type { AsrUserFreeQuotaResponse, UserPreferences, UserPreferencesUpdateRequest, NotificationTypeKey, UserPreferencesNotifications } from '@/types/api';
+import { NotificationSettingsCard } from "@/components/settings/NotificationSettingsCard";
+import {
+  defaultNotificationPreferences,
+  normalizeNotificationPreferences,
+  setMasterInApp,
+  setTypeInApp,
+} from "@/lib/notification-preferences";
 import {
   Globe,
   Palette,
@@ -81,6 +88,10 @@ export default function Settings() {
   } = useSettings();
   const [localSettings, setLocalSettings] = useState<LocalSettings>(() => loadLocalSettings());
   const [saveState, setSaveState] = useState<"idle" | "saving" | "success" | "error">("idle");
+  const [notificationPrefs, setNotificationPrefs] = useState<UserPreferencesNotifications>(
+    defaultNotificationPreferences()
+  );
+  const notificationsTouchedRef = useRef(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<"clearTasks" | "deleteAccount" | "resetSettings" | null>(null);
   const [accountStats, setAccountStats] = useState<{
@@ -249,6 +260,9 @@ export default function Settings() {
         const result = await client.getUserPreferences();
         if (!active) return;
         applyPreferencesRef.current(result);
+        if (!notificationsTouchedRef.current) {
+          setNotificationPrefs(normalizeNotificationPreferences(result.notifications));
+        }
       } catch {
         // ignore preference load failures
       }
@@ -375,6 +389,30 @@ export default function Settings() {
     setLocalSettings((prev) => ({ ...prev, playbackBehavior: value }));
     persistLocalSettings({ playbackBehavior: value });
   };
+
+  const handleNotificationMasterToggle = useCallback(
+    async (on: boolean) => {
+      notificationsTouchedRef.current = true;
+      const prev = notificationPrefs;
+      const next = setMasterInApp(prev, on);
+      setNotificationPrefs(next);
+      const ok = await updatePreferences({ notifications: next });
+      if (!ok) setNotificationPrefs(prev);
+    },
+    [notificationPrefs, updatePreferences]
+  );
+
+  const handleNotificationTypeToggle = useCallback(
+    async (key: NotificationTypeKey, on: boolean) => {
+      notificationsTouchedRef.current = true;
+      const prev = notificationPrefs;
+      const next = setTypeInApp(prev, key, on);
+      setNotificationPrefs(next);
+      const ok = await updatePreferences({ notifications: next });
+      if (!ok) setNotificationPrefs(prev);
+    },
+    [notificationPrefs, updatePreferences]
+  );
 
   const handleSpeakerDiarizationToggle = (checked: boolean) => {
     speakerDiarizationTouchedRef.current = true;
@@ -566,6 +604,14 @@ export default function Settings() {
             </div>
               </CardContent>
             </Card>
+            {isAuthenticated && (
+              <NotificationSettingsCard
+                prefs={notificationPrefs}
+                onChangeMaster={handleNotificationMasterToggle}
+                onChangeType={handleNotificationTypeToggle}
+                t={t}
+              />
+            )}
             {/* Processing Settings */}
             <Card>
               <CardHeader>

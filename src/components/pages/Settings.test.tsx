@@ -60,9 +60,8 @@ beforeEach(() => {
 });
 
 describe("UX-10 安慰剂控件删除", () => {
-  it("不再渲染 Notification 卡(邮件/推送开关)", () => {
+  it("不再渲染邮件/推送安慰剂开关", () => {
     render(<Settings />);
-    expect(screen.queryByText("settings.notificationsTitle")).toBeNull();
     expect(screen.queryByText("settings.emailNotifications")).toBeNull();
     expect(screen.queryByText("settings.pushNotifications")).toBeNull();
   });
@@ -105,5 +104,85 @@ describe("UX-10 保存按钮三态", () => {
     fireEvent.click(screen.getByRole("button", { name: /settings\.saveAction$/ }));
     expect(await screen.findByText("common.saved")).toBeInTheDocument();
     expect(mockClient.updateUserPreferences).not.toHaveBeenCalled();
+  });
+});
+
+describe("in-app 通知偏好", () => {
+  it("登录加载后渲染通知卡并反映服务端矩阵(总开关关 → 分项 disabled)", async () => {
+    mockClient.getUserPreferences.mockResolvedValue({
+      task_defaults: {},
+      ui: {},
+      notifications: { channels: { in_app: false, feishu: false }, types: {} },
+    });
+    render(<Settings />);
+    await waitFor(() =>
+      expect(screen.getByLabelText("settings.notifType.task_completed")).toBeDisabled(),
+    );
+    expect(screen.getByLabelText("settings.notificationsMasterLabel")).not.toBeChecked();
+  });
+
+  it("切某类型 → PATCH 完整矩阵(channels 两键 + 该类型 in_app=false)", async () => {
+    render(<Settings />);
+    const sw = await screen.findByLabelText("settings.notifType.task_completed");
+    await waitFor(() => expect(sw).toBeChecked());
+    fireEvent.click(sw);
+    await waitFor(() =>
+      expect(mockClient.updateUserPreferences).toHaveBeenCalledWith({
+        notifications: {
+          channels: { in_app: true, feishu: false },
+          types: { task_completed: { in_app: false } },
+        },
+      }),
+    );
+  });
+
+  it("切总开关 → PATCH channels.in_app=false", async () => {
+    render(<Settings />);
+    const master = await screen.findByLabelText("settings.notificationsMasterLabel");
+    await waitFor(() => expect(master).toBeChecked());
+    fireEvent.click(master);
+    await waitFor(() =>
+      expect(mockClient.updateUserPreferences).toHaveBeenCalledWith({
+        notifications: { channels: { in_app: false, feishu: false }, types: {} },
+      }),
+    );
+  });
+
+  it("feishu round-trip:不暴露但 PATCH 时原样保留 channels.feishu 与 types.*.feishu", async () => {
+    mockClient.getUserPreferences.mockResolvedValue({
+      task_defaults: {},
+      ui: {},
+      notifications: {
+        channels: { in_app: true, feishu: true },
+        types: { task_completed: { in_app: false }, task_failed: { in_app: null, feishu: true } },
+      },
+    });
+    render(<Settings />);
+    // 用 task_completed 的可见 OFF 态作为「加载已应用」同步点
+    const tc = await screen.findByLabelText("settings.notifType.task_completed");
+    await waitFor(() => expect(tc).not.toBeChecked());
+    // 切另一个类型,断言发出的 payload 仍保留两处 feishu
+    fireEvent.click(screen.getByLabelText("settings.notifType.quota_alert"));
+    await waitFor(() => expect(mockClient.updateUserPreferences).toHaveBeenCalled());
+    const sent = mockClient.updateUserPreferences.mock.calls.at(-1)![0];
+    expect(sent.notifications.channels.feishu).toBe(true);
+    expect(sent.notifications.types.task_failed.feishu).toBe(true);
+    expect(sent.notifications.types.quota_alert.in_app).toBe(false);
+  });
+
+  it("未登录不渲染通知卡", () => {
+    authState.user = null;
+    render(<Settings />);
+    expect(screen.queryByLabelText("settings.notificationsMasterLabel")).toBeNull();
+  });
+
+  it("保存失败 → 乐观态回滚", async () => {
+    mockClient.updateUserPreferences.mockRejectedValue(new Error("boom"));
+    render(<Settings />);
+    const sw = await screen.findByLabelText("settings.notifType.task_completed");
+    await waitFor(() => expect(sw).toBeChecked());
+    fireEvent.click(sw); // 乐观置 false
+    await waitFor(() => expect(mockClient.updateUserPreferences).toHaveBeenCalled());
+    await waitFor(() => expect(sw).toBeChecked()); // 回滚为 true
   });
 });

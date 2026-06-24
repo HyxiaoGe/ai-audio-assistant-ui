@@ -790,9 +790,30 @@ export interface UserPreferencesUI {
   timezone?: string
 }
 
+/** 后端 NotificationType 枚举对齐的 5 个通知类型 key。 */
+export type NotificationTypeKey =
+  | "task_completed"
+  | "task_failed"
+  | "quota_alert"
+  | "youtube_reauth_required"
+  | "visual_failed"
+
+/** 渠道总开关。 */
+export interface NotificationChannelToggles {
+  in_app: boolean
+  feishu: boolean
+}
+
+/** 按类型的渠道覆写;null/未设 = 继承总开关。 */
+export interface NotificationTypeToggles {
+  in_app?: boolean | null
+  feishu?: boolean | null
+}
+
+/** 通知偏好矩阵(对齐后端 NotificationPreferences)。 */
 export interface UserPreferencesNotifications {
-  task_completed?: boolean
-  task_failed?: boolean
+  channels: NotificationChannelToggles
+  types: Partial<Record<NotificationTypeKey, NotificationTypeToggles>>
 }
 
 export interface UserPreferences {
@@ -804,7 +825,7 @@ export interface UserPreferences {
 export interface UserPreferencesUpdateRequest {
   task_defaults?: Partial<UserPreferencesTaskDefaults>
   ui?: Partial<UserPreferencesUI>
-  notifications?: Partial<UserPreferencesNotifications>
+  notifications?: UserPreferencesNotifications
 }
 
 // ============================================================================
