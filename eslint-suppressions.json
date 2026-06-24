@@ -6,7 +6,7 @@
   },
   "src/app/auth/callback/page.tsx": {
     "no-restricted-syntax": {
-      "count": 5
+      "count": 6
     }
   },
   "src/app/error.tsx": {
@@ -16,7 +16,7 @@
   },
   "src/app/global-error.tsx": {
     "no-restricted-syntax": {
-      "count": 6
+      "count": 7
     }
   },
   "src/app/not-found.tsx": {
@@ -26,17 +26,17 @@
   },
   "src/components/auth/LoginModal.tsx": {
     "no-restricted-syntax": {
-      "count": 8
+      "count": 10
     }
   },
   "src/components/common/EmptyState.tsx": {
     "no-restricted-syntax": {
-      "count": 5
+      "count": 6
     }
   },
   "src/components/common/ErrorState.tsx": {
     "no-restricted-syntax": {
-      "count": 4
+      "count": 5
     }
   },
   "src/components/common/FullPageLoader.tsx": {
@@ -46,12 +46,12 @@
   },
   "src/components/common/GuestConversionCta.tsx": {
     "no-restricted-syntax": {
-      "count": 5
+      "count": 6
     }
   },
   "src/components/common/Pagination.tsx": {
     "no-restricted-syntax": {
-      "count": 1
+      "count": 4
     }
   },
   "src/components/common/ProcessingState.tsx": {
@@ -71,12 +71,12 @@
   },
   "src/components/layout/Header.tsx": {
     "no-restricted-syntax": {
-      "count": 10
+      "count": 14
     }
   },
   "src/components/layout/HeaderMiniPlayer.tsx": {
     "no-restricted-syntax": {
-      "count": 13
+      "count": 15
     }
   },
   "src/components/layout/Sidebar.tsx": {
@@ -86,12 +86,22 @@
   },
   "src/components/notifications/NotificationBell.tsx": {
     "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/components/notifications/NotificationItem.tsx": {
+    "no-restricted-syntax": {
       "count": 1
     }
   },
   "src/components/notifications/NotificationList.tsx": {
     "no-restricted-syntax": {
-      "count": 2
+      "count": 3
+    }
+  },
+  "src/components/notifications/NotificationPanel.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
     }
   },
   "src/components/pages/Admin.tsx": {
@@ -101,7 +111,7 @@
   },
   "src/components/pages/Dashboard.tsx": {
     "no-restricted-syntax": {
-      "count": 4
+      "count": 5
     }
   },
   "src/components/pages/Explore.tsx": {
@@ -121,12 +131,12 @@
   },
   "src/components/pages/PublicTaskDetail.tsx": {
     "no-restricted-syntax": {
-      "count": 21
+      "count": 24
     }
   },
   "src/components/pages/PublicTaskList.tsx": {
     "no-restricted-syntax": {
-      "count": 11
+      "count": 13
     }
   },
   "src/components/pages/Settings.tsx": {
@@ -136,7 +146,7 @@
   },
   "src/components/pages/Stats.tsx": {
     "no-restricted-syntax": {
-      "count": 12
+      "count": 14
     }
   },
   "src/components/pages/Subscriptions.tsx": {
@@ -146,12 +156,12 @@
   },
   "src/components/pages/TaskDetail.tsx": {
     "no-restricted-syntax": {
-      "count": 20
+      "count": 24
     }
   },
   "src/components/pages/TaskList.tsx": {
     "no-restricted-syntax": {
-      "count": 9
+      "count": 15
     }
   },
   "src/components/stats/StatsCharts.tsx": {
@@ -166,12 +176,12 @@
   },
   "src/components/task/ActionItemToggle.tsx": {
     "no-restricted-syntax": {
-      "count": 2
+      "count": 3
     }
   },
   "src/components/task/CompareModelDialog.tsx": {
     "no-restricted-syntax": {
-      "count": 7
+      "count": 9
     }
   },
   "src/components/task/DeleteTaskDialog.tsx": {
@@ -186,7 +196,7 @@
   },
   "src/components/task/ExportMenu.tsx": {
     "no-restricted-syntax": {
-      "count": 4
+      "count": 6
     }
   },
   "src/components/task/ImagePlaceholder.tsx": {
@@ -201,17 +211,17 @@
   },
   "src/components/task/NewTaskCard.tsx": {
     "no-restricted-syntax": {
-      "count": 4
+      "count": 5
     }
   },
   "src/components/task/NewTaskModal.tsx": {
     "no-restricted-syntax": {
-      "count": 25
+      "count": 28
     }
   },
   "src/components/task/PlayerBar.tsx": {
     "no-restricted-syntax": {
-      "count": 10
+      "count": 11
     }
   },
   "src/components/task/PlayerBarContainer.tsx": {
@@ -221,32 +231,37 @@
   },
   "src/components/task/RetryCleanupToast.tsx": {
     "no-restricted-syntax": {
-      "count": 7
+      "count": 10
+    }
+  },
+  "src/components/task/StatusFilter.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
     }
   },
   "src/components/task/SummaryTabPanel.tsx": {
     "no-restricted-syntax": {
-      "count": 27
+      "count": 34
     }
   },
   "src/components/task/TabSwitch.tsx": {
     "no-restricted-syntax": {
-      "count": 3
+      "count": 4
     }
   },
   "src/components/task/TaskCard.tsx": {
     "no-restricted-syntax": {
-      "count": 6
+      "count": 8
     }
   },
   "src/components/task/TaskCardNew.tsx": {
     "no-restricted-syntax": {
-      "count": 6
+      "count": 7
     }
   },
   "src/components/task/TaskDetailHeader.tsx": {
     "no-restricted-syntax": {
-      "count": 5
+      "count": 6
     }
   },
   "src/components/task/TaskDetailProcessing.tsx": {
@@ -256,7 +271,7 @@
   },
   "src/components/task/TaskFailedPanel.tsx": {
     "no-restricted-syntax": {
-      "count": 5
+      "count": 6
     }
   },
   "src/components/task/TaskProcessingPanel.tsx": {
@@ -266,12 +281,12 @@
   },
   "src/components/task/TaskSearchInput.tsx": {
     "no-restricted-syntax": {
-      "count": 3
+      "count": 4
     }
   },
   "src/components/task/TaskVisibilityToggle.tsx": {
     "no-restricted-syntax": {
-      "count": 2
+      "count": 3
     }
   },
   "src/components/task/TranscriptColumnHeader.tsx": {
@@ -281,7 +296,7 @@
   },
   "src/components/task/TranscriptItem.tsx": {
     "no-restricted-syntax": {
-      "count": 12
+      "count": 16
     }
   },
   "src/components/task/TranscriptList.tsx": {
@@ -291,12 +306,12 @@
   },
   "src/components/task/UploadZone.tsx": {
     "no-restricted-syntax": {
-      "count": 18
+      "count": 20
     }
   },
   "src/components/task/YouTubePlayerCard.tsx": {
     "no-restricted-syntax": {
-      "count": 15
+      "count": 16
     }
   },
   "src/components/ui/chart.tsx": {
@@ -331,7 +346,7 @@
   },
   "src/components/youtube/ChannelCard.tsx": {
     "no-restricted-syntax": {
-      "count": 3
+      "count": 4
     }
   },
   "src/components/youtube/ChannelDetailDialog.tsx": {
@@ -341,7 +356,7 @@
   },
   "src/components/youtube/ChannelSearchInput.tsx": {
     "no-restricted-syntax": {
-      "count": 3
+      "count": 4
     }
   },
   "src/components/youtube/SubscriptionSkeleton.tsx": {
@@ -351,7 +366,7 @@
   },
   "src/components/youtube/VideoCard.tsx": {
     "no-restricted-syntax": {
-      "count": 6
+      "count": 7
     }
   }
 }
