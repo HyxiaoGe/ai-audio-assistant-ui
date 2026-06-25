@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Search } from "lucide-react"
 import { useAPIClient } from "@/lib/use-api-client"
 import { useI18n } from "@/lib/i18n-context"
@@ -36,6 +36,30 @@ export default function Discover({ initialTrending }: DiscoverProps) {
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [searched, setSearched] = useState(false)
+
+  const [trending, setTrending] = useState<YouTubeTrendingItem[]>(initialTrending ?? [])
+  const seeded = initialTrending !== undefined
+
+  useEffect(() => {
+    if (seeded) return // SSR 已注入则不再客户端拉取
+    let alive = true
+    client
+      .getYouTubeTrending({ limit: 10 })
+      .then((res) => {
+        if (alive) setTrending(res.items)
+      })
+      .catch(() => {
+        /* 热门拉取失败静默:非关键路径 */
+      })
+    return () => {
+      alive = false
+    }
+  }, [seeded, client])
+
+  const handleChip = (term: string) => {
+    setQuery(term)
+    void runSearch(term)
+  }
 
   const runSearch = useCallback(
     async (raw: string) => {
@@ -91,8 +115,16 @@ export default function Discover({ initialTrending }: DiscoverProps) {
         </Button>
       </form>
 
-      {/* 热门 chips 槽位 —— 由 Task 9 填充 */}
-      {initialTrending && initialTrending.length > 0 && null}
+      {trending.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-6">
+          <span className="text-sm text-[var(--app-text-muted)]">{t("discover.trendingLabel")}</span>
+          {trending.map((item) => (
+            <Button key={item.query} variant="secondary" size="sm" onClick={() => handleChip(item.query)}>
+              {item.query}
+            </Button>
+          ))}
+        </div>
+      )}
 
       {loading && <p className="text-[var(--app-text-muted)]">{t("discover.loading")}</p>}
       {errorMsg && <p className="text-[var(--app-danger)]">{errorMsg}</p>}

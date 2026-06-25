@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const i18n = vi.hoisted(() => ({ t: (k: string) => k }))
 const stores = vi.hoisted(() => ({ authed: true, openLogin: vi.fn(), openNewTask: vi.fn() }))
-const client = vi.hoisted(() => ({ searchYouTube: vi.fn() }))
+const client = vi.hoisted(() => ({ searchYouTube: vi.fn(), getYouTubeTrending: vi.fn() }))
 
 vi.mock("@/lib/i18n-context", () => ({ useI18n: () => ({ t: i18n.t, locale: "en" }) }))
 vi.mock("@/lib/use-api-client", () => ({ useAPIClient: () => client }))
@@ -26,6 +26,22 @@ function hit(vid: string, title: string) {
 beforeEach(() => {
   vi.clearAllMocks()
   stores.authed = true
+  client.getYouTubeTrending.mockResolvedValue({ items: [] })
+})
+
+describe("Discover trending", () => {
+  it("renders trending chips from initialTrending and searches on chip click", async () => {
+    client.searchYouTube.mockResolvedValue({ query: "news", cached: true, items: [] })
+    render(<Discover initialTrending={[{ query: "news", count: 9 }, { query: "music", count: 4 }]} />)
+    expect(screen.getByText("discover.trendingLabel")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "news" }))
+    await waitFor(() => expect(client.searchYouTube).toHaveBeenCalledWith("news", { authenticated: true }))
+  })
+
+  it("does not render the trending block when there are no trending items", () => {
+    render(<Discover initialTrending={[]} />)
+    expect(screen.queryByText("discover.trendingLabel")).toBeNull()
+  })
 })
 
 describe("Discover", () => {
