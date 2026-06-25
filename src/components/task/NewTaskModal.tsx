@@ -122,7 +122,9 @@ export default function NewTaskModal({
 
   const platformTabs = [
     { id: 'youtube', label: 'YouTube', disabled: false },
-    { id: 'bilibili', label: 'Bilibili', disabled: false }
+    // B站 取流接口对海外出口 IP + 未登录返回 412（当前部署下无法取流），
+    // 暂时禁用 Bilibili 入口，待登录态 cookie 接入后再开放。
+    { id: 'bilibili', label: 'Bilibili', disabled: true }
   ];
 
   const platformInfo = {

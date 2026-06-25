@@ -802,7 +802,7 @@
     "comingSoon": "Coming soon",
     "validatingVideo": "Validating video...",
     "createFailed": "Failed to create task",
-    "anyLinkHint": "Supports YouTube, Bilibili, podcasts and 1000+ sites (beta)"
+    "anyLinkHint": "Supports YouTube, Vimeo, podcasts and 1000+ sites (beta)"
   },
   "errors": {
     "loadTaskFailed": "Failed to load task",

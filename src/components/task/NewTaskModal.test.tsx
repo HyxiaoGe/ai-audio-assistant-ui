@@ -336,4 +336,14 @@ describe("NewTaskModal 链接来源类型判定", () => {
     expect(payload.source_type).toBe("url")
     expect(payload.source_url).toBe("https://www.bilibili.com/video/BV1xx")
   })
+
+  // B站 取流接口对海外出口 IP + 未登录返回 412，当前部署下 B站 实际无法取流，
+  // 故暂时禁用 Bilibili 平台入口（待登录态 cookie 接入后再开放），避免宣传一个点了不通的来源。
+  it("Bilibili 平台入口暂时禁用（取流被风控，待 cookie 接入再开放）", async () => {
+    render(<NewTaskModal isOpen onClose={vi.fn()} />)
+    await screen.findByRole("dialog")
+    fireEvent.click(screen.getByRole("tab", { name: "newTask.tabs.link" }))
+    const bili = (await screen.findByRole("button", { name: /Bilibili/ })) as HTMLButtonElement
+    expect(bili.disabled).toBe(true)
+  })
 })
