@@ -1347,3 +1347,31 @@ export interface TaskVisibilityResponse {
   is_public: boolean
   published_at: string | null
 }
+
+// ============================================================================
+// YouTube 搜索/热门（/api/v1/youtube/search 与 /api/v1/youtube/search/trending）
+// ============================================================================
+
+export interface VideoHit {
+  video_id: string
+  title: string
+  channel: string | null
+  channel_id: string | null
+  thumbnail: string | null
+  url: string
+}
+
+export interface YouTubeSearchResponse {
+  query: string
+  items: VideoHit[]
+  cached: boolean
+}
+
+export interface YouTubeTrendingItem {
+  query: string
+  count: number
+}
+
+export interface YouTubeTrendingResponse {
+  items: YouTubeTrendingItem[]
+}
