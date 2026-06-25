@@ -320,28 +320,6 @@ describe("PublicTaskDetail 公开详情页", () => {
     expect(screen.getByTestId("player-bar")).toBeInTheDocument()
   })
 
-  it("source_type=url 任务:有 source_url 且无 youtube_info 时渲染来源链接", async () => {
-    // §5.3/§8/§11 验收:url 类型任务必须在公开详情页显示可点的来源链接。
-    mockClient.getPublicTask.mockResolvedValue({
-      id: "t1",
-      title: "URL 任务",
-      source_type: "url" as const,
-      source_url: "https://example.com/article/123",
-      audio_url: null,
-      duration_seconds: 60,
-      detected_language: "zh",
-      detected_summary_style: "general",
-      published_at: "2026-06-10T00:00:00Z",
-      created_at: "2026-06-09T00:00:00Z",
-    })
-    mockClient.getPublicTranscript.mockResolvedValue({ task_id: "t1", total: 0, items: [] })
-    mockClient.getPublicSummary.mockResolvedValue({ task_id: "t1", total: 0, items: [] })
-    render(<PublicTaskDetail />)
-    await waitFor(() => expect(screen.getByText("URL 任务")).toBeInTheDocument(), { timeout: 3000 })
-    const link = screen.getByRole("link", { name: "explore.viewSource" })
-    expect(link).toHaveAttribute("href", "https://example.com/article/123")
-  })
-
   it("非 YouTube 来源时不渲染来源链接", async () => {
     mockClient.getPublicTask.mockResolvedValue({
       id: "t1",

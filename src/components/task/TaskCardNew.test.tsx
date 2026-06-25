@@ -36,14 +36,6 @@ describe("TaskCardNew", () => {
     expect(screen.getByText("task.status.processing")).toBeInTheDocument()
   })
 
-  it("url 来源渲染视频图标而非文件图标", () => {
-    const urlTask = { ...baseTask, source_type: "url" as const }
-    const { container } = render(<TaskCardNew task={urlTask} />)
-    // Video 图标 lucide class = lucide-video；FileAudio 图标 = lucide-file-headphone
-    expect(container.querySelector(".lucide-video")).toBeInTheDocument()
-    expect(container.querySelector(".lucide-file-headphone")).not.toBeInTheDocument()
-  })
-
   it("calls onClick and onRetry with failure state", () => {
     const onClick = vi.fn()
     const onRetry = vi.fn()

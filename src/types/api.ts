@@ -260,7 +260,7 @@ export type TaskStatus =
   | "completed"
   | "failed"
 
-export type SourceType = "upload" | "youtube" | "url"
+export type SourceType = "upload" | "youtube"
 
 export type Language = "auto" | "zh" | "en"
 

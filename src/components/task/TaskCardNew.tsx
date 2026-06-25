@@ -72,11 +72,10 @@ export function TaskCardNew({
     task.status !== "completed" && task.status !== "failed"
 
   const getIcon = () => {
-    // youtube 与通用 url 都是外部视频/音频链接 → 视频图标；仅本地上传用文件图标。
-    if (task.source_type === "upload") {
-      return <FileAudio className="size-6" />
+    if (task.source_type === "youtube") {
+      return <Video className="size-6" />
     }
-    return <Video className="size-6" />
+    return <FileAudio className="size-6" />
   }
 
   return (

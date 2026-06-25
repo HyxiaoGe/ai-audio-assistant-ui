@@ -417,7 +417,7 @@ export default function PublicTaskDetail({
       )}
 
       {/* 来源归属:有 youtube_info(封面卡已含视频信息)时不重复;无 youtube_info 但 source_url 在(提取回退)时保留 */}
-      {(task.source_type === 'url' || task.source_type === 'youtube') && task.source_url && !task.youtube_info && (
+      {task.source_type === 'youtube' && task.source_url && !task.youtube_info && (
         <div className="flex justify-center pt-3">
           <a
             href={task.source_url}
