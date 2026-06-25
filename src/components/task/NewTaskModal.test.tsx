@@ -299,3 +299,41 @@ describe("NewTaskModal advanced 折叠 aria", () => {
     expect(toggle).toHaveAttribute("aria-expanded", "false")
   })
 })
+
+describe("NewTaskModal 链接来源类型判定", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockClient.getLLMModels.mockResolvedValue({ models: [] })
+    mockClient.getSummaryStyles.mockResolvedValue({ styles: [] })
+    mockClient.getUserPreferences.mockResolvedValue({ task_defaults: {} })
+    mockClient.getYouTubeSummaryStyleRecommendation.mockResolvedValue({
+      style: "general", confidence: 0.5, reason: "", cached: false,
+    })
+    mockClient.createTask.mockResolvedValue({
+      id: "task-1", status: "queued", progress: 1, created_at: "2026-06-25T00:00:00Z",
+    })
+  })
+
+  async function submitLink(url: string) {
+    render(<NewTaskModal isOpen onClose={vi.fn()} />)
+    await screen.findByRole("dialog")
+    fireEvent.click(screen.getByRole("tab", { name: "newTask.tabs.link" }))
+    const input = (await screen.findByPlaceholderText(/https?:/)) as HTMLInputElement
+    fireEvent.change(input, { target: { value: url } })
+    fireEvent.click(screen.getByRole("button", { name: /newTask\.startProcessing|newTask\.creatingTask/ }))
+    await waitFor(() => expect(mockClient.createTask).toHaveBeenCalled())
+    return mockClient.createTask.mock.calls[0][0]
+  }
+
+  it("YouTube 链接提交 source_type=youtube", async () => {
+    const payload = await submitLink("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+    expect(payload.source_type).toBe("youtube")
+    expect(payload.source_url).toBe("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+  })
+
+  it("非 YouTube 链接提交 source_type=url", async () => {
+    const payload = await submitLink("https://www.bilibili.com/video/BV1xx")
+    expect(payload.source_type).toBe("url")
+    expect(payload.source_url).toBe("https://www.bilibili.com/video/BV1xx")
+  })
+})
