@@ -135,6 +135,7 @@
     "viewSource": "View original video",
     "summaryLoadFailed": "Failed to load summary",
     "sourceFile": "File",
+    "sourceLink": "Link",
     "newBadge": "NEW",
     "publishedBy": "by {name}",
     "guestCtaTitle": "Sign in to create your own transcript",
