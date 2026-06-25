@@ -1193,4 +1193,24 @@ describe("TaskDetail — 配图 90s 兜底特征锁定(slice5)", () => {
       vi.useRealTimers()
     }
   })
+
+  it("source_type=url 任务:私有详情页渲染可点的来源链接", async () => {
+    // §5.3/§8/§11 验收:url 类型任务必须在私有详情页显示「来源:<可点 source_url>」。
+    apiMock.getTask.mockResolvedValue(
+      task({ source_type: "url", source_url: "https://example.com/article/456", status: "completed" })
+    )
+    apiMock.getSummary.mockResolvedValue(summaryResp())
+
+    render(<TaskDetail />)
+
+    await waitFor(
+      () => {
+        const link = screen.getByRole("link", { name: "explore.viewSource" })
+        expect(link).toHaveAttribute("href", "https://example.com/article/456")
+        expect(link).toHaveAttribute("target", "_blank")
+        expect(link).toHaveAttribute("rel", "noopener noreferrer")
+      },
+      { timeout: 3000 }
+    )
+  })
 })
