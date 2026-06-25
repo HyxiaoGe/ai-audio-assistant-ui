@@ -485,7 +485,7 @@ export default function TaskList() {
                   duration={formatDurationLabel(task.duration_seconds)}
                   timeAgo={formatRelativeTime(task.created_at)}
                   status={displayStatus(task.status)}
-                  type={task.source_type === 'youtube' ? 'video' : 'file'}
+                  type={task.source_type === 'upload' ? 'file' : 'video'}
                   onClick={handleTaskClick}
                   onRetry={handleRetryTask}
                   isRetrying={retryingTaskId === task.id}

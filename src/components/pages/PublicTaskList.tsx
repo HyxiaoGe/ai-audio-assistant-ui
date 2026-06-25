@@ -177,7 +177,11 @@ export default function PublicTaskList({ initialItems, initialTotal }: PublicTas
                 style={{ color: "var(--app-text-muted)" }}
               >
                 <span className="px-1.5 py-0.5 rounded-full border" style={{ borderColor: "var(--app-border)" }}>
-                  {item.source_type === "youtube" ? "YouTube" : t("explore.sourceFile")}
+                  {item.source_type === "youtube"
+                    ? "YouTube"
+                    : item.source_type === "url"
+                      ? t("explore.sourceLink")
+                      : t("explore.sourceFile")}
                 </span>
                 {item.duration_seconds != null && (
                   <span className="flex items-center gap-1">

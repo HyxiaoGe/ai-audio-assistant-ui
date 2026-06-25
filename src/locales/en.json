@@ -135,6 +135,7 @@
     "viewSource": "View original video",
     "summaryLoadFailed": "Failed to load summary",
     "sourceFile": "File",
+    "sourceLink": "Link",
     "newBadge": "NEW",
     "publishedBy": "by {name}",
     "guestCtaTitle": "Sign in to create your own transcript",
@@ -800,7 +801,8 @@
     "creatingTask": "Creating task...",
     "comingSoon": "Coming soon",
     "validatingVideo": "Validating video...",
-    "createFailed": "Failed to create task"
+    "createFailed": "Failed to create task",
+    "anyLinkHint": "Supports YouTube, Bilibili, podcasts and 1000+ sites (beta)"
   },
   "errors": {
     "loadTaskFailed": "Failed to load task",

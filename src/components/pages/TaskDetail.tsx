@@ -1078,6 +1078,20 @@ export default function TaskDetail() {
             }
           />
 
+          {/* 来源链接:url 任务(或无 youtube_info 的 youtube 任务)显示可点的原始来源 */}
+          {(task.source_type === 'url' || task.source_type === 'youtube') && task.source_url && !task.youtube_info && (
+            <div className="flex justify-center pt-3">
+              <a
+                href={task.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm underline hover:text-foreground text-[var(--app-text-muted)]"
+              >
+                {t('explore.viewSource')}
+              </a>
+            </div>
+          )}
+
           {/* Player Section - 进度条逐帧订阅 currentTime，下沉到 PlayerBarContainer 叶子组件，避免父组件每秒重渲染 */}
           <PlayerBarContainer
             isActiveAudio={isActiveAudio}
