@@ -14,7 +14,6 @@ import { useAPIClient } from '@/lib/use-api-client';
 import { useFileUpload } from '@/hooks/use-file-upload';
 import type {
   LLMModel,
-  SourceType,
   SummaryStyleItem,
   TaskOptions,
   UserPreferences,
@@ -122,7 +121,8 @@ export default function NewTaskModal({
 
   const platformTabs = [
     { id: 'youtube', label: 'YouTube', disabled: false },
-    { id: 'bilibili', label: 'Bilibili', disabled: false }
+    // Bilibili 入口尚未开放（后端 source_type 仍写死 youtube），禁选并标注「敬请期待」。
+    { id: 'bilibili', label: 'Bilibili', disabled: true }
   ];
 
   const platformInfo = {
@@ -361,15 +361,11 @@ export default function NewTaskModal({
 
     if (!videoUrl.trim()) return;
 
-    const trimmedUrl = videoUrl.trim();
-    // YouTube 链接仍走 'youtube'（保留缩略图/风格推荐/订阅发现）；其余任意链接走通用 'url'。
-    const sourceType: SourceType = extractYouTubeVideoId(trimmedUrl) ? 'youtube' : 'url';
-
     setIsCreating(true);
     try {
       const task = await client.createTask({
-        source_type: sourceType,
-        source_url: trimmedUrl,
+        source_type: 'youtube',
+        source_url: videoUrl.trim(),
         options: buildOptions(),
       });
       notifySuccess(t("upload.taskCreated"));
@@ -543,7 +539,6 @@ export default function NewTaskModal({
                       ))}
                     </ul>
                   </div>
-                  <p className="text-xs text-[var(--app-text-subtle)]">{t("newTask.anyLinkHint")}</p>
                 </div>
               </div>
             )}

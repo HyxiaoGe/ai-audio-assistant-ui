@@ -203,14 +203,6 @@ describe("PublicTaskList", () => {
     expect(mockClient.getPublicTasks).not.toHaveBeenCalled()
   })
 
-  it("url 来源显示「链接」标签而非 YouTube/文件", async () => {
-    render(<PublicTaskList initialItems={[makeItem({ source_type: "url" })]} initialTotal={1} />)
-    await screen.findByText("公开任务一")
-    // i18n 桩返回原 key，故 explore.sourceLink 就是文案
-    expect(screen.getByText("explore.sourceLink")).toBeInTheDocument()
-    expect(screen.queryByText("YouTube")).not.toBeInTheDocument()
-  })
-
   it("翻页失败后「重试」拉的是失败的目标页(第2页),而非回到第1页", async () => {
     // seeded 第 1 页(total=40 → 2 页),挂载不拉取
     render(<PublicTaskList initialItems={[makeItem({ title: "第一页任务" })]} initialTotal={40} />)

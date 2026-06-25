@@ -135,7 +135,6 @@
     "viewSource": "查看原视频",
     "summaryLoadFailed": "摘要加载失败",
     "sourceFile": "文件",
-    "sourceLink": "链接",
     "newBadge": "NEW",
     "publishedBy": "{name} 发布",
     "guestCtaTitle": "登录后创建你自己的转写",
@@ -801,8 +800,7 @@
     "creatingTask": "创建任务...",
     "comingSoon": "敬请期待",
     "validatingVideo": "正在验证视频...",
-    "createFailed": "创建任务失败",
-    "anyLinkHint": "支持 YouTube、Bilibili、播客等 1000+ 站点（beta）"
+    "createFailed": "创建任务失败"
   },
   "errors": {
     "loadTaskFailed": "加载任务失败",
