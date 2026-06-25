@@ -85,4 +85,10 @@ describe("Sidebar 按登录态过滤", () => {
     render(<Sidebar />);
     expect(screen.queryByText("admin.console")).not.toBeInTheDocument();
   });
+
+  it("未登录也渲染「发现」入口(public)", () => {
+    auth.user = null;
+    render(<Sidebar />);
+    expect(screen.getByText("nav.discover")).toBeInTheDocument();
+  });
 });
