@@ -912,5 +912,15 @@
     "noStarredChannels": "暂无特别关注的频道",
     "noStarredVideos": "暂无特别关注频道的视频",
     "updateSettingsFailed": "更新设置失败"
+  },
+  "discover": {
+    "pageTitle": "发现",
+    "pageSubtitle": "搜索 YouTube 视频，无需订阅即可直接转写",
+    "searchPlaceholder": "搜索 YouTube 视频…",
+    "searchButton": "搜索",
+    "loading": "搜索中…",
+    "empty": "没有找到相关视频，换个关键词试试",
+    "searchError": "搜索暂时不可用，请稍后再试",
+    "trendingLabel": "大家在搜："
   }
 }

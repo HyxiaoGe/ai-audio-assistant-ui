@@ -912,5 +912,15 @@
     "noStarredChannels": "No starred channels",
     "noStarredVideos": "No videos from starred channels",
     "updateSettingsFailed": "Failed to update settings"
+  },
+  "discover": {
+    "pageTitle": "Discover",
+    "pageSubtitle": "Search YouTube videos and transcribe any result — no subscription needed",
+    "searchPlaceholder": "Search YouTube videos…",
+    "searchButton": "Search",
+    "loading": "Searching…",
+    "empty": "No videos found; try a different keyword",
+    "searchError": "Search is temporarily unavailable, please try again later",
+    "trendingLabel": "Trending:"
   }
 }
