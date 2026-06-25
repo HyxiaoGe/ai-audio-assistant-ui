@@ -75,6 +75,8 @@ import {
   PublicTranscriptResponse,
   PublicSummaryResponse,
   TaskVisibilityResponse,
+  YouTubeSearchResponse,
+  YouTubeTrendingResponse,
 } from "@/types/api"
 
 // ============================================================================
@@ -1118,6 +1120,27 @@ export class APIClient {
       { method: "GET" },
       this.token
     )
+  }
+
+  // YouTube 关键词搜索(公开;默认走 publicRequest 免 token 闸,登录态可显式带 token 拿更高限额)
+  async searchYouTube(
+    q: string,
+    opts?: { limit?: number; authenticated?: boolean },
+  ): Promise<YouTubeSearchResponse> {
+    const params = new URLSearchParams()
+    params.set("q", q)
+    if (opts?.limit) params.set("limit", String(opts.limit))
+    const path = `/youtube/search?${params.toString()}`
+    return opts?.authenticated
+      ? request(path, { method: "GET" }, this.token)
+      : publicRequest(path, { method: "GET" })
+  }
+
+  async getYouTubeTrending(opts?: { limit?: number }): Promise<YouTubeTrendingResponse> {
+    const params = new URLSearchParams()
+    if (opts?.limit) params.set("limit", String(opts.limit))
+    const qs = params.toString()
+    return publicRequest(`/youtube/search/trending${qs ? `?${qs}` : ""}`, { method: "GET" })
   }
 }
 

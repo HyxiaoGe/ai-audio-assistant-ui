@@ -2,7 +2,7 @@
 
 import type React from "react";
 import Link from "next/link";
-import { BarChart3, Settings, List, LineChart, Youtube, Shield, Compass } from "lucide-react";
+import { BarChart3, Settings, List, LineChart, Youtube, Shield, Compass, Search } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useI18n } from "@/lib/i18n-context";
 import { useUserStore } from "@/store/user-store";
@@ -42,6 +42,7 @@ export default function Sidebar() {
     { icon: <BarChart3 className="w-5 h-5" />, label: t("nav.overview"), path: "/" },
     { icon: <List className="w-5 h-5" />, label: t("nav.tasks"), path: "/tasks" },
     { icon: <Compass className="w-5 h-5" />, label: t("nav.explore"), path: "/explore", public: true },
+    { icon: <Search className="w-5 h-5" />, label: t("nav.discover"), path: "/discover", public: true },
     { icon: <Youtube className="w-5 h-5" />, label: t("nav.subscriptions"), path: "/subscriptions" },
     { icon: <LineChart className="w-5 h-5" />, label: t("nav.stats"), path: "/stats" },
     { icon: <Settings className="w-5 h-5" />, label: t("nav.settings"), path: "/settings" },
@@ -59,6 +60,7 @@ export default function Sidebar() {
     // 注意：/admin 分支由底部 admin 项调用（isActive("/admin")），不是死代码，保留。
     if (itemPath === "/admin") return pathname === "/admin" || pathname.startsWith("/admin/");
     if (itemPath === "/explore") return pathname === "/explore" || pathname.startsWith("/explore/");
+    if (itemPath === "/discover") return pathname === "/discover" || pathname.startsWith("/discover/");
     return pathname === itemPath;
   };
 
