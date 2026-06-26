@@ -8,6 +8,7 @@ import { useAuthStore } from "@/store/auth-store"
 import { useUIStore } from "@/store/ui-store"
 import { useDiscoverStore } from "@/store/discover-store"
 import VideoCard from "@/components/youtube/VideoCard"
+import { VideoGridSkeleton } from "@/components/youtube/SubscriptionSkeleton"
 import { Button } from "@/components/ui/button"
 import type { VideoHit, YouTubeTrendingItem, YouTubeVideoItem } from "@/types/api"
 
@@ -18,6 +19,8 @@ interface DiscoverProps {
 // yt-dlp ytsearch 零配额、无翻页游标:一次最多抓 50(再大不稳),前端无限滚动在这 50 条内分批揭示。
 const SEARCH_LIMIT = 50
 const PAGE_SIZE = 20 // 每批揭示条数(首屏 20,滚到底 +20)
+// 结果网格与加载骨架共用同一套列定义,避免加载→出结果时列数跳变。
+const RESULT_GRID = "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
 
 // VideoHit → VideoCard 需要的最小形状(video_id/title/thumbnail_url/transcribed)
 function hitToVideoItem(hit: VideoHit): YouTubeVideoItem {
@@ -189,18 +192,22 @@ export default function Discover({ initialTrending }: DiscoverProps) {
         </div>
       )}
 
-      {loading && <p className="text-[var(--app-text-muted)]">{t("discover.loading")}</p>}
-      {errorMsg && <p className="text-[var(--app-danger)]">{errorMsg}</p>}
-      {!loading && !errorMsg && searched && hits.length === 0 && (
+      {loading ? (
+        <VideoGridSkeleton count={9} gridClassName={RESULT_GRID} />
+      ) : errorMsg ? (
+        <p className="text-[var(--app-danger)]">{errorMsg}</p>
+      ) : searched && hits.length === 0 ? (
         <p className="text-[var(--app-text-muted)]">{t("discover.empty")}</p>
+      ) : (
+        <>
+          <div className={RESULT_GRID}>
+            {hits.slice(0, visibleCount).map((hit) => (
+              <VideoCard key={hit.video_id} video={hitToVideoItem(hit)} onTranscribe={handleTranscribe} />
+            ))}
+          </div>
+          {visibleCount < hits.length && <div ref={sentinelRef} aria-hidden className="h-12" />}
+        </>
       )}
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {hits.slice(0, visibleCount).map((hit) => (
-          <VideoCard key={hit.video_id} video={hitToVideoItem(hit)} onTranscribe={handleTranscribe} />
-        ))}
-      </div>
-      {visibleCount < hits.length && <div ref={sentinelRef} aria-hidden className="h-12" />}
     </div>
   )
 }

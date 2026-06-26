@@ -30,12 +30,15 @@ export function ChannelListSkeleton({ count = 6 }: SkeletonProps) {
   );
 }
 
-export function VideoGridSkeleton({ count = 8 }: SkeletonProps) {
+export function VideoGridSkeleton({
+  count = 8,
+  gridClassName = "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4",
+}: SkeletonProps & { gridClassName?: string }) {
   const { t } = useI18n();
   return (
     <div role="status" aria-busy="true">
       <span className="sr-only">{t("common.loading")}</span>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      <div className={gridClassName}>
         {Array.from({ length: count }).map((_, i) => (
           <div
             key={i}
