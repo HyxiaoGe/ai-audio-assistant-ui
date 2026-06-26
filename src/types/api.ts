@@ -1375,3 +1375,26 @@ export interface YouTubeTrendingItem {
 export interface YouTubeTrendingResponse {
   items: YouTubeTrendingItem[]
 }
+
+// ============================================================================
+// /discover 黑名单（管理员；/api/v1/admin/youtube-blocklist）
+// ============================================================================
+
+export interface BlocklistEntry {
+  id: string
+  kind: "term" | "channel"
+  match_field: string
+  raw_value: string
+  note: string | null
+  created_at: string
+}
+
+export interface BlocklistListResponse {
+  items: BlocklistEntry[]
+}
+
+export interface BlocklistAddRequest {
+  kind: "term" | "channel"
+  value: string
+  note?: string | null
+}
