@@ -1,5 +1,19 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react"
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
+
+// jsdom 无 IntersectionObserver:本地可控 stub,捕获实例以手动模拟「滚到底」。
+const ioInstances: Array<{ trigger: () => void }> = []
+class MockIO {
+  constructor(private cb: IntersectionObserverCallback) {
+    ioInstances.push({
+      trigger: () => this.cb([{ isIntersecting: true } as IntersectionObserverEntry], this as unknown as IntersectionObserver),
+    })
+  }
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+vi.stubGlobal("IntersectionObserver", MockIO)
 
 const i18n = vi.hoisted(() => ({ t: (k: string) => k }))
 const stores = vi.hoisted(() => ({ authed: true, openLogin: vi.fn(), openNewTask: vi.fn() }))
@@ -30,6 +44,7 @@ beforeEach(() => {
   client.getYouTubeTrending.mockResolvedValue({ items: [] })
   useDiscoverStore.getState().reset() // 模块单例 store 跨用例残留,逐例清零
   window.history.replaceState(null, "", "/discover") // jsdom location 跨用例残留,逐例清零
+  ioInstances.length = 0
 })
 
 describe("Discover trending", () => {
@@ -38,7 +53,7 @@ describe("Discover trending", () => {
     render(<Discover initialTrending={[{ query: "news", count: 9 }, { query: "music", count: 4 }]} />)
     expect(screen.getByText("discover.trendingLabel")).toBeInTheDocument()
     fireEvent.click(screen.getByRole("button", { name: "news" }))
-    await waitFor(() => expect(client.searchYouTube).toHaveBeenCalledWith("news", { authenticated: true }))
+    await waitFor(() => expect(client.searchYouTube).toHaveBeenCalledWith("news", { limit: 50, authenticated: true }))
   })
 
   it("does not render the trending block when there are no trending items", () => {
@@ -55,7 +70,7 @@ describe("Discover", () => {
     fireEvent.click(screen.getByRole("button", { name: "discover.searchButton" }))
     await waitFor(() => expect(screen.getByText("Cat 1")).toBeInTheDocument())
     expect(screen.getByText("Cat 2")).toBeInTheDocument()
-    expect(client.searchYouTube).toHaveBeenCalledWith("cats", { authenticated: true })
+    expect(client.searchYouTube).toHaveBeenCalledWith("cats", { limit: 50, authenticated: true })
   })
 
   it("搜索后把搜索词写进 URL ?q=", async () => {
@@ -71,7 +86,7 @@ describe("Discover", () => {
     window.history.replaceState(null, "", "/discover?q=dogs")
     client.searchYouTube.mockResolvedValue({ query: "dogs", cached: true, items: [hit("v9", "Dog 9")] })
     render(<Discover />)
-    await waitFor(() => expect(client.searchYouTube).toHaveBeenCalledWith("dogs", { authenticated: true }))
+    await waitFor(() => expect(client.searchYouTube).toHaveBeenCalledWith("dogs", { limit: 50, authenticated: true }))
     expect(await screen.findByText("Dog 9")).toBeInTheDocument()
     expect((screen.getByLabelText("discover.searchPlaceholder") as HTMLInputElement).value).toBe("dogs")
   })
@@ -91,6 +106,26 @@ describe("Discover", () => {
     expect(screen.getByText("Cat 1")).toBeInTheDocument() // 结果即时还原
     expect((screen.getByLabelText("discover.searchPlaceholder") as HTMLInputElement).value).toBe("cats")
     expect(client.searchYouTube).not.toHaveBeenCalled() // 零网络
+  })
+
+  it("结果超一屏:先渲染 20 条,滚到底再揭示下一批(无限滚动)", async () => {
+    const many = Array.from({ length: 50 }, (_, i) => hit(`v${i}`, `Vid ${i}`))
+    client.searchYouTube.mockResolvedValue({ query: "many", cached: false, items: many })
+    render(<Discover />)
+    fireEvent.change(screen.getByLabelText("discover.searchPlaceholder"), { target: { value: "many" } })
+    fireEvent.click(screen.getByRole("button", { name: "discover.searchButton" }))
+    await waitFor(() => expect(screen.getByText("Vid 0")).toBeInTheDocument())
+
+    // 首屏只渲染前 20 条
+    expect(screen.getByText("Vid 19")).toBeInTheDocument()
+    expect(screen.queryByText("Vid 20")).toBeNull()
+    expect(client.searchYouTube).toHaveBeenCalledWith("many", { limit: 50, authenticated: true })
+
+    // 模拟哨兵进入视口 → 揭示下一批
+    act(() => ioInstances[ioInstances.length - 1].trigger())
+    await waitFor(() => expect(screen.getByText("Vid 20")).toBeInTheDocument())
+    expect(screen.getByText("Vid 39")).toBeInTheDocument()
+    expect(screen.queryByText("Vid 40")).toBeNull()
   })
 
   it("logged-in transcribe opens new-task modal with the watch URL", async () => {

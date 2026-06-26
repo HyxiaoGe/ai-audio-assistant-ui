@@ -15,6 +15,10 @@ interface DiscoverProps {
   initialTrending?: YouTubeTrendingItem[]
 }
 
+// yt-dlp ytsearch 零配额、无翻页游标:一次最多抓 50(再大不稳),前端无限滚动在这 50 条内分批揭示。
+const SEARCH_LIMIT = 50
+const PAGE_SIZE = 20 // 每批揭示条数(首屏 20,滚到底 +20)
+
 // VideoHit → VideoCard 需要的最小形状(video_id/title/thumbnail_url/transcribed)
 function hitToVideoItem(hit: VideoHit): YouTubeVideoItem {
   return {
@@ -38,6 +42,7 @@ export default function Discover({ initialTrending }: DiscoverProps) {
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [searched, setSearched] = useState(() => useDiscoverStore.getState().searched)
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE) // 无限滚动已揭示的条数
 
   const [trending, setTrending] = useState<YouTubeTrendingItem[]>(initialTrending ?? [])
   const seeded = initialTrending !== undefined
@@ -81,9 +86,10 @@ export default function Discover({ initialTrending }: DiscoverProps) {
       setLoading(true)
       setErrorMsg(null)
       setSearched(true)
+      setVisibleCount(PAGE_SIZE) // 新搜索回到首屏
       syncUrl(q)
       try {
-        const res = await client.searchYouTube(q, { authenticated: isAuthenticated })
+        const res = await client.searchYouTube(q, { limit: SEARCH_LIMIT, authenticated: isAuthenticated })
         setHits(res.items)
         // 写回会话缓存:词与结果一起存,切回 /discover 时即时还原、零网络。
         useDiscoverStore.getState().saveSearch(q, res.items)
@@ -115,6 +121,28 @@ export default function Discover({ initialTrending }: DiscoverProps) {
     setQuery(effective)
     void runSearch(effective)
   }, [runSearch, syncUrl])
+
+  // 无限滚动:底部哨兵进入视口(提前 300px)就再揭示一批,直到把已抓取的结果全展示完。
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (visibleCount >= hits.length) return // 已全部展示
+    if (typeof IntersectionObserver === "undefined") {
+      setVisibleCount(hits.length) // 无 IO 的环境降级:直接全展示,不把用户卡在首屏
+      return
+    }
+    const el = sentinelRef.current
+    if (!el) return
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setVisibleCount((c) => Math.min(c + PAGE_SIZE, hits.length))
+        }
+      },
+      { rootMargin: "300px" },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [visibleCount, hits])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -168,10 +196,11 @@ export default function Discover({ initialTrending }: DiscoverProps) {
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {hits.map((hit) => (
+        {hits.slice(0, visibleCount).map((hit) => (
           <VideoCard key={hit.video_id} video={hitToVideoItem(hit)} onTranscribe={handleTranscribe} />
         ))}
       </div>
+      {visibleCount < hits.length && <div ref={sentinelRef} aria-hidden className="h-12" />}
     </div>
   )
 }
