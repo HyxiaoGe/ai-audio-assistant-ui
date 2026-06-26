@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { Search } from "lucide-react"
 import { useAPIClient } from "@/lib/use-api-client"
 import { useI18n } from "@/lib/i18n-context"
@@ -63,6 +63,17 @@ export default function Discover({ initialTrending }: DiscoverProps) {
     void runSearch(term)
   }
 
+  // 把搜索词反映进 URL ?q=,与任务搜索对齐(刷新/后退/分享都能还原)。
+  // 用原生 history.replaceState 而非 router.replace:/discover 是服务端页(SSR 注入 trending),
+  // 走 router 改 query 会触发 RSC 重取;replaceState 只改地址栏、零导航副作用,Next 自会同步。
+  // 同 query 不重复写(避免冗余 history 操作)。
+  const syncUrl = useCallback((q: string) => {
+    const next = q ? `/discover?q=${encodeURIComponent(q)}` : "/discover"
+    if (typeof window === "undefined") return
+    const current = window.location.pathname + window.location.search
+    if (current !== next) window.history.replaceState(window.history.state, "", next)
+  }, [])
+
   const runSearch = useCallback(
     async (raw: string) => {
       const q = raw.trim()
@@ -70,6 +81,7 @@ export default function Discover({ initialTrending }: DiscoverProps) {
       setLoading(true)
       setErrorMsg(null)
       setSearched(true)
+      syncUrl(q)
       try {
         const res = await client.searchYouTube(q, { authenticated: isAuthenticated })
         setHits(res.items)
@@ -82,8 +94,27 @@ export default function Discover({ initialTrending }: DiscoverProps) {
         setLoading(false)
       }
     },
-    [client, isAuthenticated, t],
+    [client, isAuthenticated, t, syncUrl],
   )
+
+  // 挂载时还原搜索态,两个来源对齐(URL 优先,store 兜底):
+  // - 分享链接/刷新/手动改 URL:URL 带 ?q= 而 store 无(或不一致)→ 现搜一次(后端 6h 缓存,通常秒回)。
+  // - 侧栏切回:URL 是干净的 /discover、store 有上次结果 → 已由 useState 从 store 还原,只需把 ?q= 补回地址栏。
+  const initedRef = useRef(false)
+  useEffect(() => {
+    if (initedRef.current) return
+    initedRef.current = true
+    const urlQ = new URLSearchParams(window.location.search).get("q")?.trim() ?? ""
+    const stored = useDiscoverStore.getState()
+    const effective = urlQ || stored.query
+    if (!effective) return
+    if (stored.searched && stored.query === effective) {
+      if (!urlQ) syncUrl(effective) // 从 store 还原但地址栏没带 q,补上以便后退/分享
+      return
+    }
+    setQuery(effective)
+    void runSearch(effective)
+  }, [runSearch, syncUrl])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()

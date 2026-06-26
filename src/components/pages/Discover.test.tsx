@@ -29,6 +29,7 @@ beforeEach(() => {
   stores.authed = true
   client.getYouTubeTrending.mockResolvedValue({ items: [] })
   useDiscoverStore.getState().reset() // 模块单例 store 跨用例残留,逐例清零
+  window.history.replaceState(null, "", "/discover") // jsdom location 跨用例残留,逐例清零
 })
 
 describe("Discover trending", () => {
@@ -55,6 +56,24 @@ describe("Discover", () => {
     await waitFor(() => expect(screen.getByText("Cat 1")).toBeInTheDocument())
     expect(screen.getByText("Cat 2")).toBeInTheDocument()
     expect(client.searchYouTube).toHaveBeenCalledWith("cats", { authenticated: true })
+  })
+
+  it("搜索后把搜索词写进 URL ?q=", async () => {
+    client.searchYouTube.mockResolvedValue({ query: "cats", cached: false, items: [hit("v1", "Cat 1")] })
+    render(<Discover />)
+    fireEvent.change(screen.getByLabelText("discover.searchPlaceholder"), { target: { value: "cats" } })
+    fireEvent.click(screen.getByRole("button", { name: "discover.searchButton" }))
+    await waitFor(() => expect(screen.getByText("Cat 1")).toBeInTheDocument())
+    expect(window.location.search).toBe("?q=cats")
+  })
+
+  it("带 ?q= 进入(分享链接/刷新):挂载即自动搜索并还原搜索框", async () => {
+    window.history.replaceState(null, "", "/discover?q=dogs")
+    client.searchYouTube.mockResolvedValue({ query: "dogs", cached: true, items: [hit("v9", "Dog 9")] })
+    render(<Discover />)
+    await waitFor(() => expect(client.searchYouTube).toHaveBeenCalledWith("dogs", { authenticated: true }))
+    expect(await screen.findByText("Dog 9")).toBeInTheDocument()
+    expect((screen.getByLabelText("discover.searchPlaceholder") as HTMLInputElement).value).toBe("dogs")
   })
 
   it("切走再切回:还原上一次搜索词与结果,不重新请求", async () => {
