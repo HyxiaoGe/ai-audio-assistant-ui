@@ -18,6 +18,7 @@ vi.mock("@/store/ui-store", () => ({
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }))
 
 import Discover from "./Discover"
+import { useDiscoverStore } from "@/store/discover-store"
 
 function hit(vid: string, title: string) {
   return { video_id: vid, title, channel: null, channel_id: null, thumbnail: null, url: `https://www.youtube.com/watch?v=${vid}` }
@@ -27,6 +28,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   stores.authed = true
   client.getYouTubeTrending.mockResolvedValue({ items: [] })
+  useDiscoverStore.getState().reset() // 模块单例 store 跨用例残留,逐例清零
 })
 
 describe("Discover trending", () => {
@@ -53,6 +55,23 @@ describe("Discover", () => {
     await waitFor(() => expect(screen.getByText("Cat 1")).toBeInTheDocument())
     expect(screen.getByText("Cat 2")).toBeInTheDocument()
     expect(client.searchYouTube).toHaveBeenCalledWith("cats", { authenticated: true })
+  })
+
+  it("切走再切回:还原上一次搜索词与结果,不重新请求", async () => {
+    client.searchYouTube.mockResolvedValue({ query: "cats", cached: false, items: [hit("v1", "Cat 1")] })
+    const { unmount } = render(<Discover />)
+    fireEvent.change(screen.getByLabelText("discover.searchPlaceholder"), { target: { value: "cats" } })
+    fireEvent.click(screen.getByRole("button", { name: "discover.searchButton" }))
+    await waitFor(() => expect(screen.getByText("Cat 1")).toBeInTheDocument())
+    expect(client.searchYouTube).toHaveBeenCalledTimes(1)
+
+    unmount() // 模拟侧栏切走
+    client.searchYouTube.mockClear()
+    render(<Discover />) // 切回
+
+    expect(screen.getByText("Cat 1")).toBeInTheDocument() // 结果即时还原
+    expect((screen.getByLabelText("discover.searchPlaceholder") as HTMLInputElement).value).toBe("cats")
+    expect(client.searchYouTube).not.toHaveBeenCalled() // 零网络
   })
 
   it("logged-in transcribe opens new-task modal with the watch URL", async () => {
