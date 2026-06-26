@@ -75,6 +75,20 @@
       "llmUnavailableHint": "LiteLLM master key not configured; LLM spend unavailable",
       "calls": "{value} calls",
       "empty": "No cost data yet"
+    },
+    "blocklist": {
+      "title": "Search Blocklist",
+      "desc": "Block search terms and channels on /discover. Changes take effect immediately.",
+      "termsTitle": "Blocked Search Terms",
+      "termsDesc": "A matching query is blocked entirely and returns no results.",
+      "termPlaceholder": "Enter a search term to block",
+      "channelsTitle": "Blocked Channels",
+      "channelsDesc": "Videos from this channel are removed from search results.",
+      "channelPlaceholder": "Channel name (e.g. Lex Fridman) or channel ID (UCxxxx) / channel URL",
+      "add": "Add",
+      "remove": "Remove",
+      "termsEmpty": "No blocked search terms yet",
+      "channelsEmpty": "No blocked channels yet"
     }
   },
   "player": {

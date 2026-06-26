@@ -10,6 +10,7 @@ import { useUserStore } from '@/store/user-store';
 import { formatMoney, isLlmUnavailable, formatUserName } from '@/lib/admin-cost-format';
 import type { AdminCostsResponse, AsrAdminOverviewResponse } from '@/types/api';
 import { ShieldAlert, TrendingUp, Clock, DollarSign, Zap, Users } from 'lucide-react';
+import YouTubeBlocklistPanel from '@/components/admin/YouTubeBlocklistPanel';
 
 export default function Admin() {
   const { t } = useI18n();
@@ -360,6 +361,9 @@ export default function Admin() {
                 )}
               </CardContent>
             </Card>
+
+            {/* 搜索黑名单(屏蔽搜索词 + 博主) */}
+            <YouTubeBlocklistPanel />
           </div>
     </div>
   );
