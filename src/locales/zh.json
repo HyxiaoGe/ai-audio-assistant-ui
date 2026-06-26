@@ -75,6 +75,20 @@
       "llmUnavailableHint": "未配置 LiteLLM master key，无法读取 LLM 花销",
       "calls": "{value} 次",
       "empty": "暂无成本数据"
+    },
+    "blocklist": {
+      "title": "搜索黑名单",
+      "desc": "屏蔽 /discover 的搜索词与博主,改动即时生效。",
+      "termsTitle": "屏蔽搜索词",
+      "termsDesc": "命中的整条搜索将被拦截,不返回任何结果。",
+      "termPlaceholder": "输入要屏蔽的搜索词",
+      "channelsTitle": "屏蔽博主(频道)",
+      "channelsDesc": "从搜索结果中剔除该频道的视频。",
+      "channelPlaceholder": "频道名(如 Lex Fridman)或频道 ID(UCxxxx)/频道链接",
+      "add": "添加",
+      "remove": "删除",
+      "termsEmpty": "暂无屏蔽搜索词",
+      "channelsEmpty": "暂无屏蔽频道"
     }
   },
   "player": {

@@ -12,6 +12,9 @@ import { getToken } from "@/lib/auth-token"
 import { translateStatic } from "@/lib/i18n-static"
 import {
   AdminCostsResponse,
+  BlocklistEntry,
+  BlocklistListResponse,
+  BlocklistAddRequest,
   ApiError,
   ApiResponse,
   AsrUserFreeQuotaResponse,
@@ -367,6 +370,31 @@ export class APIClient {
    */
   async getCostsByUser(): Promise<AdminCostsResponse> {
     return request("/admin/costs/by-user", { method: "GET" }, this.token)
+  }
+
+  /**
+   * /discover 黑名单：列出全部活跃条目（搜索词 + 频道）。仅管理员。
+   */
+  async getYouTubeBlocklist(): Promise<BlocklistListResponse> {
+    return request("/admin/youtube-blocklist", { method: "GET" }, this.token)
+  }
+
+  /**
+   * 加一条黑名单（kind=term 整词拦截；kind=channel 按名/ID 过滤结果）。仅管理员。
+   */
+  async addYouTubeBlocklistEntry(body: BlocklistAddRequest): Promise<BlocklistEntry> {
+    return request(
+      "/admin/youtube-blocklist",
+      { method: "POST", body: JSON.stringify(body) },
+      this.token
+    )
+  }
+
+  /**
+   * 软删一条黑名单。仅管理员。
+   */
+  async deleteYouTubeBlocklistEntry(id: string): Promise<void> {
+    return request(`/admin/youtube-blocklist/${id}`, { method: "DELETE" }, this.token)
   }
 
   // ==========================================================================
