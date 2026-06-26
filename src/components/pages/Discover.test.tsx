@@ -108,6 +108,24 @@ describe("Discover", () => {
     expect(client.searchYouTube).not.toHaveBeenCalled() // 零网络
   })
 
+  it("搜索进行中展示骨架屏,出结果后骨架消失", async () => {
+    let resolveSearch: (v: unknown) => void = () => {}
+    client.searchYouTube.mockReturnValue(new Promise((r) => { resolveSearch = r }))
+    render(<Discover />)
+    fireEvent.change(screen.getByLabelText("discover.searchPlaceholder"), { target: { value: "cats" } })
+    fireEvent.click(screen.getByRole("button", { name: "discover.searchButton" }))
+
+    // 加载中:骨架卡出现
+    await waitFor(() => expect(screen.getAllByTestId("video-card-skeleton").length).toBeGreaterThan(0))
+
+    await act(async () => {
+      resolveSearch({ query: "cats", cached: false, items: [hit("v1", "Cat 1")] })
+    })
+    // 出结果:骨架消失、卡片在
+    await waitFor(() => expect(screen.getByText("Cat 1")).toBeInTheDocument())
+    expect(screen.queryByTestId("video-card-skeleton")).toBeNull()
+  })
+
   it("结果超一屏:先渲染 20 条,滚到底再揭示下一批(无限滚动)", async () => {
     const many = Array.from({ length: 50 }, (_, i) => hit(`v${i}`, `Vid ${i}`))
     client.searchYouTube.mockResolvedValue({ query: "many", cached: false, items: many })
