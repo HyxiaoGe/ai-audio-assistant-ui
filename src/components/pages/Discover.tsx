@@ -6,6 +6,7 @@ import { useAPIClient } from "@/lib/use-api-client"
 import { useI18n } from "@/lib/i18n-context"
 import { useAuthStore } from "@/store/auth-store"
 import { useUIStore } from "@/store/ui-store"
+import { useDiscoverStore } from "@/store/discover-store"
 import VideoCard from "@/components/youtube/VideoCard"
 import { Button } from "@/components/ui/button"
 import type { VideoHit, YouTubeTrendingItem, YouTubeVideoItem } from "@/types/api"
@@ -31,11 +32,12 @@ export default function Discover({ initialTrending }: DiscoverProps) {
   const openLogin = useUIStore((s) => s.openLogin)
   const openNewTask = useUIStore((s) => s.openNewTask)
 
-  const [query, setQuery] = useState("")
-  const [hits, setHits] = useState<VideoHit[]>([])
+  // 初值从会话级缓存还原:侧栏切走/切回会卸载本组件,本地 state 全丢,靠 store 把上一次搜索带回来。
+  const [query, setQuery] = useState(() => useDiscoverStore.getState().query)
+  const [hits, setHits] = useState<VideoHit[]>(() => useDiscoverStore.getState().hits)
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
-  const [searched, setSearched] = useState(false)
+  const [searched, setSearched] = useState(() => useDiscoverStore.getState().searched)
 
   const [trending, setTrending] = useState<YouTubeTrendingItem[]>(initialTrending ?? [])
   const seeded = initialTrending !== undefined
@@ -71,6 +73,8 @@ export default function Discover({ initialTrending }: DiscoverProps) {
       try {
         const res = await client.searchYouTube(q, { authenticated: isAuthenticated })
         setHits(res.items)
+        // 写回会话缓存:词与结果一起存,切回 /discover 时即时还原、零网络。
+        useDiscoverStore.getState().saveSearch(q, res.items)
       } catch (e) {
         setHits([])
         setErrorMsg(e instanceof Error ? e.message : t("discover.searchError"))
