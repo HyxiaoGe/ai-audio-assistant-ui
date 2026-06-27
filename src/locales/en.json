@@ -100,7 +100,11 @@
       "matchHandle": "@handle",
       "matchChannelName": "Channel name",
       "termsEmpty": "No blocked search terms yet",
-      "channelsEmpty": "No blocked channels yet"
+      "channelsEmpty": "No blocked channels yet",
+      "channelSearchPlaceholder": "Search channel name…",
+      "channelsNoMatch": "No matching channel",
+      "prevPage": "Prev",
+      "nextPage": "Next"
     },
     "flaggedChannels": {
       "title": "Flagged Channels",

@@ -100,7 +100,11 @@
       "matchHandle": "@handle",
       "matchChannelName": "频道名",
       "termsEmpty": "暂无屏蔽搜索词",
-      "channelsEmpty": "暂无屏蔽频道"
+      "channelsEmpty": "暂无屏蔽频道",
+      "channelSearchPlaceholder": "搜索频道名…",
+      "channelsNoMatch": "无匹配频道",
+      "prevPage": "上一页",
+      "nextPage": "下一页"
     },
     "flaggedChannels": {
       "title": "频道标记复核",
