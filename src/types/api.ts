@@ -1398,3 +1398,24 @@ export interface BlocklistAddRequest {
   value: string
   note?: string | null
 }
+
+// ============================================================================
+// 频道标记复核队列（管理员；/api/v1/admin/flagged-channels）
+// ============================================================================
+
+export interface FlaggedChannelOut {
+  id: string;
+  match_field: string;             // "channel_id" | "channel_handle" | "channel_name"
+  match_value: string;
+  channel_id: string | null;
+  channel_handle: string | null;
+  channel_name: string | null;
+  block_count: number;
+  last_video_id: string | null;
+  last_title: string | null;
+  status: string;                  // "pending"；resolve 后 "blocked"|"dismissed"
+  first_flagged_at: string | null; // ISO datetime
+  last_flagged_at: string | null;  // ISO datetime
+}
+export interface FlaggedChannelListResponse { items: FlaggedChannelOut[] }
+export interface FlagResolveRequest { action: "block" | "dismiss"; note?: string | null }

@@ -25,6 +25,9 @@ import {
   ComparisonResultsResponse,
   CreateTaskRequest,
   CreateTaskResponse,
+  FlaggedChannelOut,
+  FlaggedChannelListResponse,
+  FlagResolveRequest,
   LLMModelsResponse,
   MediaTicketResponse,
   NotificationListRequest,
@@ -395,6 +398,27 @@ export class APIClient {
    */
   async deleteYouTubeBlocklistEntry(id: string): Promise<void> {
     return request(`/admin/youtube-blocklist/${id}`, { method: "DELETE" }, this.token)
+  }
+
+  /**
+   * 频道标记复核队列：列出全部待复核(pending)频道。后端已按命中次数/最近降序排。仅管理员。
+   */
+  async getFlaggedChannels(): Promise<FlaggedChannelListResponse> {
+    return request("/admin/flagged-channels", { method: "GET" }, this.token)
+  }
+
+  /**
+   * 处置一条频道标记：action=block 提升黑名单(可带 note)；action=dismiss 永久加白。仅管理员。
+   */
+  async resolveFlaggedChannel(
+    flagId: string,
+    body: FlagResolveRequest
+  ): Promise<FlaggedChannelOut> {
+    return request(
+      `/admin/flagged-channels/${flagId}/resolve`,
+      { method: "POST", body: JSON.stringify(body) },
+      this.token
+    )
   }
 
   // ==========================================================================
