@@ -113,7 +113,7 @@ export default function YouTubeBlocklistPanel() {
               className="flex items-center justify-between gap-2 rounded-lg border border-[var(--app-glass-border)] bg-[var(--app-glass-bg)] px-3 py-2"
             >
               <div className="flex min-w-0 flex-col gap-0.5">
-                <span className="text-sm text-[var(--app-text)] break-all">{e.raw_value}</span>
+                <span className="text-sm text-[var(--app-text)] break-all">{e.name || e.raw_value}</span>
                 {badge && (
                   <span className="text-xs text-[var(--app-text-muted)]">{badge}</span>
                 )}
@@ -211,7 +211,7 @@ export default function YouTubeBlocklistPanel() {
           </DialogHeader>
           {pending && (
             <p className="rounded-lg border border-[var(--app-glass-border)] bg-[var(--app-glass-bg)] px-3 py-2 text-sm text-[var(--app-text)] break-all">
-              {pending.raw_value}
+              {pending.name || pending.raw_value}
             </p>
           )}
           <DialogFooter>
