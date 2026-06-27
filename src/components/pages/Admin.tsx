@@ -11,6 +11,7 @@ import { formatMoney, isLlmUnavailable, formatUserName } from '@/lib/admin-cost-
 import type { AdminCostsResponse, AsrAdminOverviewResponse } from '@/types/api';
 import { ShieldAlert, TrendingUp, Clock, DollarSign, Zap, Users } from 'lucide-react';
 import YouTubeBlocklistPanel from '@/components/admin/YouTubeBlocklistPanel';
+import FlaggedChannelsReviewPanel from '@/components/admin/FlaggedChannelsReviewPanel';
 
 export default function Admin() {
   const { t } = useI18n();
@@ -364,6 +365,9 @@ export default function Admin() {
 
             {/* 搜索黑名单(屏蔽搜索词 + 博主) */}
             <YouTubeBlocklistPanel />
+
+            {/* 频道标记复核队列 */}
+            <FlaggedChannelsReviewPanel />
           </div>
     </div>
   );
