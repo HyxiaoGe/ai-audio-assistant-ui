@@ -128,4 +128,54 @@ describe("YouTubeBlocklistPanel", () => {
     await waitFor(() => expect(screen.queryByText("admin.blocklist.removeConfirmTitle")).toBeNull())
     expect(mockClient.deleteYouTubeBlocklistEntry).not.toHaveBeenCalled()
   })
+
+  const makeChannels = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      ...channelEntry,
+      id: `c${i}`,
+      match_field: "channel_id",
+      raw_value: `UC${i}`,
+      name: `频道${i}`,
+    }))
+
+  it("搜索按频道名过滤", async () => {
+    mockClient.getYouTubeBlocklist.mockResolvedValue({ items: makeChannels(3) })
+    render(<YouTubeBlocklistPanel />)
+    expect(await screen.findByText("频道1")).toBeTruthy()
+    fireEvent.change(screen.getByPlaceholderText("admin.blocklist.channelSearchPlaceholder"), {
+      target: { value: "频道2" },
+    })
+    await waitFor(() => expect(screen.queryByText("频道1")).toBeNull())
+    expect(screen.getByText("频道2")).toBeTruthy()
+  })
+
+  it("无匹配显示空态", async () => {
+    mockClient.getYouTubeBlocklist.mockResolvedValue({ items: makeChannels(3) })
+    render(<YouTubeBlocklistPanel />)
+    await screen.findByText("频道0")
+    fireEvent.change(screen.getByPlaceholderText("admin.blocklist.channelSearchPlaceholder"), {
+      target: { value: "不存在" },
+    })
+    expect(await screen.findByText("admin.blocklist.channelsNoMatch")).toBeTruthy()
+  })
+
+  it("分页每页 10 条,下一页显示其余", async () => {
+    mockClient.getYouTubeBlocklist.mockResolvedValue({ items: makeChannels(12) })
+    render(<YouTubeBlocklistPanel />)
+    expect(await screen.findByText("频道0")).toBeTruthy()
+    expect(screen.queryByText("频道10")).toBeNull() // 第 11 条在第二页
+    fireEvent.click(screen.getByText("admin.blocklist.nextPage"))
+    expect(await screen.findByText("频道10")).toBeTruthy()
+    expect(screen.queryByText("频道0")).toBeNull()
+  })
+
+  it("重复添加显示错误 toast 且保留输入", async () => {
+    mockClient.addYouTubeBlocklistEntry.mockRejectedValue(new Error("该频道已在屏蔽列表中"))
+    render(<YouTubeBlocklistPanel />)
+    const input = await screen.findByPlaceholderText("admin.blocklist.channelPlaceholder")
+    fireEvent.change(input, { target: { value: "https://www.youtube.com/@dup" } })
+    fireEvent.click(screen.getAllByText("admin.blocklist.add")[1])
+    await waitFor(() => expect(mockNotify.notifyError).toHaveBeenCalledWith("该频道已在屏蔽列表中"))
+    expect((input as HTMLInputElement).value).toBe("https://www.youtube.com/@dup") // 输入保留
+  })
 })

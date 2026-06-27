@@ -21,6 +21,8 @@ import { ShieldBan, X } from "lucide-react";
 // 全局互斥的「正在进行的写操作」:既做防重锁,又用于把加载态精确显示在被点的控件上。
 type BusyAction = null | "term" | "channel" | "delete";
 
+const CHANNELS_PAGE_SIZE = 10;
+
 export default function YouTubeBlocklistPanel() {
   const { t } = useI18n();
   const client = useAPIClient();
@@ -30,6 +32,8 @@ export default function YouTubeBlocklistPanel() {
   const [channelValue, setChannelValue] = useState("");
   const [busyAction, setBusyAction] = useState<BusyAction>(null);
   const [pending, setPending] = useState<BlocklistEntry | null>(null); // 待二次确认删除的条目
+  const [channelSearch, setChannelSearch] = useState("");
+  const [channelPage, setChannelPage] = useState(1);
   const busy = busyAction !== null;
 
   const reload = useCallback(async () => {
@@ -47,6 +51,24 @@ export default function YouTubeBlocklistPanel() {
 
   const terms = useMemo(() => entries.filter((e) => e.kind === "term"), [entries]);
   const channels = useMemo(() => entries.filter((e) => e.kind === "channel"), [entries]);
+
+  const filteredChannels = useMemo(() => {
+    const q = channelSearch.trim().toLowerCase();
+    if (!q) return channels;
+    return channels.filter((e) => (e.name || e.raw_value).toLowerCase().includes(q));
+  }, [channels, channelSearch]);
+
+  const totalChannelPages = Math.max(1, Math.ceil(filteredChannels.length / CHANNELS_PAGE_SIZE));
+
+  // 删除/搜索使可见集变小后,把越界页码 clamp 回最后一页,避免卡在空页。
+  useEffect(() => {
+    if (channelPage > totalChannelPages) setChannelPage(totalChannelPages);
+  }, [channelPage, totalChannelPages]);
+
+  const pagedChannels = useMemo(
+    () => filteredChannels.slice((channelPage - 1) * CHANNELS_PAGE_SIZE, channelPage * CHANNELS_PAGE_SIZE),
+    [filteredChannels, channelPage]
+  );
 
   const add = useCallback(
     async (kind: "term" | "channel", value: string, clear: () => void) => {
@@ -193,7 +215,43 @@ export default function YouTubeBlocklistPanel() {
             </Button>
           </form>
           <p className="text-xs text-[var(--app-text-muted)]">{t("admin.blocklist.channelHint")}</p>
-          {renderList(channels, "admin.blocklist.channelsEmpty")}
+          {channels.length > 0 && (
+            <Input
+              value={channelSearch}
+              onChange={(ev) => {
+                setChannelSearch(ev.target.value);
+                setChannelPage(1);
+              }}
+              placeholder={t("admin.blocklist.channelSearchPlaceholder")}
+            />
+          )}
+          {renderList(
+            pagedChannels,
+            channels.length === 0 ? "admin.blocklist.channelsEmpty" : "admin.blocklist.channelsNoMatch"
+          )}
+          {filteredChannels.length > CHANNELS_PAGE_SIZE && (
+            <div className="flex items-center justify-center gap-3 pt-1">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setChannelPage((p) => Math.max(1, p - 1))}
+                disabled={busy || channelPage <= 1}
+              >
+                {t("admin.blocklist.prevPage")}
+              </Button>
+              <span className="text-xs text-[var(--app-text-muted)] tabular-nums">
+                {channelPage} / {totalChannelPages}
+              </span>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setChannelPage((p) => Math.min(totalChannelPages, p + 1))}
+                disabled={busy || channelPage >= totalChannelPages}
+              >
+                {t("admin.blocklist.nextPage")}
+              </Button>
+            </div>
+          )}
         </section>
       </CardContent>
 
