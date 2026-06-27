@@ -106,6 +106,18 @@ describe("YouTubeBlocklistPanel", () => {
     await waitFor(() => expect(mockNotify.notifySuccess).toHaveBeenCalledWith("admin.blocklist.removeSuccess"))
   })
 
+  it("renders channel display name when present, falls back to raw_value", async () => {
+    mockClient.getYouTubeBlocklist.mockResolvedValue({
+      items: [
+        { ...channelEntry, id: "c1", match_field: "channel_id", raw_value: "UCabc", name: "BBC News 中文" },
+        { ...channelEntry, id: "c2", match_field: "channel_id", raw_value: "UCdef", name: null },
+      ],
+    })
+    render(<YouTubeBlocklistPanel />)
+    expect(await screen.findByText("BBC News 中文")).toBeTruthy()  // 有 name → 显示名字
+    expect(await screen.findByText("UCdef")).toBeTruthy()          // 无 name → 回落 raw_value
+  })
+
   it("确认框取消 → 不调删除 api", async () => {
     mockClient.getYouTubeBlocklist.mockResolvedValue({ items: [channelEntry] })
     render(<YouTubeBlocklistPanel />)
