@@ -19,7 +19,9 @@
     "justNow": "just now",
     "edit": "Edit",
     "admin": "Admin",
-    "close": "Close"
+    "close": "Close",
+    "prevPage": "Prev",
+    "nextPage": "Next"
   },
   "admin": {
     "console": "Admin",

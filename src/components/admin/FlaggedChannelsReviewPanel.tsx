@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +22,8 @@ import { ApiError, type FlaggedChannelOut } from "@/types/api";
 import { Flag, ShieldBan, ShieldOff, ShieldAlert, ExternalLink } from "lucide-react";
 
 type LoadState = "loading" | "ready" | "forbidden" | "error";
+
+const FLAGS_PAGE_SIZE = 8;
 
 function identityLabel(f: FlaggedChannelOut): string {
   return (
@@ -51,6 +53,13 @@ export default function FlaggedChannelsReviewPanel() {
   const [dismissTarget, setDismissTarget] = useState<FlaggedChannelOut | null>(null);
   const busy = busyId !== null;
 
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(items.length / FLAGS_PAGE_SIZE));
+  const pagedItems = useMemo(
+    () => items.slice((page - 1) * FLAGS_PAGE_SIZE, page * FLAGS_PAGE_SIZE),
+    [items, page]
+  );
+
   const reload = useCallback(async () => {
     try {
       const res = await client.getFlaggedChannels();
@@ -66,6 +75,10 @@ export default function FlaggedChannelsReviewPanel() {
   useEffect(() => {
     reload();
   }, [reload]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   const closeDialogs = useCallback(() => {
     setBlockTarget(null);
@@ -206,7 +219,34 @@ export default function FlaggedChannelsReviewPanel() {
         />
       );
     }
-    return <ul className="space-y-2">{items.map(renderCard)}</ul>;
+    return (
+      <div className="space-y-3">
+        <ul className="space-y-2">{pagedItems.map(renderCard)}</ul>
+        {items.length > FLAGS_PAGE_SIZE && (
+          <div className="flex items-center justify-center gap-3 pt-1">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={busy || page <= 1}
+            >
+              {t("common.prevPage")}
+            </Button>
+            <span className="text-xs text-[var(--app-text-muted)] tabular-nums">
+              {page} / {totalPages}
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={busy || page >= totalPages}
+            >
+              {t("common.nextPage")}
+            </Button>
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (

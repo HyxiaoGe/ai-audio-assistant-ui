@@ -19,7 +19,9 @@
     "justNow": "刚刚",
     "edit": "编辑",
     "admin": "管理员",
-    "close": "关闭"
+    "close": "关闭",
+    "prevPage": "上一页",
+    "nextPage": "下一页"
   },
   "admin": {
     "console": "后台管理",
