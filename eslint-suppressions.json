@@ -156,7 +156,7 @@
   },
   "src/components/pages/TaskDetail.tsx": {
     "no-restricted-syntax": {
-      "count": 24
+      "count": 23
     }
   },
   "src/components/pages/TaskList.tsx": {

@@ -14,7 +14,7 @@ import { type ActionItem, parseActionItems, parseSummaryLines } from '@/lib/summ
 import { ExportMenu } from '@/components/task/ExportMenu';
 import { TaskVisibilityToggle } from '@/components/task/TaskVisibilityToggle';
 import { TaskDetailHeader } from '@/components/task/TaskDetailHeader';
-import { TaskFailedPanel } from '@/components/task/TaskFailedPanel';
+import { TaskFailedView } from '@/components/task/TaskFailedView';
 import { TaskProcessingPanel } from '@/components/task/TaskProcessingPanel';
 import { TranscriptColumnHeader } from '@/components/task/TranscriptColumnHeader';
 import ErrorState from '@/components/common/ErrorState';
@@ -1007,15 +1007,14 @@ export default function TaskDetail() {
 
   if (task.status === 'failed') {
     return (
-      <div className="h-full flex flex-col overflow-hidden">
-            <TaskDetailHeader
-              title={task.title}
-              onBack={handleBackToTasks}
-              right={<div style={{ width: '140px' }} />}
-            />
-
-            <TaskFailedPanel task={task} onRetry={handleRetry} isRetrying={isRetrying} />
-      </div>
+      <TaskFailedView
+        task={task}
+        onBack={handleBackToTasks}
+        onRetry={handleRetry}
+        isRetrying={isRetrying}
+        onConfirmDelete={handleDeleteTask}
+        isDeleting={isDeleting}
+      />
     );
   }
 
