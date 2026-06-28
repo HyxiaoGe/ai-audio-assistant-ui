@@ -233,7 +233,9 @@ export default function YouTubeBlocklistPanel() {
           )}
           <p className="text-xs text-[var(--app-text-muted)]">{t("admin.blocklist.channelHint")}</p>
           {renderList(
-            pagedChannels,
+            // 结构化命中但子串过滤没 surface(粘链接/@handle/UCID 非频道名子串)时,
+            // 显示被命中的那条而非「无匹配」空态——否则「无匹配频道」与下方「已屏蔽」提示自相矛盾。
+            alreadyBlocked && pagedChannels.length === 0 ? [alreadyBlocked] : pagedChannels,
             channels.length === 0 ? "admin.blocklist.channelsEmpty" : "admin.blocklist.channelsNoMatch"
           )}
           {filteredChannels.length > CHANNELS_PAGE_SIZE && (

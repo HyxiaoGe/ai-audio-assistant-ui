@@ -231,6 +231,9 @@ describe("YouTubeBlocklistPanel", () => {
     const channelAdd = screen.getAllByText("admin.blocklist.add")[1].closest("button") as HTMLButtonElement
     await waitFor(() => expect(channelAdd.disabled).toBe(true))
     expect(screen.getByText("admin.blocklist.channelAlreadyBlocked")).toBeTruthy()
+    // 命中条目虽不是粘贴串的子串,也不应显示「无匹配频道」空态(与「已屏蔽」提示矛盾);改显被命中的那条
+    expect(screen.queryByText("admin.blocklist.channelsNoMatch")).toBeNull()
+    expect(screen.getByText("Lex Fridman")).toBeTruthy()
   })
 
   it("粘贴 /channel/UC… 命中已屏蔽 channel_id 条目 → 禁用添加", async () => {
