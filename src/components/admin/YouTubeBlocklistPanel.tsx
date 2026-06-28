@@ -16,6 +16,7 @@ import { useI18n } from "@/lib/i18n-context";
 import { useAPIClient } from "@/lib/use-api-client";
 import { notifyError, notifySuccess } from "@/lib/notify";
 import type { BlocklistEntry } from "@/types/api";
+import { classifyChannelInput } from "@/lib/youtube-channel-classify";
 import { ShieldBan, X } from "lucide-react";
 
 // 全局互斥的「正在进行的写操作」:既做防重锁,又用于把加载态精确显示在被点的控件上。
@@ -69,7 +70,16 @@ export default function YouTubeBlocklistPanel() {
     [filteredChannels, channelPage]
   );
 
-  const canAddChannel = channelQuery.trim() !== "" && filteredChannels.length === 0;
+  // 对当前输入做结构化判型(id/handle/name 三维),命中已屏蔽条目即视为重复——
+  // 覆盖子串过滤识别不出的粘贴链接/@handle/UCID 形态。空输入跳过。
+  const alreadyBlocked = useMemo(() => {
+    const q = channelQuery.trim();
+    if (!q) return null;
+    const cls = classifyChannelInput(q);
+    return channels.find((e) => e.match_field === cls.matchField && e.normalized_value === cls.normalizedValue) ?? null;
+  }, [channels, channelQuery]);
+
+  const canAddChannel = channelQuery.trim() !== "" && filteredChannels.length === 0 && !alreadyBlocked;
 
   const add = useCallback(
     async (kind: "term" | "channel", value: string, clear: () => void) => {
@@ -218,9 +228,14 @@ export default function YouTubeBlocklistPanel() {
               {busyAction === "channel" ? t("admin.blocklist.adding") : t("admin.blocklist.add")}
             </Button>
           </form>
+          {alreadyBlocked && (
+            <p className="text-xs text-[var(--app-danger)]">{t("admin.blocklist.channelAlreadyBlocked")}</p>
+          )}
           <p className="text-xs text-[var(--app-text-muted)]">{t("admin.blocklist.channelHint")}</p>
           {renderList(
-            pagedChannels,
+            // 结构化命中但子串过滤没 surface(粘链接/@handle/UCID 非频道名子串)时,
+            // 显示被命中的那条而非「无匹配」空态——否则「无匹配频道」与下方「已屏蔽」提示自相矛盾。
+            alreadyBlocked && pagedChannels.length === 0 ? [alreadyBlocked] : pagedChannels,
             channels.length === 0 ? "admin.blocklist.channelsEmpty" : "admin.blocklist.channelsNoMatch"
           )}
           {filteredChannels.length > CHANNELS_PAGE_SIZE && (
