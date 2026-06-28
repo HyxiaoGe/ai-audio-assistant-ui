@@ -88,6 +88,7 @@
       "channelsDesc": "从搜索结果中剔除该频道的视频。",
       "channelSearchOrAdd": "搜索或添加频道(名/链接/UCID)",
       "channelHint": "支持频道名、频道链接(youtube.com/@xxx)或频道 ID;链接会自动解析为频道。",
+      "channelAlreadyBlocked": "该频道已在屏蔽列表中",
       "add": "添加",
       "adding": "添加中…",
       "remove": "删除",

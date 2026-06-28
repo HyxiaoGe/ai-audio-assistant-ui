@@ -214,4 +214,64 @@ describe("YouTubeBlocklistPanel", () => {
     fireEvent.submit(input)
     expect(mockClient.addYouTubeBlocklistEntry).not.toHaveBeenCalled()
   })
+
+  it("粘贴 @handle 链接命中已屏蔽 handle 条目 → 禁用添加 + 提示", async () => {
+    mockClient.getYouTubeBlocklist.mockResolvedValue({
+      items: [{
+        id: "h1", kind: "channel", match_field: "channel_handle",
+        raw_value: "https://youtube.com/@LexFridman", name: "Lex Fridman",
+        normalized_value: "lexfridman", note: null, created_at: "2026-06-26T00:00:00Z",
+      }],
+    })
+    render(<YouTubeBlocklistPanel />)
+    await screen.findByText("Lex Fridman")
+    fireEvent.change(screen.getByPlaceholderText("admin.blocklist.channelSearchOrAdd"), {
+      target: { value: "https://www.youtube.com/@LexFridman" },
+    })
+    const channelAdd = screen.getAllByText("admin.blocklist.add")[1].closest("button") as HTMLButtonElement
+    await waitFor(() => expect(channelAdd.disabled).toBe(true))
+    expect(screen.getByText("admin.blocklist.channelAlreadyBlocked")).toBeTruthy()
+  })
+
+  it("粘贴 /channel/UC… 命中已屏蔽 channel_id 条目 → 禁用添加", async () => {
+    const ucid = "UC1234567890abcdefghijkl"
+    mockClient.getYouTubeBlocklist.mockResolvedValue({
+      items: [{
+        id: "i1", kind: "channel", match_field: "channel_id",
+        raw_value: `https://youtube.com/channel/${ucid}`, name: "Some Channel",
+        normalized_value: ucid, note: null, created_at: "2026-06-26T00:00:00Z",
+      }],
+    })
+    render(<YouTubeBlocklistPanel />)
+    await screen.findByText("Some Channel")
+    fireEvent.change(screen.getByPlaceholderText("admin.blocklist.channelSearchOrAdd"), {
+      target: { value: `https://www.youtube.com/channel/${ucid}` },
+    })
+    const channelAdd = screen.getAllByText("admin.blocklist.add")[1].closest("button") as HTMLButtonElement
+    await waitFor(() => expect(channelAdd.disabled).toBe(true))
+  })
+
+  it("粘贴未屏蔽频道链接 → 添加点亮且无提示", async () => {
+    mockClient.getYouTubeBlocklist.mockResolvedValue({
+      items: [{
+        id: "h1", kind: "channel", match_field: "channel_handle",
+        raw_value: "https://youtube.com/@LexFridman", name: "Lex Fridman",
+        normalized_value: "lexfridman", note: null, created_at: "2026-06-26T00:00:00Z",
+      }],
+    })
+    render(<YouTubeBlocklistPanel />)
+    await screen.findByText("Lex Fridman")
+    fireEvent.change(screen.getByPlaceholderText("admin.blocklist.channelSearchOrAdd"), {
+      target: { value: "https://www.youtube.com/@SomeoneElse" },
+    })
+    const channelAdd = screen.getAllByText("admin.blocklist.add")[1].closest("button") as HTMLButtonElement
+    await waitFor(() => expect(channelAdd.disabled).toBe(false))
+    expect(screen.queryByText("admin.blocklist.channelAlreadyBlocked")).toBeNull()
+    fireEvent.click(channelAdd)
+    await waitFor(() =>
+      expect(mockClient.addYouTubeBlocklistEntry).toHaveBeenCalledWith({
+        kind: "channel", value: "https://www.youtube.com/@SomeoneElse",
+      })
+    )
+  })
 })

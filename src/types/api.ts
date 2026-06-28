@@ -1385,6 +1385,7 @@ export interface BlocklistEntry {
   kind: "term" | "channel"
   match_field: string
   raw_value: string
+  normalized_value: string
   name?: string | null
   note: string | null
   created_at: string

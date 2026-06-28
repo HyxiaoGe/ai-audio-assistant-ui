@@ -88,6 +88,7 @@
       "channelsDesc": "Videos from this channel are removed from search results.",
       "channelSearchOrAdd": "Search or add a channel (name / link / UCID)",
       "channelHint": "Accepts a channel name, link (youtube.com/@xxx), or ID; links are resolved automatically.",
+      "channelAlreadyBlocked": "This channel is already blocked",
       "add": "Add",
       "adding": "Adding…",
       "remove": "Remove",
