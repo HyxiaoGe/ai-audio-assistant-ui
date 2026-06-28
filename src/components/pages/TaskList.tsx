@@ -6,6 +6,7 @@ import { Pagination } from '@/components/common/Pagination';
 import TaskCard from '@/components/task/TaskCard';
 import { TaskSearchInput } from '@/components/task/TaskSearchInput';
 import { SearchSnippet } from '@/components/task/SearchSnippet';
+import { DeleteTaskDialog } from '@/components/task/DeleteTaskDialog';
 import EmptyState from '@/components/common/EmptyState';
 import ErrorState from '@/components/common/ErrorState';
 import TaskCardSkeleton from '@/components/task/TaskCardSkeleton';
@@ -51,6 +52,8 @@ export default function TaskList() {
   const [searching, setSearching] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [retryingTaskId, setRetryingTaskId] = useState<string | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   // 自增计数：重试成功后 +1，触发列表与状态计数重新拉取，避免卡片停留在 failed 态。
   const [reloadKey, setReloadKey] = useState(0);
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
@@ -295,6 +298,26 @@ export default function TaskList() {
   }, [retryingTaskId, client, t, router]);
 
 
+  // 稳定身份(只存 id、空依赖),使 memo 化 TaskCard 不被破坏;标题在弹窗渲染时从 tasks 派生。
+  const handleDeleteRequest = useCallback((taskId: string) => {
+    setDeleteTargetId(taskId);
+  }, []);
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteTargetId || deletingId) return;
+    setDeletingId(deleteTargetId);
+    try {
+      await client.deleteTask(deleteTargetId);
+      notifySuccess(t("task.deleteSuccess"));
+      setDeleteTargetId(null);
+      reload(); // 重拉列表 + 状态计数(与重试成功同范式)
+    } catch (err) {
+      notifyError(err instanceof ApiError ? err.message : t("task.deleteFailed"));
+    } finally {
+      setDeletingId(null);
+    }
+  }, [deleteTargetId, deletingId, client, t, reload]);
+
   // 是否处于激活搜索态：有非空查询即用服务端命中替换常规列表（不再做当前页客户端过滤）。
   const isSearching = searchQuery.trim().length > 0;
 
@@ -489,6 +512,8 @@ export default function TaskList() {
                   onClick={handleTaskClick}
                   onRetry={handleRetryTask}
                   isRetrying={retryingTaskId === task.id}
+                  onDelete={handleDeleteRequest}
+                  isDeleting={deletingId === task.id}
                   publicLabel={task.is_public ? t('task.visibilityPublic') : undefined}
                 />
               ))
@@ -533,6 +558,14 @@ export default function TaskList() {
               </p>
             </div>
           )}
+
+          <DeleteTaskDialog
+            open={!!deleteTargetId}
+            isDeleting={!!deletingId}
+            onClose={() => setDeleteTargetId(null)}
+            onConfirm={confirmDelete}
+            title={tasks.find((x) => x.id === deleteTargetId)?.title}
+          />
     </div>
   );
 }

@@ -10,6 +10,7 @@ const mockClient = vi.hoisted(() => ({
   getTasks: vi.fn(),
   getTaskStatusCounts: vi.fn(),
   retryTask: vi.fn(),
+  deleteTask: vi.fn(),
   searchTranscripts: vi.fn(),
 }))
 
@@ -61,17 +62,24 @@ vi.mock("@/components/task/TaskCard", () => ({
     title,
     status,
     onRetry,
+    onDelete,
+    isDeleting,
   }: {
     id: string
     title: string
     status: string
     onRetry: (id: string) => void
+    onDelete?: (id: string) => void
+    isDeleting?: boolean
   }) => (
     <div data-testid={`task-${id}`}>
       <span>{title}</span>
       <span>{status}</span>
       <button data-testid={`retry-${id}`} onClick={() => onRetry(id)}>
         retry
+      </button>
+      <button data-testid={`delete-${id}`} disabled={isDeleting} onClick={() => onDelete?.(id)}>
+        delete
       </button>
     </div>
   ),
@@ -374,4 +382,54 @@ describe("TaskList 三态", () => {
     fireEvent.click(retry);
     await waitFor(() => expect(mockClient.getTasks).toHaveBeenCalledTimes(2));
   });
+})
+
+describe("TaskList 行内删除", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.clear()
+    mockClient.getTasks.mockResolvedValue({
+      items: [
+        { id: "t1", title: "Failed task", status: "failed", source_type: "file", duration_seconds: 0, created_at: "2026-06-28T00:00:00Z", is_public: false },
+      ],
+      total: 1,
+    })
+    mockClient.getTaskStatusCounts.mockResolvedValue({ all: 1, processing: 0, completed: 0, failed: 1 })
+    mockClient.searchTranscripts.mockResolvedValue({ hits: [] })
+  })
+
+  it("点删除按钮打开确认弹窗,确认调 client.deleteTask 并重拉列表", async () => {
+    const { notifySuccess } = await import("@/lib/notify")
+    mockClient.deleteTask.mockResolvedValue(undefined)
+    render(<TaskList />)
+    await screen.findByTestId("task-t1")
+    expect(mockClient.getTasks).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(screen.getByTestId("delete-t1"))
+    // 弹窗打开
+    expect(screen.getByText("task.deleteConfirmTitle")).toBeInTheDocument()
+    // 弹窗确认(destructive Button 文案 common.delete)
+    const deletes = screen.getAllByText("common.delete")
+    fireEvent.click(deletes[deletes.length - 1])
+
+    await waitFor(() => expect(mockClient.deleteTask).toHaveBeenCalledWith("t1"))
+    expect(notifySuccess).toHaveBeenCalled()
+    // 删除后 reload:getTasks 再次被调用
+    await waitFor(() => expect(mockClient.getTasks).toHaveBeenCalledTimes(2))
+  })
+
+  it("删除 reject 时 notifyError 且不重拉、列表保留", async () => {
+    const { ApiError } = await import("@/types/api")
+    const { notifyError } = await import("@/lib/notify")
+    mockClient.deleteTask.mockRejectedValue(new ApiError(50000, "boom"))
+    render(<TaskList />)
+    await screen.findByTestId("task-t1")
+
+    fireEvent.click(screen.getByTestId("delete-t1"))
+    const deletes = screen.getAllByText("common.delete")
+    fireEvent.click(deletes[deletes.length - 1])
+
+    await waitFor(() => expect(notifyError).toHaveBeenCalledWith("boom"))
+    expect(screen.getByTestId("task-t1")).toBeInTheDocument()
+  })
 })
