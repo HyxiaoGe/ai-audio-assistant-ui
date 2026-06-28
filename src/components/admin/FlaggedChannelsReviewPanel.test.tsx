@@ -109,6 +109,28 @@ describe("FlaggedChannelsReviewPanel", () => {
     expect(screen.queryByText("Evil Channel")).toBeNull()
   })
 
+  const makeFlags = (n: number) =>
+    Array.from({ length: n }, (_, i) =>
+      flag({ id: `f${i}`, channel_id: `UC${i}`, channel_name: `频道${i}` })
+    )
+
+  it("分页每页 8 条,下一页显示其余", async () => {
+    mockClient.getFlaggedChannels.mockResolvedValue({ items: makeFlags(10) })
+    render(<FlaggedChannelsReviewPanel />)
+    expect(await screen.findByText("频道0")).toBeTruthy()
+    expect(screen.queryByText("频道8")).toBeNull() // 第 9 条在第二页
+    fireEvent.click(screen.getByText("common.nextPage"))
+    expect(await screen.findByText("频道8")).toBeTruthy()
+    expect(screen.queryByText("频道0")).toBeNull()
+  })
+
+  it("≤8 条不显示分页条", async () => {
+    mockClient.getFlaggedChannels.mockResolvedValue({ items: makeFlags(8) })
+    render(<FlaggedChannelsReviewPanel />)
+    await screen.findByText("频道0")
+    expect(screen.queryByText("common.nextPage")).toBeNull()
+  })
+
   it("处置进行中 → 行内按钮禁用(busy-lock)", async () => {
     mockClient.getFlaggedChannels.mockResolvedValue({ items: [flag()] })
     let release: (v: unknown) => void = () => {}

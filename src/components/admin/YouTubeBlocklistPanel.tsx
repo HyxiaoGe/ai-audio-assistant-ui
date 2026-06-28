@@ -29,10 +29,9 @@ export default function YouTubeBlocklistPanel() {
 
   const [entries, setEntries] = useState<BlocklistEntry[]>([]);
   const [termValue, setTermValue] = useState("");
-  const [channelValue, setChannelValue] = useState("");
+  const [channelQuery, setChannelQuery] = useState("");
   const [busyAction, setBusyAction] = useState<BusyAction>(null);
   const [pending, setPending] = useState<BlocklistEntry | null>(null); // 待二次确认删除的条目
-  const [channelSearch, setChannelSearch] = useState("");
   const [channelPage, setChannelPage] = useState(1);
   const busy = busyAction !== null;
 
@@ -53,10 +52,10 @@ export default function YouTubeBlocklistPanel() {
   const channels = useMemo(() => entries.filter((e) => e.kind === "channel"), [entries]);
 
   const filteredChannels = useMemo(() => {
-    const q = channelSearch.trim().toLowerCase();
+    const q = channelQuery.trim().toLowerCase();
     if (!q) return channels;
     return channels.filter((e) => (e.name || e.raw_value).toLowerCase().includes(q));
-  }, [channels, channelSearch]);
+  }, [channels, channelQuery]);
 
   const totalChannelPages = Math.max(1, Math.ceil(filteredChannels.length / CHANNELS_PAGE_SIZE));
 
@@ -69,6 +68,8 @@ export default function YouTubeBlocklistPanel() {
     () => filteredChannels.slice((channelPage - 1) * CHANNELS_PAGE_SIZE, channelPage * CHANNELS_PAGE_SIZE),
     [filteredChannels, channelPage]
   );
+
+  const canAddChannel = channelQuery.trim() !== "" && filteredChannels.length === 0;
 
   const add = useCallback(
     async (kind: "term" | "channel", value: string, clear: () => void) => {
@@ -192,7 +193,7 @@ export default function YouTubeBlocklistPanel() {
           {renderList(terms, "admin.blocklist.termsEmpty")}
         </section>
 
-        {/* 屏蔽频道 */}
+        {/* 屏蔽频道:搜索与添加合并为一个框 —— 输入即过滤,仅当无匹配项时「添加」点亮 */}
         <section className="space-y-3">
           <div>
             <h4 className="text-sm font-semibold text-[var(--app-text)]">{t("admin.blocklist.channelsTitle")}</h4>
@@ -202,29 +203,22 @@ export default function YouTubeBlocklistPanel() {
             className="flex gap-2"
             onSubmit={(ev) => {
               ev.preventDefault();
-              add("channel", channelValue, () => setChannelValue(""));
+              if (canAddChannel) add("channel", channelQuery, () => { setChannelQuery(""); setChannelPage(1); });
             }}
           >
             <Input
-              value={channelValue}
-              onChange={(ev) => setChannelValue(ev.target.value)}
-              placeholder={t("admin.blocklist.channelPlaceholder")}
+              value={channelQuery}
+              onChange={(ev) => {
+                setChannelQuery(ev.target.value);
+                setChannelPage(1);
+              }}
+              placeholder={t("admin.blocklist.channelSearchOrAdd")}
             />
-            <Button type="submit" disabled={busy || !channelValue.trim()}>
+            <Button type="submit" disabled={busy || !canAddChannel}>
               {busyAction === "channel" ? t("admin.blocklist.adding") : t("admin.blocklist.add")}
             </Button>
           </form>
           <p className="text-xs text-[var(--app-text-muted)]">{t("admin.blocklist.channelHint")}</p>
-          {channels.length > 0 && (
-            <Input
-              value={channelSearch}
-              onChange={(ev) => {
-                setChannelSearch(ev.target.value);
-                setChannelPage(1);
-              }}
-              placeholder={t("admin.blocklist.channelSearchPlaceholder")}
-            />
-          )}
           {renderList(
             pagedChannels,
             channels.length === 0 ? "admin.blocklist.channelsEmpty" : "admin.blocklist.channelsNoMatch"
@@ -237,7 +231,7 @@ export default function YouTubeBlocklistPanel() {
                 onClick={() => setChannelPage((p) => Math.max(1, p - 1))}
                 disabled={busy || channelPage <= 1}
               >
-                {t("admin.blocklist.prevPage")}
+                {t("common.prevPage")}
               </Button>
               <span className="text-xs text-[var(--app-text-muted)] tabular-nums">
                 {channelPage} / {totalChannelPages}
@@ -248,7 +242,7 @@ export default function YouTubeBlocklistPanel() {
                 onClick={() => setChannelPage((p) => Math.min(totalChannelPages, p + 1))}
                 disabled={busy || channelPage >= totalChannelPages}
               >
-                {t("admin.blocklist.nextPage")}
+                {t("common.nextPage")}
               </Button>
             </div>
           )}
