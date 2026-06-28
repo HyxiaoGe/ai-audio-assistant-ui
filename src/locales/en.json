@@ -86,7 +86,7 @@
       "termPlaceholder": "Enter a search term to block",
       "channelsTitle": "Blocked Channels",
       "channelsDesc": "Videos from this channel are removed from search results.",
-      "channelPlaceholder": "Channel name (e.g. Lex Fridman) or channel ID (UCxxxx) / channel URL",
+      "channelSearchOrAdd": "Search or add a channel (name / link / UCID)",
       "channelHint": "Accepts a channel name, link (youtube.com/@xxx), or ID; links are resolved automatically.",
       "add": "Add",
       "adding": "Adding…",
@@ -103,10 +103,7 @@
       "matchChannelName": "Channel name",
       "termsEmpty": "No blocked search terms yet",
       "channelsEmpty": "No blocked channels yet",
-      "channelSearchPlaceholder": "Search channel name…",
-      "channelsNoMatch": "No matching channel",
-      "prevPage": "Prev",
-      "nextPage": "Next"
+      "channelsNoMatch": "No matching channel"
     },
     "flaggedChannels": {
       "title": "Flagged Channels",

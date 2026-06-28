@@ -86,7 +86,7 @@
       "termPlaceholder": "输入要屏蔽的搜索词",
       "channelsTitle": "屏蔽博主(频道)",
       "channelsDesc": "从搜索结果中剔除该频道的视频。",
-      "channelPlaceholder": "频道名(如 Lex Fridman)或频道 ID(UCxxxx)/频道链接",
+      "channelSearchOrAdd": "搜索或添加频道(名/链接/UCID)",
       "channelHint": "支持频道名、频道链接(youtube.com/@xxx)或频道 ID;链接会自动解析为频道。",
       "add": "添加",
       "adding": "添加中…",
@@ -103,10 +103,7 @@
       "matchChannelName": "频道名",
       "termsEmpty": "暂无屏蔽搜索词",
       "channelsEmpty": "暂无屏蔽频道",
-      "channelSearchPlaceholder": "搜索频道名…",
-      "channelsNoMatch": "无匹配频道",
-      "prevPage": "上一页",
-      "nextPage": "下一页"
+      "channelsNoMatch": "无匹配频道"
     },
     "flaggedChannels": {
       "title": "频道标记复核",
