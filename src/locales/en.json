@@ -169,6 +169,36 @@
       "batchBlockCta": "Block",
       "batchSuccess": "Blocked {count} channel(s)",
       "batchPartial": "Blocked {resolved}, {failed} failed"
+    },
+    "userTasks": {
+      "viewTasks": "View tasks",
+      "heading": "User tasks",
+      "empty": "This user has no tasks",
+      "colTitle": "Title",
+      "colChannel": "Channel / Source",
+      "colStatus": "Status",
+      "colCreated": "Created",
+      "prev": "Prev",
+      "next": "Next",
+      "pageInfo": "Page {page} / {total} total",
+      "loadError": "Failed to load, please retry"
+    },
+    "taskLookup": {
+      "label": "View by task ID",
+      "placeholder": "Paste task ID",
+      "go": "Open"
+    },
+    "taskView": {
+      "transcript": "Transcript",
+      "summary": "Summary",
+      "noTranscript": "No transcript",
+      "noSummary": "No summary",
+      "status": "Status",
+      "created": "Created",
+      "duration": "Duration",
+      "errorMessage": "Failure reason",
+      "readonlyNote": "Read-only (admin)",
+      "loadError": "Failed to load, please retry"
     }
   },
   "player": {

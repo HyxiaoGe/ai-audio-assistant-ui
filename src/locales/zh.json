@@ -169,6 +169,36 @@
       "batchBlockCta": "确认拉黑",
       "batchSuccess": "已拉黑 {count} 个频道",
       "batchPartial": "已拉黑 {resolved} 个，{failed} 个失败"
+    },
+    "userTasks": {
+      "viewTasks": "查看任务",
+      "heading": "用户任务",
+      "empty": "该用户暂无任务",
+      "colTitle": "标题",
+      "colChannel": "频道/来源",
+      "colStatus": "状态",
+      "colCreated": "创建时间",
+      "prev": "上一页",
+      "next": "下一页",
+      "pageInfo": "第 {page} 页 / 共 {total} 条",
+      "loadError": "加载失败,请重试"
+    },
+    "taskLookup": {
+      "label": "按任务 ID 查看",
+      "placeholder": "粘贴任务 ID",
+      "go": "查看"
+    },
+    "taskView": {
+      "transcript": "转写",
+      "summary": "摘要",
+      "noTranscript": "暂无转写",
+      "noSummary": "暂无摘要",
+      "status": "状态",
+      "created": "创建时间",
+      "duration": "时长",
+      "errorMessage": "失败原因",
+      "readonlyNote": "只读视图(管理员)",
+      "loadError": "加载失败,请重试"
     }
   },
   "player": {

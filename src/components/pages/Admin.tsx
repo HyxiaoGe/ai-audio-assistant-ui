@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { useI18n } from '@/lib/i18n-context';
@@ -13,6 +14,7 @@ import { ShieldAlert, TrendingUp, Clock, DollarSign, Zap, Users } from 'lucide-r
 import YouTubeBlocklistPanel from '@/components/admin/YouTubeBlocklistPanel';
 import YouTubeAllowlistPanel from '@/components/admin/YouTubeAllowlistPanel';
 import FlaggedChannelsReviewPanel from '@/components/admin/FlaggedChannelsReviewPanel';
+import AdminTaskLookup from '@/components/admin/AdminTaskLookup';
 
 export default function Admin() {
   const { t } = useI18n();
@@ -292,6 +294,9 @@ export default function Admin() {
                 <CardDescription>{t("admin.costByUser.desc")}</CardDescription>
               </CardHeader>
               <CardContent>
+                <div className="mb-4">
+                  <AdminTaskLookup />
+                </div>
                 {costsLoading && (
                   <p className="text-sm text-[var(--app-text-muted)]">{t("common.loading")}...</p>
                 )}
@@ -308,6 +313,7 @@ export default function Admin() {
                           <th className="py-2 px-4 font-medium text-right">{t("admin.costByUser.imageCost")}</th>
                           <th className="py-2 px-4 font-medium text-right">{t("admin.costByUser.cnyTotal")}</th>
                           <th className="py-2 pl-4 font-medium text-right">{t("admin.costByUser.llmCost")}</th>
+                          <th className="py-2 pl-4 font-medium text-right">{t("admin.userTasks.viewTasks")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -353,6 +359,14 @@ export default function Admin() {
                                 ) : (
                                   formatMoney(row.llm_usd as number, "$")
                                 )}
+                              </td>
+                              <td className="py-2 pl-4 text-right">
+                                <Link
+                                  href={`/admin/users/${row.user_id}/tasks`}
+                                  className="text-[var(--app-primary)] hover:underline"
+                                >
+                                  {t("admin.userTasks.viewTasks")}
+                                </Link>
                               </td>
                             </tr>
                           );
