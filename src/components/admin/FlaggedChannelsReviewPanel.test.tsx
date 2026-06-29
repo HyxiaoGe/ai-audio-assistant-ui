@@ -222,4 +222,50 @@ describe("FlaggedChannelsReviewPanel", () => {
     fireEvent.click(screen.getByText("admin.flaggedChannels.clearSelection"))
     expect(screen.getByText("admin.flaggedChannels.batchBlock").closest("button")).toBeDisabled()
   })
+
+  it("分页:全选只选当前页,批量拉黑绝不波及其它页(回归)", async () => {
+    mockClient.getFlaggedChannels.mockResolvedValue({ items: makeFlags(10) }) // 2 页:f0..f7 / f8,f9
+    mockClient.batchResolveFlaggedChannels.mockResolvedValue({
+      resolved_count: 8,
+      items: Array.from({ length: 8 }, (_, i) => ({ flag_id: `f${i}`, status: "succeeded" })),
+    })
+    render(<FlaggedChannelsReviewPanel />)
+    await screen.findByText("频道0")
+    // 第 1 页点全选 → 只应选当前页 8 条
+    fireEvent.click(screen.getByText("admin.flaggedChannels.selectAll"))
+    fireEvent.click(screen.getByText("admin.flaggedChannels.batchBlock"))
+    await screen.findByText("admin.flaggedChannels.batchConfirmTitle")
+    fireEvent.click(screen.getByText("admin.flaggedChannels.batchBlockCta"))
+    await waitFor(() =>
+      expect(mockClient.batchResolveFlaggedChannels).toHaveBeenCalledWith({
+        flag_ids: ["f0", "f1", "f2", "f3", "f4", "f5", "f6", "f7"], // 不含第二页 f8/f9
+        action: "block",
+        note: undefined,
+      })
+    )
+  })
+
+  it("分页:逐页全选可累积跨页(全选本页→翻页→再全选本页 = 全部)", async () => {
+    mockClient.getFlaggedChannels.mockResolvedValue({ items: makeFlags(10) })
+    mockClient.batchResolveFlaggedChannels.mockResolvedValue({
+      resolved_count: 10,
+      items: Array.from({ length: 10 }, (_, i) => ({ flag_id: `f${i}`, status: "succeeded" })),
+    })
+    render(<FlaggedChannelsReviewPanel />)
+    await screen.findByText("频道0")
+    fireEvent.click(screen.getByText("admin.flaggedChannels.selectAll")) // 选第 1 页 8 条
+    fireEvent.click(screen.getByText("common.nextPage"))
+    await screen.findByText("频道8")
+    fireEvent.click(screen.getByText("admin.flaggedChannels.selectAll")) // 累积第 2 页 2 条
+    fireEvent.click(screen.getByText("admin.flaggedChannels.batchBlock"))
+    await screen.findByText("admin.flaggedChannels.batchConfirmTitle")
+    fireEvent.click(screen.getByText("admin.flaggedChannels.batchBlockCta"))
+    await waitFor(() =>
+      expect(mockClient.batchResolveFlaggedChannels).toHaveBeenCalledWith({
+        flag_ids: ["f0", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9"],
+        action: "block",
+        note: undefined,
+      })
+    )
+  })
 })

@@ -133,7 +133,7 @@
       "forbidden": "You don't have permission to view the flagged channels queue.",
       "loadError": "Failed to load, please retry",
       "retry": "Retry",
-      "selectAll": "Select all",
+      "selectAll": "Select page",
       "selectOne": "Select {name}",
       "selectedCount": "{count} selected",
       "batchBlock": "Block selected",
