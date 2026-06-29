@@ -6,9 +6,14 @@ const mockClient = vi.hoisted(() => ({
   getAdminTaskTranscript: vi.fn(),
   getAdminTaskSummary: vi.fn(),
 }))
+// 可变的 query string,各用例改它来切换 ?uid 分支
+const nav = vi.hoisted(() => ({ search: "" }))
 vi.mock("@/lib/use-api-client", () => ({ useAPIClient: () => mockClient }))
 vi.mock("@/lib/i18n-context", () => ({ useI18n: () => ({ t: (k: string) => k }) }))
-vi.mock("next/navigation", () => ({ useParams: () => ({ tid: "task-1" }) }))
+vi.mock("next/navigation", () => ({
+  useParams: () => ({ tid: "task-1" }),
+  useSearchParams: () => new URLSearchParams(nav.search),
+}))
 vi.mock("@/lib/use-date-formatter", () => ({ useDateFormatter: () => ({ formatDateTime: (v: string) => v }) }))
 // 重子组件桩:断言 readOnly 透传,避免拉入 audio-store / markdown 链路
 vi.mock("@/components/task/TranscriptList", () => ({
@@ -26,6 +31,7 @@ import AdminTaskView from "./AdminTaskView"
 
 beforeEach(() => {
   vi.clearAllMocks()
+  nav.search = ""
   mockClient.getAdminTaskDetail.mockResolvedValue({
     id: "task-1", title: "标题", source_type: "youtube", status: "failed",
     created_at: "2026-06-29T00:00:00Z", updated_at: "2026-06-29T00:00:00Z",
@@ -56,5 +62,20 @@ describe("AdminTaskView", () => {
     render(<AdminTaskView />)
     await waitFor(() => expect(screen.getByText("标题")).toBeInTheDocument())
     expect(screen.queryByRole("button", { name: /delete|删除|regenerate|重新生成/i })).toBeNull()
+  })
+
+  it("带 uid 时返回链接回到该用户任务列表", async () => {
+    nav.search = "uid=user-x"
+    render(<AdminTaskView />)
+    await waitFor(() => expect(screen.getByText("标题")).toBeInTheDocument())
+    const back = screen.getByRole("link", { name: /common\.back/ })
+    expect(back).toHaveAttribute("href", "/admin/users/user-x/tasks")
+  })
+
+  it("无 uid 时返回链接回 /admin 首页", async () => {
+    render(<AdminTaskView />)
+    await waitFor(() => expect(screen.getByText("标题")).toBeInTheDocument())
+    const back = screen.getByRole("link", { name: /common\.back/ })
+    expect(back).toHaveAttribute("href", "/admin")
   })
 })
