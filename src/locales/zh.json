@@ -132,7 +132,19 @@
       "emptyDesc": "内容审核拦截某频道视频时,会自动出现在这里等待复核。",
       "forbidden": "你没有权限查看频道标记复核队列。",
       "loadError": "加载失败,请重试",
-      "retry": "重试"
+      "retry": "重试",
+      "selectAll": "全选",
+      "selectOne": "选择 {name}",
+      "selectedCount": "已选 {count}",
+      "batchBlock": "批量拉黑",
+      "clearSelection": "清除",
+      "batchConfirmTitle": "批量拉黑确认",
+      "batchConfirmDesc": "选中的频道将全部加入黑名单，后续不再被转写。",
+      "batchConfirmSummary": "将拉黑选中的 {count} 个频道",
+      "batchBlocking": "批量拉黑中…",
+      "batchBlockCta": "确认拉黑",
+      "batchSuccess": "已拉黑 {count} 个频道",
+      "batchPartial": "已拉黑 {resolved} 个，{failed} 个失败"
     }
   },
   "player": {

@@ -5,6 +5,7 @@ import { ApiError } from "@/types/api"
 const mockClient = vi.hoisted(() => ({
   getFlaggedChannels: vi.fn(),
   resolveFlaggedChannel: vi.fn(),
+  batchResolveFlaggedChannels: vi.fn(),
 }))
 const mockNotify = vi.hoisted(() => ({
   notifySuccess: vi.fn(),
@@ -42,6 +43,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockClient.getFlaggedChannels.mockResolvedValue({ items: [] })
   mockClient.resolveFlaggedChannel.mockResolvedValue(flag({ status: "blocked" }))
+  mockClient.batchResolveFlaggedChannels.mockResolvedValue({ resolved_count: 0, items: [] })
 })
 afterEach(() => { vi.restoreAllMocks() })
 
@@ -145,5 +147,79 @@ describe("FlaggedChannelsReviewPanel", () => {
       expect(blockBtn.disabled).toBe(true)
     })
     release(flag({ status: "dismissed" }))
+  })
+
+  const threeFlags = [
+    flag({ id: "f1", channel_name: "Alpha" }),
+    flag({ id: "f2", channel_name: "Beta" }),
+    flag({ id: "f3", channel_name: "Gamma" }),
+  ]
+
+  it("勾选 → 顶部条显已选 + 批量拉黑启用", async () => {
+    mockClient.getFlaggedChannels.mockResolvedValue({ items: threeFlags })
+    render(<FlaggedChannelsReviewPanel />)
+    await screen.findByText("Alpha")
+    // 行 checkbox(aria-label 含身份名);全选 checkbox 用 selectAll label
+    const rowChecks = screen.getAllByRole("checkbox", { name: /selectOne|Alpha|Beta|Gamma/ })
+    fireEvent.click(rowChecks[0])
+    const batchBtn = screen.getByText("admin.flaggedChannels.batchBlock")
+    expect(batchBtn.closest("button")).not.toBeDisabled()
+  })
+
+  it("批量拉黑全流程 → 调 batchResolve(block) + 成功 toast(全成) + reload", async () => {
+    mockClient.getFlaggedChannels.mockResolvedValue({ items: threeFlags })
+    mockClient.batchResolveFlaggedChannels.mockResolvedValue({
+      resolved_count: 2,
+      items: [
+        { flag_id: "f1", status: "succeeded" },
+        { flag_id: "f2", status: "skipped" },
+      ],
+    })
+    render(<FlaggedChannelsReviewPanel />)
+    await screen.findByText("Alpha")
+    fireEvent.click(screen.getByText("admin.flaggedChannels.selectAll"))
+    fireEvent.click(screen.getByText("admin.flaggedChannels.batchBlock"))
+    await screen.findByText("admin.flaggedChannels.batchConfirmTitle")
+    fireEvent.click(screen.getByText("admin.flaggedChannels.batchBlockCta"))
+    await waitFor(() =>
+      expect(mockClient.batchResolveFlaggedChannels).toHaveBeenCalledWith({
+        flag_ids: ["f1", "f2", "f3"],
+        action: "block",
+        note: undefined,
+      })
+    )
+    await waitFor(() => expect(mockClient.getFlaggedChannels).toHaveBeenCalledTimes(2))
+    await waitFor(() =>
+      expect(mockNotify.notifySuccess).toHaveBeenCalledWith("admin.flaggedChannels.batchSuccess")
+    )
+  })
+
+  it("批量含 failed → batchPartial(error)提示", async () => {
+    mockClient.getFlaggedChannels.mockResolvedValue({ items: threeFlags })
+    mockClient.batchResolveFlaggedChannels.mockResolvedValue({
+      resolved_count: 1,
+      items: [
+        { flag_id: "f1", status: "succeeded" },
+        { flag_id: "f2", status: "failed", code: 40906 },
+      ],
+    })
+    render(<FlaggedChannelsReviewPanel />)
+    await screen.findByText("Alpha")
+    fireEvent.click(screen.getByText("admin.flaggedChannels.selectAll"))
+    fireEvent.click(screen.getByText("admin.flaggedChannels.batchBlock"))
+    await screen.findByText("admin.flaggedChannels.batchConfirmTitle")
+    fireEvent.click(screen.getByText("admin.flaggedChannels.batchBlockCta"))
+    await waitFor(() =>
+      expect(mockNotify.notifyError).toHaveBeenCalledWith("admin.flaggedChannels.batchPartial")
+    )
+  })
+
+  it("清除 → 选择集清空,批量拉黑禁用", async () => {
+    mockClient.getFlaggedChannels.mockResolvedValue({ items: threeFlags })
+    render(<FlaggedChannelsReviewPanel />)
+    await screen.findByText("Alpha")
+    fireEvent.click(screen.getByText("admin.flaggedChannels.selectAll"))
+    fireEvent.click(screen.getByText("admin.flaggedChannels.clearSelection"))
+    expect(screen.getByText("admin.flaggedChannels.batchBlock").closest("button")).toBeDisabled()
   })
 })

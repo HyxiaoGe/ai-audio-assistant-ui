@@ -51,7 +51,12 @@ export default function FlaggedChannelsReviewPanel() {
   const [blockTarget, setBlockTarget] = useState<FlaggedChannelOut | null>(null);
   const [blockNote, setBlockNote] = useState("");
   const [dismissTarget, setDismissTarget] = useState<FlaggedChannelOut | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchBusy, setBatchBusy] = useState(false);
+  const [batchConfirmOpen, setBatchConfirmOpen] = useState(false);
+  const [batchNote, setBatchNote] = useState("");
   const busy = busyId !== null;
+  const anyBusy = busy || batchBusy;
 
   const [page, setPage] = useState(1);
   const totalPages = Math.max(1, Math.ceil(items.length / FLAGS_PAGE_SIZE));
@@ -59,6 +64,23 @@ export default function FlaggedChannelsReviewPanel() {
     () => items.slice((page - 1) * FLAGS_PAGE_SIZE, page * FLAGS_PAGE_SIZE),
     [items, page]
   );
+
+  const allSelected = items.length > 0 && selectedIds.size === items.length;
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds((prev) => (prev.size === items.length ? new Set() : new Set(items.map((i) => i.id))));
+  }, [items]);
 
   const reload = useCallback(async () => {
     try {
@@ -79,6 +101,21 @@ export default function FlaggedChannelsReviewPanel() {
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
+
+  // items 变化(任意 reload 后)即把选择集收敛到仍存在的 id,避免跨页累积出幽灵勾选;无变化返回 prev 不触发额外渲染
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const valid = new Set(items.map((i) => i.id));
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (valid.has(id)) next.add(id);
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [items]);
 
   const closeDialogs = useCallback(() => {
     setBlockTarget(null);
@@ -113,63 +150,103 @@ export default function FlaggedChannelsReviewPanel() {
     [busyId, client, reload, closeDialogs, t]
   );
 
+  const submitBatch = useCallback(async () => {
+    if (batchBusy || selectedIds.size === 0) return;
+    setBatchBusy(true);
+    try {
+      const res = await client.batchResolveFlaggedChannels({
+        flag_ids: Array.from(selectedIds),
+        action: "block",
+        note: batchNote.trim() || undefined,
+      });
+      setBatchConfirmOpen(false);
+      setBatchNote("");
+      await reload(); // 重拉 pending;已处置项消失 → 幽灵清理 effect 自动剪枝选择集
+      const failed = res.items.filter((i) => i.status === "failed").length;
+      if (failed === 0) {
+        notifySuccess(t("admin.flaggedChannels.batchSuccess", { count: String(res.resolved_count) }));
+      } else {
+        notifyError(
+          t("admin.flaggedChannels.batchPartial", {
+            resolved: String(res.resolved_count),
+            failed: String(failed),
+          })
+        );
+      }
+    } catch (e) {
+      notifyError(e instanceof Error ? e.message : t("admin.flaggedChannels.resolveError"));
+    } finally {
+      setBatchBusy(false);
+    }
+  }, [batchBusy, selectedIds, client, batchNote, reload, t]);
+
   const renderCard = (f: FlaggedChannelOut) => {
     const chUrl = channelUrl(f);
     const watchUrl = f.last_video_id ? `https://www.youtube.com/watch?v=${f.last_video_id}` : null;
     return (
       <li
         key={f.id}
-        className="flex flex-col gap-2 rounded-lg border border-[var(--app-glass-border)] bg-[var(--app-glass-bg)] px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+        className="flex items-start gap-3 rounded-lg border border-[var(--app-glass-border)] bg-[var(--app-glass-bg)] px-3 py-3"
       >
-        <div className="flex min-w-0 flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-[var(--app-text)] break-all">{identityLabel(f)}</span>
-            {chUrl && (
-              <a
-                href={chUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="shrink-0 text-[var(--app-text-muted)] hover:text-[var(--app-primary)]"
-                aria-label={t("admin.flaggedChannels.verifyOnYoutube")}
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-              </a>
-            )}
-            <Badge variant="secondary" className="shrink-0">
-              {t("admin.flaggedChannels.hits", { count: String(f.block_count) })}
-            </Badge>
-          </div>
-          {f.last_title && (
-            <p className="text-xs text-[var(--app-text-muted)] break-all">
-              {t("admin.flaggedChannels.recent")}: {f.last_title}
-              {watchUrl && (
-                <>
-                  {" "}
-                  <a
-                    href={watchUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[var(--app-primary)] hover:underline"
-                  >
-                    {t("admin.flaggedChannels.verifyOnYoutube")}
-                  </a>
-                </>
+        <input
+          type="checkbox"
+          checked={selectedIds.has(f.id)}
+          onChange={() => toggleSelect(f.id)}
+          disabled={anyBusy}
+          aria-label={t("admin.flaggedChannels.selectOne", { name: identityLabel(f) })}
+          className="mt-1 h-4 w-4 shrink-0 accent-[var(--app-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-primary)]"
+        />
+        <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-[var(--app-text)] break-all">{identityLabel(f)}</span>
+              {chUrl && (
+                <a
+                  href={chUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 text-[var(--app-text-muted)] hover:text-[var(--app-primary)]"
+                  aria-label={t("admin.flaggedChannels.verifyOnYoutube")}
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
               )}
-            </p>
-          )}
-          {f.last_flagged_at && (
-            <p className="text-xs text-[var(--app-text-faint)]">
-              {t("admin.flaggedChannels.flaggedAt")}: {formatDateTime(f.last_flagged_at)}
-            </p>
-          )}
-        </div>
-        <div className="flex shrink-0 gap-2">
-          <Button variant="destructive" size="sm" disabled={busy} onClick={() => setBlockTarget(f)}>
-            {t("admin.flaggedChannels.block")}
-          </Button>
-          <Button variant="outline" size="sm" disabled={busy} onClick={() => setDismissTarget(f)}>
-            {t("admin.flaggedChannels.dismiss")}
-          </Button>
+              <Badge variant="secondary" className="shrink-0">
+                {t("admin.flaggedChannels.hits", { count: String(f.block_count) })}
+              </Badge>
+            </div>
+            {f.last_title && (
+              <p className="text-xs text-[var(--app-text-muted)] break-all">
+                {t("admin.flaggedChannels.recent")}: {f.last_title}
+                {watchUrl && (
+                  <>
+                    {" "}
+                    <a
+                      href={watchUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[var(--app-primary)] hover:underline"
+                    >
+                      {t("admin.flaggedChannels.verifyOnYoutube")}
+                    </a>
+                  </>
+                )}
+              </p>
+            )}
+            {f.last_flagged_at && (
+              <p className="text-xs text-[var(--app-text-faint)]">
+                {t("admin.flaggedChannels.flaggedAt")}: {formatDateTime(f.last_flagged_at)}
+              </p>
+            )}
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <Button variant="destructive" size="sm" disabled={anyBusy} onClick={() => setBlockTarget(f)}>
+              {t("admin.flaggedChannels.block")}
+            </Button>
+            <Button variant="outline" size="sm" disabled={anyBusy} onClick={() => setDismissTarget(f)}>
+              {t("admin.flaggedChannels.dismiss")}
+            </Button>
+          </div>
         </div>
       </li>
     );
@@ -221,6 +298,39 @@ export default function FlaggedChannelsReviewPanel() {
     }
     return (
       <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-[var(--app-glass-border)] bg-[var(--app-glass-bg)] px-3 py-2">
+          <label className="flex items-center gap-2 text-sm text-[var(--app-text)]">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={toggleSelectAll}
+              disabled={anyBusy}
+              className="h-4 w-4 accent-[var(--app-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-primary)]"
+            />
+            {t("admin.flaggedChannels.selectAll")}
+          </label>
+          <span className="text-xs text-[var(--app-text-muted)]">
+            {t("admin.flaggedChannels.selectedCount", { count: String(selectedIds.size) })}
+          </span>
+          <div className="ml-auto flex gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={anyBusy || selectedIds.size === 0}
+              onClick={clearSelection}
+            >
+              {t("admin.flaggedChannels.clearSelection")}
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={anyBusy || selectedIds.size === 0}
+              onClick={() => setBatchConfirmOpen(true)}
+            >
+              {t("admin.flaggedChannels.batchBlock")}
+            </Button>
+          </div>
+        </div>
         <ul className="space-y-2">{pagedItems.map(renderCard)}</ul>
         {items.length > FLAGS_PAGE_SIZE && (
           <div className="flex items-center justify-center gap-3 pt-1">
@@ -228,7 +338,7 @@ export default function FlaggedChannelsReviewPanel() {
               variant="secondary"
               size="sm"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={busy || page <= 1}
+              disabled={anyBusy || page <= 1}
             >
               {t("common.prevPage")}
             </Button>
@@ -239,7 +349,7 @@ export default function FlaggedChannelsReviewPanel() {
               variant="secondary"
               size="sm"
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={busy || page >= totalPages}
+              disabled={anyBusy || page >= totalPages}
             >
               {t("common.nextPage")}
             </Button>
@@ -341,6 +451,57 @@ export default function FlaggedChannelsReviewPanel() {
               {busyId && dismissTarget && busyId === dismissTarget.id
                 ? t("admin.flaggedChannels.dismissing")
                 : t("admin.flaggedChannels.dismissCta")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 批量拉黑确认(单一备注应用全批) */}
+      <Dialog
+        open={batchConfirmOpen}
+        onOpenChange={(open) => {
+          if (!open && !batchBusy) {
+            setBatchConfirmOpen(false);
+            setBatchNote("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShieldBan className="h-4 w-4 text-[var(--app-danger)]" />
+              {t("admin.flaggedChannels.batchConfirmTitle")}
+            </DialogTitle>
+            <DialogDescription>{t("admin.flaggedChannels.batchConfirmDesc")}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <p className="rounded-lg border border-[var(--app-glass-border)] bg-[var(--app-glass-bg)] px-3 py-2 text-sm text-[var(--app-text)]">
+              {t("admin.flaggedChannels.batchConfirmSummary", { count: String(selectedIds.size) })}
+            </p>
+            <label className="block text-xs text-[var(--app-text-muted)]">
+              {t("admin.flaggedChannels.noteLabel")}
+            </label>
+            <textarea
+              value={batchNote}
+              onChange={(e) => setBatchNote(e.target.value)}
+              rows={2}
+              placeholder={t("admin.flaggedChannels.notePlaceholder")}
+              className="w-full rounded-lg border border-[var(--app-glass-border)] bg-[var(--app-glass-bg)] px-3 py-2 text-sm text-[var(--app-text)] placeholder:text-[var(--app-text-faint)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-primary)]"
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setBatchConfirmOpen(false);
+                setBatchNote("");
+              }}
+              disabled={batchBusy}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button variant="destructive" onClick={submitBatch} disabled={batchBusy}>
+              {batchBusy ? t("admin.flaggedChannels.batchBlocking") : t("admin.flaggedChannels.batchBlockCta")}
             </Button>
           </DialogFooter>
         </DialogContent>

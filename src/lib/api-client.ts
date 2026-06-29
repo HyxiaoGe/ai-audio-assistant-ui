@@ -28,6 +28,8 @@ import {
   FlaggedChannelOut,
   FlaggedChannelListResponse,
   FlagResolveRequest,
+  FlagBatchResolveRequest,
+  FlagBatchResolveResponse,
   LLMModelsResponse,
   MediaTicketResponse,
   NotificationListRequest,
@@ -419,6 +421,15 @@ export class APIClient {
       { method: "POST", body: JSON.stringify(body) },
       this.token
     )
+  }
+
+  /**
+   * 批量复核处置:逐条 best-effort,返 per-item 三态明细。当前仅 action=block。仅管理员。
+   */
+  async batchResolveFlaggedChannels(
+    body: FlagBatchResolveRequest
+  ): Promise<FlagBatchResolveResponse> {
+    return request("/admin/flagged-channels/batch-resolve", { method: "POST", body: JSON.stringify(body) }, this.token)
   }
 
   // ==========================================================================
