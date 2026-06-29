@@ -7,6 +7,8 @@ import { ArrowLeft, Lock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TranscriptList } from "@/components/task/TranscriptList";
 import { MarkdownContent } from "@/components/task/MarkdownContent";
+import { TaskStatusBadge } from "@/components/task/TaskStatusBadge";
+import { TaskErrorCallout } from "@/components/task/TaskErrorCallout";
 import { useI18n } from "@/lib/i18n-context";
 import { useAPIClient } from "@/lib/use-api-client";
 import { useDateFormatter } from "@/lib/use-date-formatter";
@@ -134,8 +136,8 @@ export default function AdminTaskView() {
           <CardTitle className="mt-2 text-xl font-semibold text-[var(--app-text)]">
             {detail.title ?? detail.id}
           </CardTitle>
-          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--app-text-muted)]">
-            <span>{t("admin.taskView.status")}: {detail.status}</span>
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-[var(--app-text-muted)]">
+            <TaskStatusBadge status={detail.status} />
             <span>{t("admin.taskView.created")}: {formatDateTime(detail.created_at)}</span>
             {detail.duration_seconds != null && (
               <span>{t("admin.taskView.duration")}: {detail.duration_seconds}s</span>
@@ -144,9 +146,7 @@ export default function AdminTaskView() {
         </CardHeader>
         {detail.error_message && (
           <CardContent>
-            <p className="text-sm text-[var(--app-danger)]">
-              {t("admin.taskView.errorMessage")}: <span>{detail.error_message}</span>
-            </p>
+            <TaskErrorCallout message={detail.error_message} />
           </CardContent>
         )}
       </Card>

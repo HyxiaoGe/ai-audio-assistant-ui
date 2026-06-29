@@ -187,10 +187,8 @@
       "summary": "摘要",
       "noTranscript": "暂无转写",
       "noSummary": "暂无摘要",
-      "status": "状态",
       "created": "创建时间",
       "duration": "时长",
-      "errorMessage": "失败原因",
       "readonlyNote": "只读视图(管理员)",
       "loadError": "加载失败,请重试"
     }
