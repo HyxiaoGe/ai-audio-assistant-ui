@@ -464,13 +464,14 @@ export class APIClient {
   /** 管理员:列某用户的任务(只读)。 */
   async getAdminUserTasks(
     userId: string,
-    params?: { page?: number; page_size?: number; status?: string }
+    params?: { page?: number; page_size?: number; status?: string; q?: string }
   ): Promise<AdminUserTasksResponse> {
-    const q = new URLSearchParams()
-    if (params?.page) q.set("page", String(params.page))
-    if (params?.page_size) q.set("page_size", String(params.page_size))
-    if (params?.status && params.status !== "all") q.set("status", params.status)
-    const qs = q.toString()
+    const sp = new URLSearchParams()
+    if (params?.page) sp.set("page", String(params.page))
+    if (params?.page_size) sp.set("page_size", String(params.page_size))
+    if (params?.status && params.status !== "all") sp.set("status", params.status)
+    if (params?.q && params.q.trim()) sp.set("q", params.q.trim())
+    const qs = sp.toString()
     return request(`/admin/users/${userId}/tasks${qs ? `?${qs}` : ""}`, { method: "GET" }, this.token)
   }
 

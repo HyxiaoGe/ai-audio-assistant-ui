@@ -174,19 +174,13 @@
       "viewTasks": "View tasks",
       "heading": "User tasks",
       "empty": "This user has no tasks",
-      "colTitle": "Title",
-      "colChannel": "Channel / Source",
-      "colStatus": "Status",
-      "colCreated": "Created",
+      "searchPlaceholder": "Search by task ID or title",
+      "search": "Search",
+      "searchEmpty": "No matching tasks",
       "prev": "Prev",
       "next": "Next",
       "pageInfo": "Page {page} / {total} total",
       "loadError": "Failed to load, please retry"
-    },
-    "taskLookup": {
-      "label": "View by task ID",
-      "placeholder": "Paste task ID",
-      "go": "Open"
     },
     "taskView": {
       "transcript": "Transcript",

@@ -174,19 +174,13 @@
       "viewTasks": "查看任务",
       "heading": "用户任务",
       "empty": "该用户暂无任务",
-      "colTitle": "标题",
-      "colChannel": "频道/来源",
-      "colStatus": "状态",
-      "colCreated": "创建时间",
+      "searchPlaceholder": "按任务 ID 或标题搜索",
+      "search": "搜索",
+      "searchEmpty": "没有匹配的任务",
       "prev": "上一页",
       "next": "下一页",
       "pageInfo": "第 {page} 页 / 共 {total} 条",
       "loadError": "加载失败,请重试"
-    },
-    "taskLookup": {
-      "label": "按任务 ID 查看",
-      "placeholder": "粘贴任务 ID",
-      "go": "查看"
     },
     "taskView": {
       "transcript": "转写",

@@ -14,7 +14,6 @@ import { ShieldAlert, TrendingUp, Clock, DollarSign, Zap, Users } from 'lucide-r
 import YouTubeBlocklistPanel from '@/components/admin/YouTubeBlocklistPanel';
 import YouTubeAllowlistPanel from '@/components/admin/YouTubeAllowlistPanel';
 import FlaggedChannelsReviewPanel from '@/components/admin/FlaggedChannelsReviewPanel';
-import AdminTaskLookup from '@/components/admin/AdminTaskLookup';
 
 export default function Admin() {
   const { t } = useI18n();
@@ -294,9 +293,6 @@ export default function Admin() {
                 <CardDescription>{t("admin.costByUser.desc")}</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="mb-4">
-                  <AdminTaskLookup />
-                </div>
                 {costsLoading && (
                   <p className="text-sm text-[var(--app-text-muted)]">{t("common.loading")}...</p>
                 )}
