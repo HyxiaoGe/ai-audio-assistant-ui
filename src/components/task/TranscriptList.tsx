@@ -339,7 +339,7 @@ function TranscriptListImpl({
           type="network"
           title={t("task.transcriptLoadFailed")}
           description={t("errors.networkFailedDesc")}
-          onRetry={handleRetry}
+          onRetry={readOnly && !onRetry ? undefined : handleRetry}
           retryLabel={t("common.retry")}
         />
       ) : (
@@ -348,7 +348,7 @@ function TranscriptListImpl({
           type="general"
           title={t("task.transcriptEmpty")}
           description={t("task.transcriptEmptyDesc")}
-          onRetry={handleRetry}
+          onRetry={readOnly && !onRetry ? undefined : handleRetry}
           retryLabel={t("common.retry")}
         />
       )}

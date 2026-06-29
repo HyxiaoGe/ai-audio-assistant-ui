@@ -535,6 +535,27 @@ describe("TranscriptList empty/error states", () => {
     // 仅断言渲染出可重试态、不抛错；onRetry 缺省时退回 window.location.reload。
     expect(screen.getByText("task.transcriptLoadFailed")).not.toBeNull()
   })
+
+  // 只读视图且无真实 onRetry(如管理员看他人任务,retry 仅退化为整页刷新)→ 不渲染「重试」按钮。
+  it("hides retry in readOnly view with no real onRetry handler — error state (admin view)", () => {
+    renderList({ transcript: [], transcriptError: true, onRetry: undefined, readOnly: true })
+    expect(screen.getByText("task.transcriptLoadFailed")).not.toBeNull()
+    expect(screen.queryByText("common.retry")).toBeNull()
+  })
+
+  it("hides retry in readOnly view with no real onRetry handler — neutral empty state (admin view)", () => {
+    renderList({ transcript: [], transcriptError: false, onRetry: undefined, readOnly: true })
+    expect(screen.getByText("task.transcriptEmpty")).not.toBeNull()
+    expect(screen.queryByText("common.retry")).toBeNull()
+  })
+
+  // 只读但调用方显式接了真实 onRetry(如公开查看器 = 重新拉取转写,纯读动作)→ 保留「重试」。
+  it("keeps a real onRetry in readOnly view (public viewer refetch)", () => {
+    const onRetry = vi.fn()
+    renderList({ transcript: [], transcriptError: true, onRetry, readOnly: true })
+    fireEvent.click(screen.getByText("common.retry"))
+    expect(onRetry).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe("TranscriptList processing (生成中) state", () => {
