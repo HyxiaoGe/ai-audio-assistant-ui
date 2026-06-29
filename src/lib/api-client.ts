@@ -12,6 +12,7 @@ import { getToken } from "@/lib/auth-token"
 import { translateStatic } from "@/lib/i18n-static"
 import {
   AdminCostsResponse,
+  AdminUserTasksResponse,
   AllowlistEntry,
   AllowlistListResponse,
   AllowlistAddRequest,
@@ -458,6 +459,34 @@ export class APIClient {
     body: FlagBatchResolveRequest
   ): Promise<FlagBatchResolveResponse> {
     return request("/admin/flagged-channels/batch-resolve", { method: "POST", body: JSON.stringify(body) }, this.token)
+  }
+
+  /** 管理员:列某用户的任务(只读)。 */
+  async getAdminUserTasks(
+    userId: string,
+    params?: { page?: number; page_size?: number; status?: string }
+  ): Promise<AdminUserTasksResponse> {
+    const q = new URLSearchParams()
+    if (params?.page) q.set("page", String(params.page))
+    if (params?.page_size) q.set("page_size", String(params.page_size))
+    if (params?.status && params.status !== "all") q.set("status", params.status)
+    const qs = q.toString()
+    return request(`/admin/users/${userId}/tasks${qs ? `?${qs}` : ""}`, { method: "GET" }, this.token)
+  }
+
+  /** 管理员:看任意任务详情(无音频)。 */
+  async getAdminTaskDetail(taskId: string): Promise<TaskDetail> {
+    return request(`/admin/tasks/${taskId}`, { method: "GET" }, this.token)
+  }
+
+  /** 管理员:看任意任务转写(只读)。 */
+  async getAdminTaskTranscript(taskId: string): Promise<PublicTranscriptResponse> {
+    return request(`/admin/tasks/${taskId}/transcript`, { method: "GET" }, this.token)
+  }
+
+  /** 管理员:看任意任务摘要(纯文本)。 */
+  async getAdminTaskSummary(taskId: string): Promise<PublicSummaryResponse> {
+    return request(`/admin/tasks/${taskId}/summary`, { method: "GET" }, this.token)
   }
 
   // ==========================================================================

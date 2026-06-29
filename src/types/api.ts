@@ -237,6 +237,29 @@ export interface AdminCostsResponse {
 }
 
 // ============================================================================
+// 管理后台看用户任务(/api/v1/admin/users/{id}/tasks · /admin/tasks/{id}/*)
+// ============================================================================
+
+export interface AdminUserTaskItem {
+  id: string
+  title: string | null
+  source_type: string
+  status: string
+  progress: number
+  duration_seconds: number | null
+  created_at: string
+  channel_title?: string | null
+  error_message?: string | null
+}
+
+export interface AdminUserTasksResponse {
+  items: AdminUserTaskItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+// ============================================================================
 // 任务相关
 // ============================================================================
 
