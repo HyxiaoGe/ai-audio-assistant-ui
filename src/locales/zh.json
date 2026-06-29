@@ -133,7 +133,7 @@
       "forbidden": "你没有权限查看频道标记复核队列。",
       "loadError": "加载失败,请重试",
       "retry": "重试",
-      "selectAll": "全选",
+      "selectAll": "全选本页",
       "selectOne": "选择 {name}",
       "selectedCount": "已选 {count}",
       "batchBlock": "批量拉黑",

@@ -65,7 +65,10 @@ export default function FlaggedChannelsReviewPanel() {
     [items, page]
   );
 
-  const allSelected = items.length > 0 && selectedIds.size === items.length;
+  // 全选只作用于「当前页」(分页是纯前端切片)——跨页全选是危险 footgun,业界惯例表头复选框只选当前页;
+  // 想跨页累积仍可逐页全选或逐条勾选(selectedIds 跨页保留)。
+  const pageIds = useMemo(() => pagedItems.map((i) => i.id), [pagedItems]);
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -79,8 +82,17 @@ export default function FlaggedChannelsReviewPanel() {
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
   const toggleSelectAll = useCallback(() => {
-    setSelectedIds((prev) => (prev.size === items.length ? new Set() : new Set(items.map((i) => i.id))));
-  }, [items]);
+    setSelectedIds((prev) => {
+      if (pageIds.length === 0) return prev; // 空页守卫:every([]) 为 true 会误入取消分支并触发空渲染
+      const next = new Set(prev);
+      if (pageIds.every((id) => next.has(id))) {
+        pageIds.forEach((id) => next.delete(id)); // 当前页已全选 → 取消当前页
+      } else {
+        pageIds.forEach((id) => next.add(id)); // 否则补齐当前页(保留其它页已选)
+      }
+      return next;
+    });
+  }, [pageIds]);
 
   const reload = useCallback(async () => {
     try {
@@ -302,7 +314,7 @@ export default function FlaggedChannelsReviewPanel() {
           <label className="flex items-center gap-2 text-sm text-[var(--app-text)]">
             <input
               type="checkbox"
-              checked={allSelected}
+              checked={allPageSelected}
               onChange={toggleSelectAll}
               disabled={anyBusy}
               className="h-4 w-4 accent-[var(--app-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-primary)]"
