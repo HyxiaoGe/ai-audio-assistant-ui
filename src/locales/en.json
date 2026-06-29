@@ -187,6 +187,18 @@
       "label": "View by task ID",
       "placeholder": "Paste task ID",
       "go": "Open"
+    },
+    "taskView": {
+      "transcript": "Transcript",
+      "summary": "Summary",
+      "noTranscript": "No transcript",
+      "noSummary": "No summary",
+      "status": "Status",
+      "created": "Created",
+      "duration": "Duration",
+      "errorMessage": "Failure reason",
+      "readonlyNote": "Read-only (admin)",
+      "loadError": "Failed to load, please retry"
     }
   },
   "player": {
