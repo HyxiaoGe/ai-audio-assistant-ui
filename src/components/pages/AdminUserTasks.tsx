@@ -7,6 +7,8 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { TaskStatusBadge } from "@/components/task/TaskStatusBadge";
+import { TaskErrorCallout } from "@/components/task/TaskErrorCallout";
 import { useI18n } from "@/lib/i18n-context";
 import { useAPIClient } from "@/lib/use-api-client";
 import { useDateFormatter } from "@/lib/use-date-formatter";
@@ -95,15 +97,16 @@ export default function AdminUserTasks() {
                 <li key={it.id}>
                   <Link
                     href={`/admin/tasks/${it.id}?uid=${encodeURIComponent(uid)}`}
-                    className="flex flex-col gap-1 rounded-lg px-3 py-3 transition-colors hover:bg-[var(--app-glass-bg)]"
+                    className="flex flex-col gap-1.5 rounded-lg px-3 py-3 transition-colors hover:bg-[var(--app-glass-bg)]"
                   >
                     <span className="font-medium text-[var(--app-text)]">{it.title ?? it.id}</span>
-                    <span className="text-xs text-[var(--app-text-muted)]">
-                      {(it.channel_title ?? it.source_type)} · {it.status} · {formatDateTime(it.created_at)}
+                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--app-text-muted)]">
+                      <TaskStatusBadge status={it.status} />
+                      <span>{it.channel_title ?? it.source_type}</span>
+                      <span aria-hidden>·</span>
+                      <span>{formatDateTime(it.created_at)}</span>
                     </span>
-                    {it.error_message && (
-                      <span className="text-xs text-[var(--app-danger)]">{it.error_message}</span>
-                    )}
+                    {it.error_message && <TaskErrorCallout message={it.error_message} />}
                   </Link>
                 </li>
               ))}
