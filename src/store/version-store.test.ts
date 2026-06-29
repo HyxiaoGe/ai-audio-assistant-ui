@@ -77,6 +77,12 @@ describe("version-store", () => {
     expect(useVersionStore.getState().frontendOutdated).toBe(false)
   })
 
+  it("short-circuits when the inlined frontend baseline is empty string", () => {
+    vi.stubEnv("NEXT_PUBLIC_BUILD_SHA", "")
+    recordFrontendVersion("front-B")
+    expect(useVersionStore.getState().frontendOutdated).toBe(false)
+  })
+
   it("dismissFrontend silences the same version but a newer one re-alerts", () => {
     recordFrontendVersion("front-B")
     dismissFrontend()

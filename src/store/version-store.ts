@@ -43,9 +43,10 @@ export function recordBackendVersion(v: string | null): void {
 }
 
 export function recordFrontendVersion(v: string | null): void {
-  if (isSentinel(v) || frontendBaseline() === "dev") return
+  const baseline = frontendBaseline()
+  if (isSentinel(v) || isSentinel(baseline)) return
   const s = useVersionStore.getState()
-  const outdated = v !== frontendBaseline() && v !== s.dismissedFrontend
+  const outdated = v !== baseline && v !== s.dismissedFrontend
   useVersionStore.setState({ frontendLatest: v, frontendOutdated: s.frontendOutdated || outdated })
 }
 
