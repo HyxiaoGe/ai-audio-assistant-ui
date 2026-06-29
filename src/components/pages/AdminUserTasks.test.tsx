@@ -34,7 +34,7 @@ describe("AdminUserTasks", () => {
     await waitFor(() => expect(screen.getByText("标题一")).toBeInTheDocument())
     expect(mockClient.getAdminUserTasks).toHaveBeenCalledWith("user-b", expect.objectContaining({ page: 1 }))
     const link = screen.getByRole("link", { name: /标题一/ })
-    expect(link).toHaveAttribute("href", "/admin/tasks/t1")
+    expect(link).toHaveAttribute("href", "/admin/tasks/t1?uid=user-b")
   })
 
   it("空列表显示空态", async () => {
