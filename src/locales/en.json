@@ -23,6 +23,11 @@
     "prevPage": "Prev",
     "nextPage": "Next"
   },
+  "version": {
+    "frontendUpdated": "A new version is available. Refresh to get the latest.",
+    "backendUpdated": "Service has been updated",
+    "refresh": "Refresh"
+  },
   "admin": {
     "console": "Admin",
     "title": "Admin",
