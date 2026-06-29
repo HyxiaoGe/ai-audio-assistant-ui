@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useI18n } from "@/lib/i18n-context";
 import { useAPIClient } from "@/lib/use-api-client";
 import { useDateFormatter } from "@/lib/use-date-formatter";
@@ -18,6 +19,8 @@ export default function AdminUserTasks() {
   const params = useParams();
   const uid = String(params.uid);
 
+  const [query, setQuery] = useState("");
+  const [submitted, setSubmitted] = useState("");
   const [items, setItems] = useState<AdminUserTaskItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -26,7 +29,7 @@ export default function AdminUserTasks() {
   useEffect(() => {
     let active = true;
     client
-      .getAdminUserTasks(uid, { page, page_size: PAGE_SIZE })
+      .getAdminUserTasks(uid, { page, page_size: PAGE_SIZE, q: submitted || undefined })
       .then((res) => {
         if (!active) return;
         setError(false);
@@ -39,18 +42,37 @@ export default function AdminUserTasks() {
     return () => {
       active = false;
     };
-  }, [client, uid, page]);
+  }, [client, uid, page, submitted]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const runSearch = () => {
+    setPage(1);
+    setSubmitted(query.trim());
+  };
 
   return (
     <div className="mx-auto max-w-4xl p-6">
       <h1 className="mb-4 text-xl font-semibold text-[var(--app-text)]">{t("admin.userTasks.heading")}</h1>
 
+      <div className="mb-4 flex items-center gap-2">
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") runSearch();
+          }}
+          placeholder={t("admin.userTasks.searchPlaceholder")}
+        />
+        <Button onClick={runSearch}>{t("admin.userTasks.search")}</Button>
+      </div>
+
       {error && <p className="text-[var(--app-danger)]">{t("admin.userTasks.loadError")}</p>}
 
       {!error && items.length === 0 && (
-        <p className="text-[var(--app-text-muted)]">{t("admin.userTasks.empty")}</p>
+        <p className="text-[var(--app-text-muted)]">
+          {submitted ? t("admin.userTasks.searchEmpty") : t("admin.userTasks.empty")}
+        </p>
       )}
 
       {items.length > 0 && (

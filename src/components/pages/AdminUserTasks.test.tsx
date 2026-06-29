@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const mockClient = vi.hoisted(() => ({ getAdminUserTasks: vi.fn() }))
@@ -41,5 +41,31 @@ describe("AdminUserTasks", () => {
     mockClient.getAdminUserTasks.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 })
     render(<AdminUserTasks />)
     await waitFor(() => expect(screen.getByText("admin.userTasks.empty")).toBeInTheDocument())
+  })
+
+  it("提交搜索时带 trim 后的 q 并回到第 1 页", async () => {
+    render(<AdminUserTasks />)
+    await waitFor(() => expect(screen.getByText("标题一")).toBeInTheDocument())
+    fireEvent.change(screen.getByPlaceholderText("admin.userTasks.searchPlaceholder"), {
+      target: { value: "  预算  " },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "admin.userTasks.search" }))
+    await waitFor(() =>
+      expect(mockClient.getAdminUserTasks).toHaveBeenLastCalledWith(
+        "user-b",
+        expect.objectContaining({ page: 1, q: "预算" })
+      )
+    )
+  })
+
+  it("搜索无结果显示 searchEmpty 而非 empty", async () => {
+    render(<AdminUserTasks />)
+    await waitFor(() => expect(screen.getByText("标题一")).toBeInTheDocument())
+    mockClient.getAdminUserTasks.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 })
+    fireEvent.change(screen.getByPlaceholderText("admin.userTasks.searchPlaceholder"), {
+      target: { value: "zzz" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "admin.userTasks.search" }))
+    await waitFor(() => expect(screen.getByText("admin.userTasks.searchEmpty")).toBeInTheDocument())
   })
 })
