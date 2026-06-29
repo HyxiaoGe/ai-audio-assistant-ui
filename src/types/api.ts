@@ -1421,3 +1421,6 @@ export interface FlaggedChannelOut {
 }
 export interface FlaggedChannelListResponse { items: FlaggedChannelOut[] }
 export interface FlagResolveRequest { action: "block" | "dismiss"; note?: string | null }
+export interface FlagBatchResolveRequest { flag_ids: string[]; action: "block" | "dismiss"; note?: string | null }
+export interface FlagBatchResolveItem { flag_id: string; status: "succeeded" | "skipped" | "failed"; code?: number | null }
+export interface FlagBatchResolveResponse { resolved_count: number; items: FlagBatchResolveItem[] }
