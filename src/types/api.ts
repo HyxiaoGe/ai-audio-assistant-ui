@@ -1402,6 +1402,30 @@ export interface BlocklistAddRequest {
 }
 
 // ============================================================================
+// /discover 放行表（管理员；/api/v1/admin/youtube-allowlist）
+// 频道专用：命中者在搜索展示态绕过 CMS（把被误杀的合法频道恢复可搜）。无 kind/term。
+// ============================================================================
+
+export interface AllowlistEntry {
+  id: string
+  match_field: string
+  raw_value: string
+  normalized_value: string
+  name?: string | null
+  note: string | null
+  created_at: string
+}
+
+export interface AllowlistListResponse {
+  items: AllowlistEntry[]
+}
+
+export interface AllowlistAddRequest {
+  value: string
+  note?: string | null
+}
+
+// ============================================================================
 // 频道标记复核队列（管理员；/api/v1/admin/flagged-channels）
 // ============================================================================
 
