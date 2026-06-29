@@ -9,6 +9,7 @@
  */
 
 import { getToken } from "@/lib/auth-token"
+import { recordBackendVersion } from "@/store/version-store"
 import { translateStatic } from "@/lib/i18n-static"
 import {
   AdminCostsResponse,
@@ -245,6 +246,12 @@ async function dispatchRequest<T>(
           clearTimeout(retryTimeoutId)
         }
       }
+    }
+
+    // 后端版本指纹：搭现有 API 流量读 X-App-Version（认证/匿名请求同一漏斗），喂版本比较权威。
+    // 仅客户端记录；缺头/dev 由 store 内守卫忽略，不误设基线。
+    if (typeof window !== "undefined") {
+      recordBackendVersion(response.headers.get("X-App-Version"))
     }
 
     // 解析响应：先读文本再尝试按统一信封解析。网关 5xx(HTML)、空体或被截断的 body

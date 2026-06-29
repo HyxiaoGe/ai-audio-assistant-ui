@@ -23,6 +23,11 @@
     "prevPage": "上一页",
     "nextPage": "下一页"
   },
+  "version": {
+    "frontendUpdated": "有新版本可用,刷新即可使用最新功能",
+    "backendUpdated": "服务已更新",
+    "refresh": "刷新"
+  },
   "admin": {
     "console": "后台管理",
     "title": "后台管理",
