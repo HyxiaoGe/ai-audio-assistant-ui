@@ -63,6 +63,14 @@ export default function AdminTaskView() {
 
   const displayTranscript = useMemo(() => {
     const unknown = t("transcript.unknownSpeaker");
+    const availableSpeakers = [
+      { name: t("transcript.speakerA"), color: "var(--app-primary)" },
+      { name: t("transcript.speakerB"), color: "var(--app-success)" },
+      { name: t("transcript.speakerC"), color: "var(--app-warning)" },
+      { name: t("transcript.speakerD"), color: "var(--app-danger)" },
+      { name: t("transcript.speakerE"), color: "var(--app-purple)" },
+      { name: t("transcript.unknownSpeaker"), color: "var(--app-text-subtle)" },
+    ];
     const segs: TranscriptSegment[] = transcripts.map((item) => ({
       id: String(item.sequence),
       sequence: item.sequence,
@@ -78,7 +86,7 @@ export default function AdminTaskView() {
       created_at: "",
       updated_at: "",
     }));
-    return mapApiTranscript(segs, [], unknown);
+    return mapApiTranscript(segs, availableSpeakers, unknown);
   }, [transcripts, t]);
 
   if (error) return <p className="p-6 text-[var(--app-danger)]">{t("admin.taskView.loadError")}</p>;
@@ -107,7 +115,7 @@ export default function AdminTaskView() {
         <p className="text-[var(--app-text-muted)]">{t("admin.taskView.noSummary")}</p>
       ) : (
         summaries.map((s) => (
-          <div key={s.summary_type} className="mb-4">
+          <div key={`${s.summary_type}-${s.version}`} className="mb-4">
             <MarkdownContent
               content={stripImageAnchors(s.content)}
               streamingImages={EMPTY_STREAMING_IMAGES}
