@@ -132,7 +132,19 @@
       "emptyDesc": "When moderation blocks a channel's video, it shows up here for review.",
       "forbidden": "You don't have permission to view the flagged channels queue.",
       "loadError": "Failed to load, please retry",
-      "retry": "Retry"
+      "retry": "Retry",
+      "selectAll": "Select all",
+      "selectOne": "Select {name}",
+      "selectedCount": "{count} selected",
+      "batchBlock": "Block selected",
+      "clearSelection": "Clear",
+      "batchConfirmTitle": "Confirm bulk block",
+      "batchConfirmDesc": "Selected channels will be added to the blocklist and excluded from transcription.",
+      "batchConfirmSummary": "Block {count} selected channel(s)",
+      "batchBlocking": "Blocking…",
+      "batchBlockCta": "Block",
+      "batchSuccess": "Blocked {count} channel(s)",
+      "batchPartial": "Blocked {resolved}, {failed} failed"
     }
   },
   "player": {
