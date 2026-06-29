@@ -12,6 +12,9 @@ import { getToken } from "@/lib/auth-token"
 import { translateStatic } from "@/lib/i18n-static"
 import {
   AdminCostsResponse,
+  AllowlistEntry,
+  AllowlistListResponse,
+  AllowlistAddRequest,
   BlocklistEntry,
   BlocklistListResponse,
   BlocklistAddRequest,
@@ -400,6 +403,31 @@ export class APIClient {
    */
   async deleteYouTubeBlocklistEntry(id: string): Promise<void> {
     return request(`/admin/youtube-blocklist/${id}`, { method: "DELETE" }, this.token)
+  }
+
+  /**
+   * /discover 放行表：列出全部活跃放行频道。仅管理员。
+   */
+  async getYouTubeAllowlist(): Promise<AllowlistListResponse> {
+    return request("/admin/youtube-allowlist", { method: "GET" }, this.token)
+  }
+
+  /**
+   * 加一条放行频道（按名/ID/链接；命中者搜索绕过 CMS）。仅管理员。
+   */
+  async addYouTubeAllowlistEntry(body: AllowlistAddRequest): Promise<AllowlistEntry> {
+    return request(
+      "/admin/youtube-allowlist",
+      { method: "POST", body: JSON.stringify(body) },
+      this.token
+    )
+  }
+
+  /**
+   * 软删一条放行。仅管理员。
+   */
+  async deleteYouTubeAllowlistEntry(id: string): Promise<void> {
+    return request(`/admin/youtube-allowlist/${id}`, { method: "DELETE" }, this.token)
   }
 
   /**
