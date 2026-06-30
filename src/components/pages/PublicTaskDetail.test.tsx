@@ -357,6 +357,20 @@ describe("PublicTaskDetail 公开详情页", () => {
     expect(screen.getByText("explore.retry")).toBeInTheDocument()
   })
 
+  it("限流(40920):整页渲染后端友好文案 + 可重试,不进 notFound", async () => {
+    mockClient.getPublicTask.mockRejectedValue(
+      new ApiError(40920, "操作过于频繁，请60秒后再试", "", undefined, undefined, 60),
+    )
+    mockClient.getPublicTranscript.mockResolvedValue({ task_id: "t1", total: 0, items: [] })
+    mockClient.getPublicSummary.mockResolvedValue({ task_id: "t1", total: 0, items: [] })
+    render(<PublicTaskDetail />)
+    await waitFor(() =>
+      expect(screen.getByText("操作过于频繁，请60秒后再试")).toBeInTheDocument(),
+    )
+    expect(screen.getByText("explore.retry")).toBeInTheDocument()
+    expect(screen.queryByText("explore.notFoundTitle")).not.toBeInTheDocument()
+  })
+
   // ===== 音频 OSS 预签名直链(audio_direct_url,绕隧道)播放接线 =====
 
   const DETAIL_UPLOAD_BASE = {

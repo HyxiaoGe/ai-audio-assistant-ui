@@ -21,6 +21,7 @@ import { extractPlaceholderDescription } from '@/lib/image-placeholder';
 import { mapApiTranscript } from '@/lib/transcript-mapping';
 import type { DisplayTranscriptSegment } from '@/lib/transcript-mapping';
 import { ApiError } from '@/types/api';
+import { isRateLimitError } from "@/lib/api-error";
 import type {
   PublicSummaryItem,
   PublicSummaryResponse,
@@ -124,6 +125,7 @@ export default function PublicTaskDetail({
   const [detailLoading, setDetailLoading] = useState(!initialDetail);
   const [notFound, setNotFound] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
 
   // 转写:独立 loading / error,失败只显示左栏局部错误 + 局部重试,绝不连带整页。
   const [transcripts, setTranscripts] = useState<PublicTranscriptItem[]>([]);
@@ -154,15 +156,19 @@ export default function PublicTaskDetail({
     setDetailLoading(true);
     setNotFound(false);
     setLoadError(false);
+    setRateLimitMsg(null);
     try {
       const detail = await client.getPublicTask(id);
       if (gen !== detailGenRef.current) return;
       setTask(detail);
     } catch (err) {
       if (gen !== detailGenRef.current) return;
-      // 40401 = 不存在/未公开/已收回 → 终态 notFound;其余(网络/5xx)→ 整页可重试。
+      // 40401 = 不存在/未公开/已收回 → 终态 notFound;限流 → 整页友好文案 + 可重试;其余 → 通用可重试。
       if (err instanceof ApiError && err.code === 40401) setNotFound(true);
-      else setLoadError(true);
+      else if (isRateLimitError(err)) {
+        setRateLimitMsg(err.message);
+        setLoadError(true);
+      } else setLoadError(true);
     } finally {
       if (gen === detailGenRef.current) setDetailLoading(false);
     }
@@ -348,7 +354,7 @@ export default function PublicTaskDetail({
   if (loadError || !task) {
     return shell(
       <div className="flex-1 flex flex-col items-center justify-center text-center space-y-3 p-8">
-        <p className="text-sm" style={{ color: 'var(--app-danger)' }}>{t('explore.loadFailed')}</p>
+        <p className="text-sm" style={{ color: 'var(--app-danger)' }}>{rateLimitMsg ?? t('explore.loadFailed')}</p>
         <button
           onClick={() => void loadDetail()}
           className="px-4 py-2 text-sm border rounded-lg hover:bg-[var(--app-glass-bg-strong)] transition-colors"
