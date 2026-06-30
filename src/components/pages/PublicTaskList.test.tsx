@@ -31,6 +31,7 @@ vi.mock("@/store/auth-store", () => ({
 
 import PublicTaskList from "./PublicTaskList"
 import type { PublicTaskListItem } from "@/types/api"
+import { ApiError } from "@/types/api"
 
 function makeItem(overrides: Partial<PublicTaskListItem> = {}): PublicTaskListItem {
   return {
@@ -240,4 +241,25 @@ describe("PublicTaskList 三态", () => {
     fireEvent.click(retry);
     await waitFor(() => expect(mockClient.getPublicTasks).toHaveBeenCalledTimes(2));
   });
+})
+
+describe("PublicTaskList 限流提示", () => {
+  it("限流(40920):显示后端友好文案而非通用 loadFailed", async () => {
+    mockClient.getPublicTasks.mockRejectedValue(
+      new ApiError(40920, "操作过于频繁，请60秒后再试", "", undefined, undefined, 60),
+    )
+    render(<PublicTaskList />)
+    await waitFor(() => {
+      expect(screen.getByText("操作过于频繁，请60秒后再试")).toBeInTheDocument()
+    })
+    expect(screen.queryByText("explore.loadFailed")).not.toBeInTheDocument()
+  })
+
+  it("普通错误:仍显示通用 loadFailed 文案", async () => {
+    mockClient.getPublicTasks.mockRejectedValue(new Error("network"))
+    render(<PublicTaskList />)
+    await waitFor(() => {
+      expect(screen.getByText("explore.loadFailed")).toBeInTheDocument()
+    })
+  })
 })
