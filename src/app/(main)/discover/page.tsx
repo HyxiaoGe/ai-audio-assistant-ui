@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { fetchYouTubeTrending } from "@/lib/server-api";
+import { fetchYouTubeTrending, fetchRecommendations } from "@/lib/server-api";
 import DiscoverPageClient from "./page-client";
 
 export const metadata: Metadata = {
@@ -9,8 +9,17 @@ export const metadata: Metadata = {
 };
 
 const TRENDING_LIMIT = 10;
+const RECOMMENDATIONS_LIMIT = 12;
 
 export default async function DiscoverPage() {
-  const trending = await fetchYouTubeTrending(TRENDING_LIMIT);
-  return <DiscoverPageClient initialTrending={trending?.items} />;
+  const [trending, recommendations] = await Promise.all([
+    fetchYouTubeTrending(TRENDING_LIMIT),
+    fetchRecommendations(RECOMMENDATIONS_LIMIT),
+  ]);
+  return (
+    <DiscoverPageClient
+      initialTrending={trending?.items}
+      initialRecommendations={recommendations?.items}
+    />
+  );
 }

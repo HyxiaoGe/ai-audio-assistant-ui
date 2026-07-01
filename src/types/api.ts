@@ -1394,6 +1394,8 @@ export interface VideoHit {
   channel_id: string | null
   thumbnail: string | null
   url: string
+  view_count?: number
+  duration?: number
 }
 
 export interface YouTubeSearchResponse {

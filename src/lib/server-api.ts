@@ -20,7 +20,7 @@ import "server-only"
  *   网络,容器名解析失败是常态,永远走回落属预期。
  */
 
-import type { PublicSummaryResponse, PublicTaskDetail, PublicTaskListResponse, YouTubeTrendingResponse } from "@/types/api"
+import type { PublicSummaryResponse, PublicTaskDetail, PublicTaskListResponse, YouTubeSearchResponse, YouTubeTrendingResponse } from "@/types/api"
 
 /** 内网 base:默认值=容器 DNS(已实测可达);env 留覆盖口。每次调用读取,便于测试与运行时覆盖。 */
 function internalApiBase(): string {
@@ -116,6 +116,16 @@ export async function fetchYouTubeTrending(
 ): Promise<YouTubeTrendingResponse | undefined> {
   const result = await fetchPublicEnvelope<YouTubeTrendingResponse>(
     `/youtube/search/trending?limit=${limit}`,
+  )
+  if (!result || result.code !== 0) return undefined
+  return result.data
+}
+
+export async function fetchRecommendations(
+  limit: number,
+): Promise<YouTubeSearchResponse | undefined> {
+  const result = await fetchPublicEnvelope<YouTubeSearchResponse>(
+    `/youtube/recommendations?limit=${limit}`,
   )
   if (!result || result.code !== 0) return undefined
   return result.data

@@ -1277,6 +1277,13 @@ export class APIClient {
     return publicRequest(`/youtube/search/trending${qs ? `?${qs}` : ""}`, { method: "GET" })
   }
 
+  async getRecommendations(opts?: { limit?: number }): Promise<YouTubeSearchResponse> {
+    const params = new URLSearchParams()
+    if (opts?.limit) params.set("limit", String(opts.limit))
+    const qs = params.toString()
+    return publicRequest(`/youtube/recommendations${qs ? `?${qs}` : ""}`, { method: "GET" })
+  }
+
   async getDiscoverConfig(): Promise<ServiceConfigView> {
     return request("/configs/feature/discover", { method: "GET" }, this.token)
   }
