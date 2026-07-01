@@ -262,6 +262,10 @@ async function dispatchRequest<T>(
       response.headers.get("X-Trace-Id") ||
       response.headers.get("traceId") ||
       undefined
+    // 限流真 429 的 Retry-After:解析成秒数供 UI 显示"请 N 秒后再试"。缺头/非数字 → undefined。
+    const retryAfterRaw = response.headers.get("Retry-After")
+    const retryAfterParsed = retryAfterRaw ? Number.parseInt(retryAfterRaw, 10) : NaN
+    const retryAfterSec = Number.isFinite(retryAfterParsed) ? retryAfterParsed : undefined
     const rawBody = await response.text()
 
     let result: ApiResponse<T> | undefined
@@ -280,13 +284,14 @@ async function dispatchRequest<T>(
         translateStatic("errors.networkFailedDesc", locale),
         traceHeader ?? "client_error",
         rawBody || undefined,
-        response.status
+        response.status,
+        retryAfterSec
       )
     }
 
     // 检查业务状态码
     if (result.code !== 0) {
-      throw new ApiError(result.code, result.message, result.traceId, result.data)
+      throw new ApiError(result.code, result.message, result.traceId, result.data, undefined, retryAfterSec)
     }
 
     return result.data

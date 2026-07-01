@@ -51,6 +51,7 @@ export enum ErrorCode {
   TASK_COMPLETED = 40902,
   TASK_RETRY_NOT_ALLOWED = 40903,
   TASK_RETRY_LIMIT = 40904,
+  RATE_LIMIT = 40920,
 
   // 50000-50099: 系统异常
   INTERNAL_ERROR = 50000,
@@ -87,7 +88,9 @@ export class ApiError extends Error {
     public data?: unknown,
     // 真实 HTTP 状态码：仅当响应不是统一信封（网关 5xx/HTML/空体）时由 api-client 填入，
     // 便于把传输层故障与业务错误区分开并定位线上问题。
-    public httpStatus?: number
+    public httpStatus?: number,
+    // 限流(429)的 Retry-After 秒数：由 api-client 从响应头解析，供 UI 显示"请 N 秒后再试"。
+    public retryAfter?: number
   ) {
     super(message)
     this.name = "ApiError"

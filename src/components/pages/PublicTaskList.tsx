@@ -8,6 +8,7 @@ import ErrorState from "@/components/common/ErrorState";
 import PublicTaskCardSkeleton from "@/components/common/PublicTaskCardSkeleton";
 import PublicTaskCover from "@/components/pages/PublicTaskCover";
 import { proxiedAvatar } from "@/lib/avatar-url";
+import { isRateLimitError } from "@/lib/api-error";
 import { useAPIClient } from "@/lib/use-api-client";
 import { useI18n } from "@/lib/i18n-context";
 import { useDateFormatter } from "@/lib/use-date-formatter";
@@ -44,18 +45,21 @@ export default function PublicTaskList({ initialItems, initialTotal }: PublicTas
   const [pendingPage, setPendingPage] = useState(1);
   const [loading, setLoading] = useState(!seeded);
   const [error, setError] = useState(false);
+  const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
 
   const load = useCallback(
     async (targetPage: number) => {
       setPendingPage(targetPage);
       setLoading(true);
       setError(false);
+      setRateLimitMsg(null);
       try {
         const data = await client.getPublicTasks({ page: targetPage, page_size: PAGE_SIZE });
         setItems(data.items);
         setTotal(data.total);
         setPage(targetPage);
-      } catch {
+      } catch (err) {
+        setRateLimitMsg(isRateLimitError(err) ? err.message : null);
         setError(true);
       } finally {
         setLoading(false);
@@ -110,7 +114,7 @@ export default function PublicTaskList({ initialItems, initialTotal }: PublicTas
     return (
       <ErrorState
         type="network"
-        description={t("explore.loadFailed")}
+        description={rateLimitMsg ?? t("explore.loadFailed")}
         onRetry={() => void load(pendingPage)}
       />
     );
