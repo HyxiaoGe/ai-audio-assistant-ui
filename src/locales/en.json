@@ -1042,6 +1042,9 @@
     "searchButton": "Search",
     "empty": "No videos found; try a different keyword",
     "searchError": "Search is temporarily unavailable, please try again later",
-    "trendingLabel": "Trending:"
+    "trendingLabel": "Trending:",
+    "unavailableTitle": "Discover is under maintenance",
+    "unavailableDescription": "This feature is temporarily offline. We'll be back soon.",
+    "backHome": "Back to home"
   }
 }

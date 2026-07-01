@@ -1042,6 +1042,9 @@
     "searchButton": "搜索",
     "empty": "没有找到相关视频，换个关键词试试",
     "searchError": "搜索暂时不可用，请稍后再试",
-    "trendingLabel": "大家在搜："
+    "trendingLabel": "大家在搜：",
+    "unavailableTitle": "发现功能维护中",
+    "unavailableDescription": "该功能暂时下线，我们很快回来",
+    "backHome": "回到首页"
   }
 }
