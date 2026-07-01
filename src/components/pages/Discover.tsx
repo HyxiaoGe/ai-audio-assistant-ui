@@ -16,6 +16,7 @@ import type { VideoHit, YouTubeTrendingItem, YouTubeVideoItem } from "@/types/ap
 
 interface DiscoverProps {
   initialTrending?: YouTubeTrendingItem[]
+  initialRecommendations?: VideoHit[]
 }
 
 // yt-dlp ytsearch 零配额、无翻页游标:一次最多抓 50(再大不稳),前端无限滚动在这 50 条内分批揭示。
@@ -36,7 +37,7 @@ function hitToVideoItem(hit: VideoHit): YouTubeVideoItem {
   } as unknown as YouTubeVideoItem
 }
 
-export default function Discover({ initialTrending }: DiscoverProps) {
+export default function Discover({ initialTrending, initialRecommendations }: DiscoverProps) {
   const { t } = useI18n()
   const client = useAPIClient()
   const isAuthenticated = !!useAuthStore((s) => s.user)
@@ -72,6 +73,31 @@ export default function Discover({ initialTrending }: DiscoverProps) {
       alive = false
     }
   }, [seeded, client])
+
+  const [recommendations, setRecommendations] = useState<VideoHit[]>(initialRecommendations ?? [])
+  const [recsLoading, setRecsLoading] = useState(false)
+  const recsSeeded = initialRecommendations !== undefined
+
+  useEffect(() => {
+    if (recsSeeded) return // SSR 已注入则不客户端拉取
+    let alive = true
+    setRecsLoading(true)
+    client
+      .getRecommendations({ limit: 12 })
+      .then((res) => {
+        if (alive) setRecommendations(res.items)
+      })
+      .catch((e) => {
+        if (isDiscoverDisabled(e)) setDisabled(true)
+        /* 其它拉取失败静默:非关键路径,回落轻量提示 */
+      })
+      .finally(() => {
+        if (alive) setRecsLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [recsSeeded, client])
 
   const handleChip = (term: string) => {
     setQuery(term)
@@ -229,11 +255,32 @@ export default function Discover({ initialTrending }: DiscoverProps) {
         </div>
       )}
 
-      {loading ? (
+      {!searched ? (
+        recsLoading ? (
+          <VideoGridSkeleton count={6} gridClassName={RESULT_GRID} />
+        ) : recommendations.length === 0 ? (
+          <div className="text-center py-12">
+            <Search className="w-12 h-12 mx-auto mb-3 text-[var(--app-text-faint)]" aria-hidden />
+            <p className="text-[var(--app-text-muted)]">{t("discover.recommendationsEmptyTitle")}</p>
+            <p className="text-sm text-[var(--app-text-subtle)]">{t("discover.recommendationsEmptyHint")}</p>
+          </div>
+        ) : (
+          <>
+            <h2 className="text-sm font-medium text-[var(--app-text-muted)] mb-3">
+              {t("discover.recommendationsTitle")}
+            </h2>
+            <div className={RESULT_GRID}>
+              {recommendations.map((rec) => (
+                <VideoCard key={rec.video_id} video={hitToVideoItem(rec)} onTranscribe={handleTranscribe} />
+              ))}
+            </div>
+          </>
+        )
+      ) : loading ? (
         <VideoGridSkeleton count={9} gridClassName={RESULT_GRID} />
       ) : errorMsg ? (
         <p className="text-[var(--app-danger)]">{errorMsg}</p>
-      ) : searched && hits.length === 0 ? (
+      ) : hits.length === 0 ? (
         <p className="text-[var(--app-text-muted)]">{t("discover.empty")}</p>
       ) : (
         <>

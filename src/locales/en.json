@@ -1058,6 +1058,9 @@
     "trendingLabel": "Trending:",
     "unavailableTitle": "Discover is under maintenance",
     "unavailableDescription": "This feature is temporarily offline. We'll be back soon.",
-    "backHome": "Back to home"
+    "backHome": "Back to home",
+    "recommendationsTitle": "Trending picks",
+    "recommendationsEmptyTitle": "Search YouTube to start exploring",
+    "recommendationsEmptyHint": "Type a keyword above — transcribe directly, no subscription needed"
   }
 }

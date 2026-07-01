@@ -1058,6 +1058,9 @@
     "trendingLabel": "大家在搜：",
     "unavailableTitle": "发现功能维护中",
     "unavailableDescription": "该功能暂时下线，我们很快回来",
-    "backHome": "回到首页"
+    "backHome": "回到首页",
+    "recommendationsTitle": "热门推荐",
+    "recommendationsEmptyTitle": "搜索 YouTube 视频开始探索",
+    "recommendationsEmptyHint": "在上方输入关键词，无需订阅即可直接转写"
   }
 }

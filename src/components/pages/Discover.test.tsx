@@ -18,7 +18,7 @@ vi.stubGlobal("IntersectionObserver", MockIO)
 
 const i18n = vi.hoisted(() => ({ t: (k: string) => k }))
 const stores = vi.hoisted(() => ({ authed: true, openLogin: vi.fn(), openNewTask: vi.fn() }))
-const client = vi.hoisted(() => ({ searchYouTube: vi.fn(), getYouTubeTrending: vi.fn() }))
+const client = vi.hoisted(() => ({ searchYouTube: vi.fn(), getYouTubeTrending: vi.fn(), getRecommendations: vi.fn() }))
 
 vi.mock("@/lib/i18n-context", () => ({ useI18n: () => ({ t: i18n.t, locale: "en" }) }))
 vi.mock("@/lib/use-api-client", () => ({ useAPIClient: () => client }))
@@ -43,6 +43,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   stores.authed = true
   client.getYouTubeTrending.mockResolvedValue({ items: [] })
+  client.getRecommendations.mockResolvedValue({ query: "", cached: false, items: [] })
   useDiscoverStore.getState().reset() // 模块单例 store 跨用例残留,逐例清零
   window.history.replaceState(null, "", "/discover") // jsdom location 跨用例残留,逐例清零
   ioInstances.length = 0
@@ -200,5 +201,23 @@ describe("Discover search view count", () => {
     fireEvent.change(screen.getByLabelText("discover.searchPlaceholder"), { target: { value: "cats" } })
     fireEvent.click(screen.getByRole("button", { name: "discover.searchButton" }))
     await waitFor(() => expect(screen.getByText("subscriptions.videoViews")).toBeInTheDocument())
+  })
+})
+
+describe("Discover recommendations", () => {
+  it("renders 热门推荐 grid from initialRecommendations before searching", () => {
+    render(
+      <Discover
+        initialRecommendations={[hit("r1", "Rec One"), hit("r2", "Rec Two")]}
+      />,
+    )
+    expect(screen.getByText("discover.recommendationsTitle")).toBeInTheDocument()
+    expect(screen.getByText("Rec One")).toBeInTheDocument()
+    expect(screen.getByText("Rec Two")).toBeInTheDocument()
+  })
+
+  it("shows a light hint (not an empty void) when there are no recommendations", () => {
+    render(<Discover initialRecommendations={[]} />)
+    expect(screen.getByText("discover.recommendationsEmptyTitle")).toBeInTheDocument()
   })
 })
