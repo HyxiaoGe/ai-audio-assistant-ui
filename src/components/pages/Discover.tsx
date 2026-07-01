@@ -171,8 +171,9 @@ export default function Discover({ initialTrending }: DiscoverProps) {
   }
 
   if (disabled) {
+    // 全屏接管:fixed inset-0 盖住 AppShell 外壳(侧栏+顶栏),做成专属全屏维护页。
     return (
-      <div className="h-full flex items-center justify-center p-8">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-8 bg-[var(--app-bg)]">
         <EmptyState
           title={t("discover.unavailableTitle")}
           description={t("discover.unavailableDescription")}
