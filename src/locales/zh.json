@@ -1061,6 +1061,8 @@
     "backHome": "回到首页",
     "recommendationsTitle": "热门推荐",
     "recommendationsEmptyTitle": "搜索 YouTube 视频开始探索",
-    "recommendationsEmptyHint": "在上方输入关键词，无需订阅即可直接转写"
+    "recommendationsEmptyHint": "在上方输入关键词，无需订阅即可直接转写",
+    "existingPublicView": "已有公开转写 · 查看",
+    "transcribeAnyway": "仍要转写"
   }
 }

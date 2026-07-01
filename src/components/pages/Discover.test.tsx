@@ -142,6 +142,9 @@ describe("Discover", () => {
     expect(client.searchYouTube).toHaveBeenCalledWith("many", { limit: 50, authenticated: true })
 
     // 模拟哨兵进入视口 → 揭示下一批
+    // 哨兵 observer 在 effect 里注册,CI(Windows/全量套件较慢)下未必在此同步就绪 →
+    // 先 await 等 ioInstances 非空再 trigger,消除 `[-1]` 读到 undefined 的竞态 flake。
+    await waitFor(() => expect(ioInstances.length).toBeGreaterThan(0))
     act(() => ioInstances[ioInstances.length - 1].trigger())
     await waitFor(() => expect(screen.getByText("Vid 20")).toBeInTheDocument())
     expect(screen.getByText("Vid 39")).toBeInTheDocument()

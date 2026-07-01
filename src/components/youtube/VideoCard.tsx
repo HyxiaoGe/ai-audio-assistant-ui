@@ -70,11 +70,28 @@ export default function VideoCard({
     onTranscribe?.(videoUrl, video.video_id);
   };
 
+  const handleTranscribeAnyway = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const videoUrl = `https://www.youtube.com/watch?v=${video.video_id}`;
+    onTranscribe?.(videoUrl, video.video_id);
+  };
+
   const handleViewTask = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
     if (video.task_id) {
       router.push(`/tasks/${video.task_id}`);
+    }
+  };
+
+  // 别人的公开任务走公开详情 /explore/[id](匿名/非 owner 可看);/tasks/[id] 是 owner-gated
+  // 私有详情——非 owner 会被 middleware 弹登录或 getTask 404。约定同 PublicTaskList(is_owner ? /tasks : /explore)。
+  const handleViewPublic = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (video.task_id) {
+      router.push(`/explore/${video.task_id}`);
     }
   };
 
@@ -193,18 +210,41 @@ export default function VideoCard({
           )}
         </div>
 
-        {/* Transcribe button */}
+        {/* Transcribe / view button(三态:自己已转 · 别人已公开 · 未转) */}
         <div className="pt-1">
           {video.transcribed ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full"
-              onClick={handleViewTask}
-            >
-              <CheckCircle2 className="w-4 h-4 mr-1.5 text-[var(--app-success)]" />
-              {t("subscriptions.viewTask")}
-            </Button>
+            video.existing_is_owner === false ? (
+              // 别人已公开:主按钮跳公开页查看 + 次级仍要自己转写
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={handleViewPublic}
+                >
+                  <CheckCircle2 className="w-4 h-4 mr-1.5 text-[var(--app-success)]" />
+                  {t("discover.existingPublicView")}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleTranscribeAnyway}
+                >
+                  {t("discover.transcribeAnyway")}
+                </Button>
+              </div>
+            ) : (
+              // 自己的 / 订阅feed 旧用法:查看任务
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={handleViewTask}
+              >
+                <CheckCircle2 className="w-4 h-4 mr-1.5 text-[var(--app-success)]" />
+                {t("subscriptions.viewTask")}
+              </Button>
+            )
           ) : (
             <Button
               variant="default"

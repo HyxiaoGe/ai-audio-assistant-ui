@@ -1061,6 +1061,8 @@
     "backHome": "Back to home",
     "recommendationsTitle": "Trending picks",
     "recommendationsEmptyTitle": "Search YouTube to start exploring",
-    "recommendationsEmptyHint": "Type a keyword above — transcribe directly, no subscription needed"
+    "recommendationsEmptyHint": "Type a keyword above — transcribe directly, no subscription needed",
+    "existingPublicView": "Public transcript · View",
+    "transcribeAnyway": "Transcribe anyway"
   }
 }
