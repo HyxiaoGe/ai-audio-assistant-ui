@@ -13,9 +13,10 @@ interface SidebarItemProps {
   label: string;
   path: string;
   isActive: boolean;
+  badge?: string;
 }
 
-function SidebarItem({ icon, label, path, isActive }: SidebarItemProps) {
+function SidebarItem({ icon, label, path, isActive, badge }: SidebarItemProps) {
   return (
     <Link
       href={path}
@@ -25,6 +26,11 @@ function SidebarItem({ icon, label, path, isActive }: SidebarItemProps) {
     >
       <div className="w-5 h-5 flex items-center justify-center">{icon}</div>
       <span>{label}</span>
+      {badge && (
+        <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--app-text-muted)]">
+          {badge}
+        </span>
+      )}
     </Link>
   );
 }
@@ -42,7 +48,7 @@ export default function Sidebar() {
     { icon: <BarChart3 className="w-5 h-5" />, label: t("nav.overview"), path: "/" },
     { icon: <List className="w-5 h-5" />, label: t("nav.tasks"), path: "/tasks" },
     { icon: <Compass className="w-5 h-5" />, label: t("nav.explore"), path: "/explore", public: true },
-    { icon: <Search className="w-5 h-5" />, label: t("nav.discover"), path: "/discover", public: true },
+    { icon: <Search className="w-5 h-5" />, label: t("nav.discover"), path: "/discover", public: true, badge: "beta" },
     { icon: <Youtube className="w-5 h-5" />, label: t("nav.subscriptions"), path: "/subscriptions" },
     { icon: <LineChart className="w-5 h-5" />, label: t("nav.stats"), path: "/stats" },
     { icon: <Settings className="w-5 h-5" />, label: t("nav.settings"), path: "/settings" },
@@ -83,6 +89,7 @@ export default function Sidebar() {
             label={item.label}
             path={item.path}
             isActive={isActive(item.path)}
+            badge={item.badge}
           />
         ))}
       </div>
