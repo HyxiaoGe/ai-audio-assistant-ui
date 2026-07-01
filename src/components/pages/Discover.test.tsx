@@ -188,3 +188,17 @@ describe("Discover", () => {
     await waitFor(() => expect(screen.getByText("discover.unavailableTitle")).toBeInTheDocument())
   })
 })
+
+describe("Discover search view count", () => {
+  it("passes a search hit's view_count through hitToVideoItem to the card", async () => {
+    client.searchYouTube.mockResolvedValue({
+      query: "cats",
+      cached: false,
+      items: [{ ...hit("v1", "Cat"), view_count: 8000 }],
+    })
+    render(<Discover />)
+    fireEvent.change(screen.getByLabelText("discover.searchPlaceholder"), { target: { value: "cats" } })
+    fireEvent.click(screen.getByRole("button", { name: "discover.searchButton" }))
+    await waitFor(() => expect(screen.getByText("subscriptions.videoViews")).toBeInTheDocument())
+  })
+})
