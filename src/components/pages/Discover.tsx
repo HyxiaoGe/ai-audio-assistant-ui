@@ -177,7 +177,7 @@ export default function Discover({ initialTrending }: DiscoverProps) {
     // 传达「在维护、很快回来」的友好感而非告警感。
     return (
       <div className="h-full flex flex-col items-center justify-center px-6 py-8">
-        <div className="w-full max-w-[480px] rounded-xl border border-[var(--app-glass-border)] bg-[var(--app-surface-alt)] p-10 text-center">
+        <div className="w-full max-w-[480px] rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-10 text-center shadow-[var(--app-glass-shadow)]">
           <div className="flex justify-center mb-4">
             <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[var(--app-primary-soft)] text-[var(--app-primary)]">
               <Wrench className="w-6 h-6" />
