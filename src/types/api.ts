@@ -76,6 +76,7 @@ export enum ErrorCode {
   YOUTUBE_TOKEN_EXPIRED = 51902,
   YOUTUBE_API_ERROR = 51903,
   YOUTUBE_OAUTH_STATE_INVALID = 51904,
+  DISCOVER_DISABLED = 40019,
 }
 
 export class ApiError extends Error {
@@ -91,6 +92,14 @@ export class ApiError extends Error {
     super(message)
     this.name = "ApiError"
   }
+}
+
+export interface ServiceConfigView {
+  service_type: string
+  provider: string
+  enabled: boolean
+  version: number
+  config: Record<string, unknown>
 }
 
 // ============================================================================
