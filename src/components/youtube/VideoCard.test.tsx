@@ -130,9 +130,9 @@ describe("VideoCard 三态按钮", () => {
     // 不应有「查看任务」的旧文案
     expect(screen.queryByText("subscriptions.viewTask")).toBeNull()
 
-    // 点「已有公开转写·查看」→ push 到 /tasks/task-xyz
+    // 点「已有公开转写·查看」→ push 到公开详情 /explore/task-xyz(非 owner 不走 owner-gated /tasks/)
     await userEvent.click(screen.getByText("discover.existingPublicView"))
-    expect(pushMock).toHaveBeenCalledWith("/tasks/task-xyz")
+    expect(pushMock).toHaveBeenCalledWith("/explore/task-xyz")
 
     // 点「仍要转写」→ 触发 onTranscribe
     await userEvent.click(screen.getByText("discover.transcribeAnyway"))

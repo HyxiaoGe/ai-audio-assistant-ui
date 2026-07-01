@@ -85,6 +85,16 @@ export default function VideoCard({
     }
   };
 
+  // 别人的公开任务走公开详情 /explore/[id](匿名/非 owner 可看);/tasks/[id] 是 owner-gated
+  // 私有详情——非 owner 会被 middleware 弹登录或 getTask 404。约定同 PublicTaskList(is_owner ? /tasks : /explore)。
+  const handleViewPublic = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (video.task_id) {
+      router.push(`/explore/${video.task_id}`);
+    }
+  };
+
   const handleOpenYouTube = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -210,7 +220,7 @@ export default function VideoCard({
                   variant="outline"
                   size="sm"
                   className="flex-1"
-                  onClick={handleViewTask}
+                  onClick={handleViewPublic}
                 >
                   <CheckCircle2 className="w-4 h-4 mr-1.5 text-[var(--app-success)]" />
                   {t("discover.existingPublicView")}
