@@ -172,11 +172,13 @@ export default function Discover({ initialTrending }: DiscoverProps) {
 
   if (disabled) {
     return (
-      <EmptyState
-        title={t("discover.unavailableTitle")}
-        description={t("discover.unavailableDescription")}
-        action={{ label: t("discover.backHome"), onClick: () => router.push("/") }}
-      />
+      <div className="h-full flex items-center justify-center p-8">
+        <EmptyState
+          title={t("discover.unavailableTitle")}
+          description={t("discover.unavailableDescription")}
+          action={{ label: t("discover.backHome"), onClick: () => router.push("/") }}
+        />
+      </div>
     )
   }
 
