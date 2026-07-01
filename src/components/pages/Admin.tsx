@@ -14,6 +14,7 @@ import { ShieldAlert, TrendingUp, Clock, DollarSign, Zap, Users } from 'lucide-r
 import YouTubeBlocklistPanel from '@/components/admin/YouTubeBlocklistPanel';
 import YouTubeAllowlistPanel from '@/components/admin/YouTubeAllowlistPanel';
 import FlaggedChannelsReviewPanel from '@/components/admin/FlaggedChannelsReviewPanel';
+import DiscoverFeatureToggle from '@/components/pages/admin/DiscoverFeatureToggle';
 
 export default function Admin() {
   const { t } = useI18n();
@@ -371,6 +372,13 @@ export default function Admin() {
                     </table>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            {/* 发现功能开关 */}
+            <Card>
+              <CardContent className="pt-6">
+                <DiscoverFeatureToggle />
               </CardContent>
             </Card>
 

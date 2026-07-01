@@ -87,6 +87,7 @@ import {
   PublicTaskDetail,
   PublicTranscriptResponse,
   PublicSummaryResponse,
+  ServiceConfigView,
   TaskVisibilityResponse,
   YouTubeSearchResponse,
   YouTubeTrendingResponse,
@@ -1274,6 +1275,18 @@ export class APIClient {
     if (opts?.limit) params.set("limit", String(opts.limit))
     const qs = params.toString()
     return publicRequest(`/youtube/search/trending${qs ? `?${qs}` : ""}`, { method: "GET" })
+  }
+
+  async getDiscoverConfig(): Promise<ServiceConfigView> {
+    return request("/configs/feature/discover", { method: "GET" }, this.token)
+  }
+
+  async setDiscoverEnabled(enabled: boolean): Promise<ServiceConfigView> {
+    return request(
+      "/configs/feature/discover",
+      { method: "PUT", body: JSON.stringify({ config: {}, enabled, note: "admin kill-switch" }) },
+      this.token,
+    )
   }
 }
 

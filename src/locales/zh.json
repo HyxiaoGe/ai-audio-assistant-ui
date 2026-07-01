@@ -196,6 +196,19 @@
       "duration": "时长",
       "readonlyNote": "只读视图(管理员)",
       "loadError": "加载失败,请重试"
+    },
+    "discover": {
+      "title": "发现功能",
+      "description": "出问题时可一键下线整个「发现」搜索(后端强制拒绝,前端显示维护页)。",
+      "statusLabel": "当前状态",
+      "on": "已启用",
+      "off": "已下线",
+      "disableAction": "下线发现",
+      "confirmDisable": "确认下线?(再点一次)",
+      "enableAction": "重新启用",
+      "enabledToast": "发现功能已重新启用",
+      "disabledToast": "发现功能已下线",
+      "actionFailed": "操作失败,请重试"
     }
   },
   "player": {
@@ -1042,6 +1055,9 @@
     "searchButton": "搜索",
     "empty": "没有找到相关视频，换个关键词试试",
     "searchError": "搜索暂时不可用，请稍后再试",
-    "trendingLabel": "大家在搜："
+    "trendingLabel": "大家在搜：",
+    "unavailableTitle": "发现功能维护中",
+    "unavailableDescription": "该功能暂时下线，我们很快回来",
+    "backHome": "回到首页"
   }
 }

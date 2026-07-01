@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { ApiError, ErrorCode } from "@/types/api"
 
 // jsdom 无 IntersectionObserver:本地可控 stub,捕获实例以手动模拟「滚到底」。
 const ioInstances: Array<{ trigger: () => void }> = []
@@ -170,5 +171,20 @@ describe("Discover", () => {
     fireEvent.click(screen.getByRole("button", { name: "subscriptions.transcribeButton" }))
     expect(stores.openLogin).toHaveBeenCalled()
     expect(stores.openNewTask).not.toHaveBeenCalled()
+  })
+
+  it("搜索返回 DISCOVER_DISABLED → 渲染维护页", async () => {
+    client.getYouTubeTrending.mockResolvedValue({ items: [] })
+    client.searchYouTube.mockRejectedValue(new ApiError(ErrorCode.DISCOVER_DISABLED, "off", "t"))
+    render(<Discover />)
+    fireEvent.change(screen.getByLabelText("discover.searchPlaceholder"), { target: { value: "x" } })
+    fireEvent.click(screen.getByRole("button", { name: "discover.searchButton" }))
+    await waitFor(() => expect(screen.getByText("discover.unavailableTitle")).toBeInTheDocument())
+  })
+
+  it("热门词返回 DISCOVER_DISABLED → 渲染维护页", async () => {
+    client.getYouTubeTrending.mockRejectedValue(new ApiError(ErrorCode.DISCOVER_DISABLED, "off", "t"))
+    render(<Discover />)
+    await waitFor(() => expect(screen.getByText("discover.unavailableTitle")).toBeInTheDocument())
   })
 })

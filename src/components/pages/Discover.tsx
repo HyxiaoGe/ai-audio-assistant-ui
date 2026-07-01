@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Search } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { useAPIClient } from "@/lib/use-api-client"
 import { useI18n } from "@/lib/i18n-context"
 import { useAuthStore } from "@/store/auth-store"
@@ -10,6 +11,8 @@ import { useDiscoverStore } from "@/store/discover-store"
 import VideoCard from "@/components/youtube/VideoCard"
 import { VideoGridSkeleton } from "@/components/youtube/SubscriptionSkeleton"
 import { Button } from "@/components/ui/button"
+import EmptyState from "@/components/common/EmptyState"
+import { isDiscoverDisabled } from "@/lib/api-error"
 import type { VideoHit, YouTubeTrendingItem, YouTubeVideoItem } from "@/types/api"
 
 interface DiscoverProps {
@@ -46,6 +49,8 @@ export default function Discover({ initialTrending }: DiscoverProps) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [searched, setSearched] = useState(() => useDiscoverStore.getState().searched)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE) // 无限滚动已揭示的条数
+  const [disabled, setDisabled] = useState(false)
+  const router = useRouter()
 
   const [trending, setTrending] = useState<YouTubeTrendingItem[]>(initialTrending ?? [])
   const seeded = initialTrending !== undefined
@@ -58,8 +63,9 @@ export default function Discover({ initialTrending }: DiscoverProps) {
       .then((res) => {
         if (alive) setTrending(res.items)
       })
-      .catch(() => {
-        /* 热门拉取失败静默:非关键路径 */
+      .catch((e) => {
+        if (isDiscoverDisabled(e)) setDisabled(true)
+        /* 其它热门拉取失败静默:非关键路径 */
       })
     return () => {
       alive = false
@@ -97,6 +103,10 @@ export default function Discover({ initialTrending }: DiscoverProps) {
         // 写回会话缓存:词与结果一起存,切回 /discover 时即时还原、零网络。
         useDiscoverStore.getState().saveSearch(q, res.items)
       } catch (e) {
+        if (isDiscoverDisabled(e)) {
+          setDisabled(true)
+          return
+        }
         setHits([])
         setErrorMsg(e instanceof Error ? e.message : t("discover.searchError"))
       } finally {
@@ -158,6 +168,16 @@ export default function Discover({ initialTrending }: DiscoverProps) {
       return
     }
     openNewTask({ initialVideoUrl: videoUrl, initialYouTubeVideoId: videoId })
+  }
+
+  if (disabled) {
+    return (
+      <EmptyState
+        title={t("discover.unavailableTitle")}
+        description={t("discover.unavailableDescription")}
+        action={{ label: t("discover.backHome"), onClick: () => router.push("/") }}
+      />
+    )
   }
 
   return (

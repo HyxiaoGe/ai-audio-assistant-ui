@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { ApiError, ErrorCode } from "@/types/api"
-import { isRateLimitError } from "./api-error"
+import { isDiscoverDisabled, isRateLimitError } from "./api-error"
 
 describe("isRateLimitError", () => {
   it("RATE_LIMIT 常量为 40920", () => {
@@ -20,5 +20,15 @@ describe("isRateLimitError", () => {
   it("对非 ApiError 返回 false", () => {
     expect(isRateLimitError(new Error("x"))).toBe(false)
     expect(isRateLimitError(null)).toBe(false)
+  })
+})
+
+describe("isDiscoverDisabled", () => {
+  it("true for DISCOVER_DISABLED ApiError", () => {
+    expect(isDiscoverDisabled(new ApiError(ErrorCode.DISCOVER_DISABLED, "off", "t"))).toBe(true)
+  })
+  it("false for other errors", () => {
+    expect(isDiscoverDisabled(new ApiError(40000, "x", "t"))).toBe(false)
+    expect(isDiscoverDisabled(new Error("nope"))).toBe(false)
   })
 })

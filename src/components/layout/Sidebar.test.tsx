@@ -91,4 +91,9 @@ describe("Sidebar 按登录态过滤", () => {
     render(<Sidebar />);
     expect(screen.getByText("nav.discover")).toBeInTheDocument();
   });
+
+  it("发现入口带 beta 角标", () => {
+    render(<Sidebar />)
+    expect(screen.getByText("beta")).toBeInTheDocument()
+  })
 });
