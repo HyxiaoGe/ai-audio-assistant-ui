@@ -1012,6 +1012,7 @@ export interface YouTubeVideoItem {
   comment_count?: number
   transcribed: boolean
   task_id?: string
+  existing_is_owner?: boolean  // /discover 搜索：区分"自己的"与"别人公开的"
 }
 
 /**
@@ -1396,6 +1397,8 @@ export interface VideoHit {
   url: string
   view_count?: number
   duration?: number
+  existing_task_id?: string | null  // 后端叠加：命中的既有任务 id
+  existing_is_owner?: boolean        // 后端叠加：viewer 是否为该任务 owner
 }
 
 export interface YouTubeSearchResponse {

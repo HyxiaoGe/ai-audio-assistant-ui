@@ -33,7 +33,9 @@ function hitToVideoItem(hit: VideoHit): YouTubeVideoItem {
     thumbnail_url: hit.thumbnail ?? undefined,
     view_count: hit.view_count,
     duration_seconds: hit.duration,
-    transcribed: false,
+    transcribed: hit.existing_task_id != null,
+    task_id: hit.existing_task_id ?? undefined,
+    existing_is_owner: hit.existing_is_owner,
   } as unknown as YouTubeVideoItem
 }
 
