@@ -377,11 +377,7 @@ export default function Admin() {
 
             {/* 发现功能开关 */}
             <Card>
-              <CardHeader>
-                <CardTitle>{t("admin.discover.title")}</CardTitle>
-                <CardDescription>{t("admin.discover.description")}</CardDescription>
-              </CardHeader>
-              <CardContent>
+              <CardContent className="pt-6">
                 <DiscoverFeatureToggle />
               </CardContent>
             </Card>
