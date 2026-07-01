@@ -196,6 +196,19 @@
       "duration": "Duration",
       "readonlyNote": "Read-only (admin)",
       "loadError": "Failed to load, please retry"
+    },
+    "discover": {
+      "title": "Discover feature",
+      "description": "Take the entire Discover search offline in one click when something goes wrong (backend-enforced; users see a maintenance page).",
+      "statusLabel": "Current status",
+      "on": "Enabled",
+      "off": "Offline",
+      "disableAction": "Take offline",
+      "confirmDisable": "Confirm offline? (click again)",
+      "enableAction": "Re-enable",
+      "enabledToast": "Discover re-enabled",
+      "disabledToast": "Discover taken offline",
+      "actionFailed": "Action failed, please retry"
     }
   },
   "player": {
