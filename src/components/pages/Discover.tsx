@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Search } from "lucide-react"
+import { Search, Wrench } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useAPIClient } from "@/lib/use-api-client"
 import { useI18n } from "@/lib/i18n-context"
@@ -11,7 +11,6 @@ import { useDiscoverStore } from "@/store/discover-store"
 import VideoCard from "@/components/youtube/VideoCard"
 import { VideoGridSkeleton } from "@/components/youtube/SubscriptionSkeleton"
 import { Button } from "@/components/ui/button"
-import EmptyState from "@/components/common/EmptyState"
 import { isDiscoverDisabled } from "@/lib/api-error"
 import type { VideoHit, YouTubeTrendingItem, YouTubeVideoItem } from "@/types/api"
 
@@ -171,14 +170,27 @@ export default function Discover({ initialTrending }: DiscoverProps) {
   }
 
   if (disabled) {
-    // 全屏接管:fixed inset-0 盖住 AppShell 外壳(侧栏+顶栏),做成专属全屏维护页。
+    // 维护态:镜像任务失败页(TaskFailedPanel)的设计语言——在 AppShell 外壳内(h-full,保留侧栏+顶栏),
+    // 内容区居中的圆角卡片,而非 fixed inset-0 全屏接管。取向「淡蓝品牌暖意」:把失败页的 danger 红
+    // 整体换成 --app-primary 一族的极淡蓝(徽章圈 --app-primary-soft + 图标 --app-primary 做克制品牌暖意),
+    // 卡底仍保持中性 surface 不抢戏,标题 text-strong、描述 text-muted、动作走主品牌 <Button>,
+    // 传达「在维护、很快回来」的友好感而非告警感。
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-8 bg-[var(--app-bg)]">
-        <EmptyState
-          title={t("discover.unavailableTitle")}
-          description={t("discover.unavailableDescription")}
-          action={{ label: t("discover.backHome"), onClick: () => router.push("/") }}
-        />
+      <div className="h-full flex flex-col items-center justify-center px-6 py-8">
+        <div className="w-full max-w-[480px] rounded-xl border border-[var(--app-glass-border)] bg-[var(--app-surface-alt)] p-10 text-center">
+          <div className="flex justify-center mb-4">
+            <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[var(--app-primary-soft)] text-[var(--app-primary)]">
+              <Wrench className="w-6 h-6" />
+            </div>
+          </div>
+          <h2 className="text-xl font-semibold mb-2 text-[var(--app-text-strong)]">
+            {t("discover.unavailableTitle")}
+          </h2>
+          <p className="text-sm mb-6 text-[var(--app-text-muted)]">
+            {t("discover.unavailableDescription")}
+          </p>
+          <Button onClick={() => router.push("/")}>{t("discover.backHome")}</Button>
+        </div>
       </div>
     )
   }
