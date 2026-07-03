@@ -49,6 +49,8 @@ jobs:
       - name: Push CI/CD active metric
         continue-on-error: true
         shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
+        env:
+          PUSHGW_AUTH: ${{ secrets.PUSHGW_BASIC_AUTH }}
         run: |
           $environment = if ($env:GITHUB_REF_NAME -eq "master") { "dev" } else { "preview" }
           $branchKey = $env:GITHUB_REF_NAME -replace '[^A-Za-z0-9_.-]', '_'
@@ -63,7 +65,8 @@ jobs:
           "@
           $body = (($metrics -replace "`r`n", "`n").Trim() + "`n")
           $bytes = [System.Text.Encoding]::UTF8.GetBytes($body)
-          Invoke-WebRequest -UseBasicParsing -Method Post -Uri "http://192.168.1.11:9092/metrics/job/cicd_active/project_key/ai-audio-assistant-ui/branch_key/$branchKey/environment_key/$environment" -ContentType "text/plain; version=0.0.4" -Body $bytes -TimeoutSec 5
+          # pushgateway 本体只绑 loopback,经 nginx 9094 鉴权反代推送(凭证在仓库 Secret PUSHGW_BASIC_AUTH)
+          Invoke-WebRequest -UseBasicParsing -Method Post -Uri "http://192.168.1.11:9094/metrics/job/cicd_active/project_key/ai-audio-assistant-ui/branch_key/$branchKey/environment_key/$environment" -ContentType "text/plain; version=0.0.4" -Headers @{ Authorization = "Basic $env:PUSHGW_AUTH" } -Body $bytes -TimeoutSec 5
 
       - name: Checkout
         uses: actions/checkout@v6
