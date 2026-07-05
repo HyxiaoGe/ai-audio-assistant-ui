@@ -112,12 +112,11 @@ src/
 
 | 文档 | 位置 | 说明 |
 |------|------|------|
-| 工程约定 | `CLAUDE.md` | 样式与组件契约、目录约定 |
-| 前端架构 | `docs/ARCH.md` | 架构与数据流 |
-| 接口契约 | `docs/API.md` | 前端消费的后端接口 |
-| 前端职责 | `docs/FE.md` | 前后端边界 |
-| 产品需求 | `docs/PRD.md` | 产品目标与范围 |
+| 贡献指南 | `CONTRIBUTING.md` | 开发流程与提交规范 |
+| 测试策略 | `docs/TESTING.md` | Vitest + Testing Library |
 | 环境变量样例 | `.env.example` | 前端环境变量 |
+
+> `CLAUDE.md`(样式与组件契约、目录约定)为**本地开发文档,未随仓公开**。
 
 ---
 

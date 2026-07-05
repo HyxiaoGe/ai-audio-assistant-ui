@@ -29,7 +29,7 @@
 ## Mocks & Helpers
 - Router: mock `next/navigation` `useRouter()` when testing navigation behavior.
 - i18n: mock `useI18n()` to return deterministic strings.
-- Auth: mock `useSession()` only when the component depends on auth state.
+- Auth: mock `useAuthStore()` (`src/store/auth-store.ts`) only when the component depends on auth state. (Auth is the shared SSO SDK + Zustand `auth-store`, not NextAuth.)
 
 ## Baseline Examples
 - `src/components/common/EmptyState.test.tsx`
@@ -49,4 +49,4 @@ npm run test
 
 ## CI Notes
 - GitHub Actions runs on `master` branch push and pull requests.
-- Workflow file: `.github/workflows/ci.yml`.
+- Workflow file: `.github/workflows/build-and-deploy.yml` (build job runs ESLint + Vitest; deploy only on `master`). Doc-only changes are skipped via `paths-ignore`.
