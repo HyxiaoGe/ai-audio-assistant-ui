@@ -227,6 +227,8 @@
     "speakerCount": "{count} speakers",
     "edited": "Edited",
     "aiPolished": "AI polished",
+    "editSaved": "Transcript saved",
+    "editSaveFailed": "Failed to save, please try again",
     "clickToShowOriginal": "Click to show original",
     "clickToShowPolished": "Click to show polished",
     "confidence": "Confidence:",

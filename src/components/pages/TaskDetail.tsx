@@ -754,7 +754,7 @@ export default function TaskDetail() {
             : segment
         )
       );
-      notifySuccess('转写已保存');
+      notifySuccess(t('transcript.editSaved'));
     } catch (err) {
       // 保存失败:回滚到编辑前并提示(读回路径不再抹掉编辑,因为根本没落库成功)
       if (previous) {
@@ -763,9 +763,9 @@ export default function TaskDetail() {
           prev.map(segment => (segment.id === segmentId ? restored : segment))
         );
       }
-      notifyError(err instanceof Error ? err.message : '保存失败,请重试');
+      notifyError(err instanceof Error ? err.message : t('transcript.editSaveFailed'));
     }
-  }, [client, id]);
+  }, [client, id, t]);
 
   // TranscriptList 已 memo:onRetry 若内联箭头,每次渲染都是新引用会击穿 memo
   //(SSE 流式期间父组件每次 flush 都重渲染,1700+ 行整列 reconcile 就回来了)。

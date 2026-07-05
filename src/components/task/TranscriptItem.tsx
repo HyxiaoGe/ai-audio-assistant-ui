@@ -66,6 +66,8 @@ function TranscriptItem({
   };
 
   const handleSaveEdit = () => {
+    // 空白不提交:后端会以 422 拒绝(非统一信封),前端会误报「网络失败」,故这里直接拦下
+    if (!editedContent.trim()) return;
     onEdit(segmentId, editedContent);
     setIsEditing(false);
   };
@@ -153,7 +155,8 @@ function TranscriptItem({
           <div className="flex items-center gap-2">
             <button
               onClick={handleSaveEdit}
-              className="flex items-center gap-1 px-2 py-1 rounded hover:bg-[var(--app-success-bg)] transition-colors"
+              disabled={!editedContent.trim()}
+              className="flex items-center gap-1 px-2 py-1 rounded hover:bg-[var(--app-success-bg)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
               style={{ color: 'var(--app-success)' }}
             >
               <Check className="w-3.5 h-3.5" />

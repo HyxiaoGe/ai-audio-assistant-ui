@@ -227,6 +227,8 @@
     "speakerCount": "{count} 位说话人",
     "edited": "已编辑",
     "aiPolished": "AI 已校对",
+    "editSaved": "转写已保存",
+    "editSaveFailed": "保存失败，请重试",
     "clickToShowOriginal": "点击查看原文",
     "clickToShowPolished": "点击查看校对后",
     "confidence": "置信度:",
