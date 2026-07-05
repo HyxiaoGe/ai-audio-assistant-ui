@@ -2,6 +2,13 @@ name: AI Audio UI Build & Deploy
 
 on:
   push:
+    # 纯文档改动跳过整条 build+deploy(仅这些文件时不触发)。
+    # 文档+代码混合的 push 仍照常部署;需强制部署走下方 workflow_dispatch。
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.env.example'
   workflow_dispatch:
 
 permissions:
