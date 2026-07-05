@@ -6,7 +6,7 @@
 
 [English](#overview) | [中文](#概览)
 
-前端仓库：面向音视频内容理解的 AI 助手 UI。后端是独立的 FastAPI 仓库（`ai-audio-assistant-web`），本仓只负责界面、OAuth 登录流、文件哈希与 S3 直传。
+前端仓库：面向音视频内容理解的 AI 助手 UI。后端是独立的 FastAPI 仓库 [`ai-audio-assistant-web`](https://github.com/HyxiaoGe/ai-audio-assistant-web)，本仓只负责界面、OAuth 登录流、文件哈希与 S3 直传。
 
 ---
 
@@ -51,7 +51,7 @@ npm run dev
 
 打开 http://localhost:3000
 
-> 需配合后端（`ai-audio-assistant-web`，默认 `http://localhost:8088`）与 auth-service（默认 `http://localhost:8100`）一起运行。
+> 需配合后端（[`ai-audio-assistant-web`](https://github.com/HyxiaoGe/ai-audio-assistant-web)，默认 `http://localhost:8088`）与 auth-service（默认 `http://localhost:8100`）一起运行。
 
 ## Environment / 环境变量
 
