@@ -44,6 +44,7 @@ function seg(
     sequence: 0,
     is_edited: false,
     original_content: null,
+    manually_edited: false,
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z',
     ...overrides,
@@ -86,6 +87,16 @@ describe('mapApiTranscript — field mapping', () => {
   it('maps originalContent from original_content', () => {
     const items = [seg('s1', null, { original_content: 'orig' })];
     expect(mapApiTranscript(items, SPEAKER_LABELS, UNKNOWN_LABEL)[0].originalContent).toBe('orig');
+  });
+
+  it('maps manuallyEdited from manually_edited (人工编辑=true)', () => {
+    const items = [seg('s1', null, { manually_edited: true })];
+    expect(mapApiTranscript(items, SPEAKER_LABELS, UNKNOWN_LABEL)[0].manuallyEdited).toBe(true);
+  });
+
+  it('manuallyEdited defaults to false (AI 校对/原始)', () => {
+    const items = [seg('s1', null, { is_edited: true })];
+    expect(mapApiTranscript(items, SPEAKER_LABELS, UNKNOWN_LABEL)[0].manuallyEdited).toBe(false);
   });
 
   it('maps words field directly (null when absent)', () => {

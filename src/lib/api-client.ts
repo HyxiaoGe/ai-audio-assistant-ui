@@ -58,6 +58,7 @@ import {
   TaskRetryResponse,
   TranscriptRequest,
   TranscriptResponse,
+  TranscriptSegment,
   UserProfile,
   UserPreferences,
   UserPreferencesUpdateRequest,
@@ -704,6 +705,21 @@ export class APIClient {
       : `/transcripts/${taskId}`
 
     return request(endpoint, { method: "GET" }, this.token)
+  }
+
+  /**
+   * 手动编辑单个转写段落内容(落库)。返回更新后的段落(含 is_edited/original_content)。
+   */
+  async updateTranscriptSegment(
+    taskId: string,
+    segmentId: string,
+    content: string
+  ): Promise<TranscriptSegment> {
+    return request(
+      `/transcripts/${taskId}/segments/${segmentId}`,
+      { method: "PATCH", body: JSON.stringify({ content }) },
+      this.token
+    )
   }
 
   // ==========================================================================

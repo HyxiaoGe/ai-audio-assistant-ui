@@ -45,6 +45,7 @@ function seg(over: Partial<DisplayTranscriptSegment> & { id: string }): DisplayT
     avatarColor: "var(--app-primary)",
     isPolished: false,
     originalContent: null,
+    manuallyEdited: false,
     ...over,
   }
 }

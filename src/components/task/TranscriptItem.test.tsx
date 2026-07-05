@@ -81,6 +81,29 @@ describe('TranscriptItem — readOnly mode', () => {
 });
 
 // ──────────────────────────────────────────────────────────────
+// 编辑徽章:按来源区分「已编辑」vs「AI 已校对」(t mock 回显 key)
+// ──────────────────────────────────────────────────────────────
+describe('TranscriptItem — edit badge source distinction', () => {
+  it('AI 校对(isPolished 且非 manuallyEdited)显 transcript.aiPolished', () => {
+    renderItem({ isPolished: true, manuallyEdited: false });
+    expect(screen.getByText('transcript.aiPolished', { exact: false })).toBeTruthy();
+    expect(screen.queryByText('transcript.edited')).toBeNull();
+  });
+
+  it('人工编辑(isPolished 且 manuallyEdited)显 transcript.edited,不显 AI 已校对', () => {
+    renderItem({ isPolished: true, manuallyEdited: true });
+    expect(screen.getByText('transcript.edited')).toBeTruthy();
+    expect(screen.queryByText('transcript.aiPolished', { exact: false })).toBeNull();
+  });
+
+  it('未编辑(isPolished=false)不渲染任何编辑徽章', () => {
+    renderItem({ isPolished: false });
+    expect(screen.queryByText('transcript.aiPolished', { exact: false })).toBeNull();
+    expect(screen.queryByText('transcript.edited')).toBeNull();
+  });
+});
+
+// ──────────────────────────────────────────────────────────────
 // 键盘可达性(UX-13)
 // ──────────────────────────────────────────────────────────────
 describe('TranscriptItem — keyboard accessibility (UX-13)', () => {
