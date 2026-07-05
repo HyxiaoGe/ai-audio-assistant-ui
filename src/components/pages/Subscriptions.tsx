@@ -224,6 +224,11 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
     ) => {
       if (!force && (!isAuthenticated || !status?.connected)) return;
 
+      // 发起时的搜索词快照。await 之后若已不是当前生效搜索(用户又改词/翻页触发新请求),
+      // 丢弃这次响应:防慢网乱序下旧搜索覆盖新搜索,以及 load-more 把不同搜索词的结果拼接
+      //(二者都会产出需用户再操作才自愈的错误列表)。
+      const reqTerm = search.trim();
+      let stale = false;
       setSubsLoading(true);
       setSubsError(null);
       try {
@@ -233,8 +238,12 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
           page,
           page_size: PAGE_SIZE,
           show_hidden: true,
-          search: search.trim() || undefined,
+          search: reqTerm || undefined,
         });
+        if (reqTerm !== searchRef.current) {
+          stale = true;
+          return;
+        }
         if (append) {
           setSubscriptions((prev) => [...prev, ...result.items]);
         } else {
@@ -243,13 +252,19 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
         setSubsTotal(result.total);
         setSubsPage(page);
       } catch (error) {
+        // 过期请求的错误同样不应覆盖当前搜索态
+        if (reqTerm !== searchRef.current) {
+          stale = true;
+          return;
+        }
         const message =
           error instanceof ApiError
             ? error.message
             : t("subscriptions.loadFailed");
         setSubsError(message);
       } finally {
-        setSubsLoading(false);
+        // 过期响应不重置 loading:避免抢先关掉更新请求的加载态(更新请求会自行收尾)
+        if (!stale) setSubsLoading(false);
       }
     },
     [client, isAuthenticated, status?.connected, t]
@@ -1160,9 +1175,11 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
                                 className="text-sm"
                                 style={{ color: "var(--app-text-muted)" }}
                               >
-                                {searchQuery
+                                {searchQuery.trim()
                                   ? t("subscriptions.searchResults", {
-                                      count: filteredSubscriptions.length,
+                                      // 后端全局搜索:显示命中总数(subsTotal)而非当前已加载子集,
+                                      // 否则会少报(还能 load-more 却显示较小数)
+                                      count: subsTotal,
                                     })
                                   : t("subscriptions.subscriptionCount", {
                                       count: subscriptions.length,
