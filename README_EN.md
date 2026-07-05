@@ -112,12 +112,11 @@ src/
 
 | Doc | Location | Notes |
 |-----|----------|-------|
-| Engineering conventions | `CLAUDE.md` | design-system contract, directory conventions |
-| Frontend architecture | `docs/ARCH.md` | architecture and data flow |
-| API contract | `docs/API.md` | backend endpoints the frontend consumes |
-| Frontend responsibilities | `docs/FE.md` | frontend/backend boundary |
-| Product requirements | `docs/PRD.md` | product goals and scope |
+| Contributing | `CONTRIBUTING.md` | dev workflow and commit conventions |
+| Testing strategy | `docs/TESTING.md` | Vitest + Testing Library |
 | Env var sample | `.env.example` | frontend environment variables |
+
+> `CLAUDE.md` (design-system contract, directory conventions) is a **local dev doc, not published with the repo**.
 
 ---
 
