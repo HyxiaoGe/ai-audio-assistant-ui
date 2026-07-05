@@ -84,7 +84,7 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
   // Refs to store latest function references for interval callbacks
   const loadSyncOverviewRef = useRef<() => Promise<void>>(() => Promise.resolve());
   const loadLatestVideosRef = useRef<(page?: number, append?: boolean, force?: boolean) => Promise<void>>(() => Promise.resolve());
-  const loadSubscriptionsRef = useRef<(page?: number, append?: boolean, force?: boolean) => Promise<void>>(() => Promise.resolve());
+  const loadSubscriptionsRef = useRef<(page?: number, append?: boolean, force?: boolean, search?: string) => Promise<void>>(() => Promise.resolve());
   const loadChannelVideosRef = useRef<(channelId: string, page?: number, append?: boolean) => Promise<void>>(() => Promise.resolve());
 
   // Connection state
@@ -102,6 +102,9 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
   const [subsPage, setSubsPage] = useState(1);
   const [subsError, setSubsError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  // 当前生效的搜索词(去空白):作为 loadSubscriptions 的默认 search 来源,
+  // 使 load-more/重试/同步刷新等既有调用点无需改签名即自动沿用当前搜索。
+  const searchRef = useRef("");
 
   // Latest videos state
   const [latestVideos, setLatestVideos] = useState<YouTubeVideoItem[]>([]);
@@ -152,18 +155,10 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
       filtered = filtered.filter((sub) => sub.is_starred);
     }
 
-    // Filter by search query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (sub) =>
-          sub.channel_title.toLowerCase().includes(query) ||
-          sub.channel_description?.toLowerCase().includes(query)
-      );
-    }
-
+    // 搜索改由后端全局匹配(见 loadSubscriptions 的 search 参数),此处不再做客户端过滤,
+    // 否则会把「已加载分页」当作全集,翻页外命中搜不到——正是本次要修的缺陷。
     return filtered;
-  }, [subscriptions, searchQuery, showHidden, starredOnly]);
+  }, [subscriptions, showHidden, starredOnly]);
   const PAGE_SIZE = 20;
   const VIDEOS_PAGE_SIZE = 12;
 
@@ -221,17 +216,24 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
 
   // Load subscriptions list
   const loadSubscriptions = useCallback(
-    async (page: number = 1, append: boolean = false, force: boolean = false) => {
+    async (
+      page: number = 1,
+      append: boolean = false,
+      force: boolean = false,
+      search: string = searchRef.current
+    ) => {
       if (!force && (!isAuthenticated || !status?.connected)) return;
 
       setSubsLoading(true);
       setSubsError(null);
       try {
-        // Always fetch all subscriptions (including hidden) for client-side filtering
+        // Always fetch all subscriptions (including hidden) for client-side filtering.
+        // search 为空时退化为原分页;非空时后端跨全部订阅按频道名/简介全局匹配。
         const result = await client.getYouTubeSubscriptions({
           page,
           page_size: PAGE_SIZE,
           show_hidden: true,
+          search: search.trim() || undefined,
         });
         if (append) {
           setSubscriptions((prev) => [...prev, ...result.items]);
@@ -368,6 +370,19 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
   useEffect(() => {
     loadSubscriptionsRef.current = loadSubscriptions;
   }, [loadSubscriptions]);
+
+  // 搜索防抖:输入停顿 300ms 后,若与当前生效搜索词不同则更新 searchRef、重置到第 1 页重拉。
+  // term === searchRef.current 时跳过——天然规避挂载/连接瞬间与初始加载 effect 的重复请求。
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      const term = searchQuery.trim();
+      if (term === searchRef.current) return;
+      searchRef.current = term;
+      if (!isAuthenticated || !status?.connected) return;
+      void loadSubscriptions(1, false, false, term);
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [searchQuery, isAuthenticated, status?.connected, loadSubscriptions]);
 
   // Real-time sync progress refresh using interval
   // Start when syncing becomes true, stop when fully_synced becomes true
@@ -1253,7 +1268,8 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
                               </ScrollArea>
 
                               {/* Load more */}
-                              {hasMoreSubs && !searchQuery && (
+                              {/* 搜索已是后端全局分页,load-more 照常可见(旧逻辑因客户端搜索把翻页当作全集才隐藏它) */}
+                              {hasMoreSubs && (
                                 <div className="text-center pt-2">
                                   <Button
                                     variant="ghost"

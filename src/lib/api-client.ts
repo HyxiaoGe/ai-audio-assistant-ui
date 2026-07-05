@@ -1033,6 +1033,7 @@ export class APIClient {
     if (params?.page) queryParams.set("page", params.page.toString())
     if (params?.page_size)
       queryParams.set("page_size", params.page_size.toString())
+    if (params?.search?.trim()) queryParams.set("search", params.search.trim())
 
     const query = queryParams.toString()
     const endpoint = query ? `/youtube/subscriptions?${query}` : "/youtube/subscriptions"

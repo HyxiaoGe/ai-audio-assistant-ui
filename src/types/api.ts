@@ -976,6 +976,8 @@ export interface YouTubeSubscriptionListRequest {
   page_size?: number
   show_hidden?: boolean
   starred_only?: boolean
+  /** 关键词:后端跨全部订阅按频道名/简介大小写不敏感匹配(全局搜索,非仅当前页) */
+  search?: string
 }
 
 /**
