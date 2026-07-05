@@ -726,13 +726,46 @@ export default function TaskDetail() {
     handleSeek(seconds);
   }, [task?.audio_url, task?.id, searchParams, handleSeek]);
 
-  const handleEditTranscript = useCallback((segmentId: string, newContent: string) => {
+  const handleEditTranscript = useCallback(async (segmentId: string, newContent: string) => {
+    // 乐观更新:立即显示新内容并标记「已编辑」(isPolished 映射自后端 is_edited),同时
+    // 捕获旧段用于失败回滚。updater 在本次提交阶段同步执行,远早于网络响应,previous 必被赋值。
+    let previous: DisplayTranscriptSegment | undefined;
     setTranscript(prev =>
-      prev.map(segment =>
-        segment.id === segmentId ? { ...segment, content: newContent } : segment
-      )
+      prev.map(segment => {
+        if (segment.id === segmentId) {
+          previous = segment;
+          return { ...segment, content: newContent, isPolished: true };
+        }
+        return segment;
+      })
     );
-  }, []);
+    try {
+      const updated = await client.updateTranscriptSegment(id, segmentId, newContent);
+      // 用服务端真值同步展示字段(不整段重映射,避免 speaker 配色等抖动)
+      setTranscript(prev =>
+        prev.map(segment =>
+          segment.id === segmentId
+            ? {
+                ...segment,
+                content: updated.content,
+                isPolished: updated.is_edited,
+                originalContent: updated.original_content,
+              }
+            : segment
+        )
+      );
+      notifySuccess('转写已保存');
+    } catch (err) {
+      // 保存失败:回滚到编辑前并提示(读回路径不再抹掉编辑,因为根本没落库成功)
+      if (previous) {
+        const restored = previous;
+        setTranscript(prev =>
+          prev.map(segment => (segment.id === segmentId ? restored : segment))
+        );
+      }
+      notifyError(err instanceof Error ? err.message : '保存失败,请重试');
+    }
+  }, [client, id]);
 
   // TranscriptList 已 memo:onRetry 若内联箭头,每次渲染都是新引用会击穿 memo
   //(SSE 流式期间父组件每次 flush 都重渲染,1700+ 行整列 reconcile 就回来了)。
