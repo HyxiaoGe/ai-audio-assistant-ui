@@ -20,6 +20,8 @@ export interface DisplayTranscriptSegment {
   avatarColor: string;
   isPolished: boolean;
   originalContent: string | null;
+  /** True=用户手动编辑,False=AI 校对或原始;决定徽章显「已编辑」还是「AI 已校对」 */
+  manuallyEdited: boolean;
 }
 
 /** 说话人调色板（按出现顺序分配，最多 5 个具名色；超出后循环）。 */
@@ -83,6 +85,7 @@ export function mapApiTranscript(
       avatarColor: speakerInfo?.color || UNKNOWN_SPEAKER_COLOR,
       isPolished: segment.is_edited ?? false,
       originalContent: segment.original_content ?? null,
+      manuallyEdited: segment.manually_edited ?? false,
     };
   });
 }

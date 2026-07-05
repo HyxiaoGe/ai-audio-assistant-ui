@@ -296,7 +296,7 @@
   },
   "src/components/task/TranscriptItem.tsx": {
     "no-restricted-syntax": {
-      "count": 16
+      "count": 15
     }
   },
   "src/components/task/TranscriptList.tsx": {

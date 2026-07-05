@@ -92,6 +92,7 @@ export default function AdminTaskView() {
       words: null,
       is_edited: false,
       original_content: null,
+      manually_edited: false,
       created_at: "",
       updated_at: "",
     }));

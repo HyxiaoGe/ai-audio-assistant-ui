@@ -727,14 +727,15 @@ export default function TaskDetail() {
   }, [task?.audio_url, task?.id, searchParams, handleSeek]);
 
   const handleEditTranscript = useCallback(async (segmentId: string, newContent: string) => {
-    // 乐观更新:立即显示新内容并标记「已编辑」(isPolished 映射自后端 is_edited),同时
-    // 捕获旧段用于失败回滚。updater 在本次提交阶段同步执行,远早于网络响应,previous 必被赋值。
+    // 乐观更新:立即显示新内容并标记「已编辑」(isPolished 映射自后端 is_edited,manuallyEdited=true
+    // 让徽章显「已编辑」而非「AI 已校对」),同时捕获旧段用于失败回滚。updater 在本次提交阶段同步执行,
+    // 远早于网络响应,previous 必被赋值。
     let previous: DisplayTranscriptSegment | undefined;
     setTranscript(prev =>
       prev.map(segment => {
         if (segment.id === segmentId) {
           previous = segment;
-          return { ...segment, content: newContent, isPolished: true };
+          return { ...segment, content: newContent, isPolished: true, manuallyEdited: true };
         }
         return segment;
       })
@@ -750,6 +751,7 @@ export default function TaskDetail() {
                 content: updated.content,
                 isPolished: updated.is_edited,
                 originalContent: updated.original_content,
+                manuallyEdited: updated.manually_edited,
               }
             : segment
         )

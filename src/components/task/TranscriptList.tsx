@@ -324,6 +324,7 @@ function TranscriptListImpl({
               onEdit={onEditSegment}
               isPolished={segment.isPolished}
               originalContent={segment.originalContent}
+              manuallyEdited={segment.manuallyEdited}
               readOnly={readOnly}
             />
           </div>

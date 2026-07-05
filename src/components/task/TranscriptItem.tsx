@@ -28,6 +28,8 @@ interface TranscriptItemProps {
   onTimeClick?: (time: string) => void;
   isPolished?: boolean;
   originalContent?: string | null;
+  /** True=用户手动编辑（徽章显「已编辑」），False=AI 校对（徽章显「AI 已校对」）。默认 false。 */
+  manuallyEdited?: boolean;
   /** 只读模式：不渲染 hover 编辑按钮、不进入编辑态。默认 false（保持原有行为）。 */
   readOnly?: boolean;
 }
@@ -47,6 +49,7 @@ function TranscriptItem({
   onTimeClick = () => {},
   isPolished = false,
   originalContent = null,
+  manuallyEdited = false,
   readOnly = false,
 }: TranscriptItemProps) {
   const [isHovered, setIsHovered] = useState(false);
@@ -135,17 +138,17 @@ function TranscriptItem({
             ({startTime} - {endTime})
           </button>
 
-          {/* AI Polish Badge */}
+          {/* 编辑徽章:人工编辑显「已编辑」(中性色),AI 校对显「AI 已校对」(绿色成功色)。
+              isPolished(is_edited)对两者皆真,靠 manuallyEdited 区分来源,不再把手动编辑误标为 AI 校对。 */}
           {isPolished && (
             <span
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs"
-              style={{
-                background: 'var(--app-success-bg)',
-                color: 'var(--app-success)',
-                fontSize: '11px',
-              }}
+              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] ${
+                manuallyEdited
+                  ? 'bg-[var(--app-glass-hover)] text-[var(--app-text-muted)]'
+                  : 'bg-[var(--app-success-bg)] text-[var(--app-success)]'
+              }`}
             >
-              ✓ {t("transcript.aiPolished")}
+              {manuallyEdited ? t("transcript.edited") : `✓ ${t("transcript.aiPolished")}`}
             </span>
           )}
         </div>

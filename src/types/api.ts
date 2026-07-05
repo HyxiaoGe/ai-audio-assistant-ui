@@ -493,6 +493,8 @@ export interface TranscriptSegment {
   sequence: number
   is_edited: boolean
   original_content: string | null
+  /** True=用户手动编辑,False=AI 校对或原始;前端据此显「已编辑」而非「AI 已校对」 */
+  manually_edited: boolean
   created_at: string
   updated_at: string
 }
