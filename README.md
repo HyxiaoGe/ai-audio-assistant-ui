@@ -1,123 +1,124 @@
-# AI Audio/Video Content Assistant
+# AI Audio/Video Content Assistant — Frontend
 
-![CI](https://github.com/HyxiaoGe/ai-audio-assistant-ui/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/HyxiaoGe/ai-audio-assistant-ui/actions/workflows/build-and-deploy.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Version](https://img.shields.io/badge/version-0.1.0-blue)
+![Next.js](https://img.shields.io/badge/Next.js-16-black)
 
-[中文](#概览) | [English](#overview)
+[English](#overview) | [中文](#概览)
+
+前端仓库：面向音视频内容理解的 AI 助手 UI。后端是独立的 FastAPI 仓库（`ai-audio-assistant-web`），本仓只负责界面、OAuth 登录流、文件哈希与 S3 直传。
+
+---
 
 ## Overview
-AI-powered audio/video understanding assistant that turns files or YouTube links into structured insights (summary, key points, action items) with real-time progress.
+
+AI-powered audio/video understanding assistant that turns uploaded files or YouTube links into structured insights — timestamped transcript, structured summary, key points and action items — with real-time progress. This repository is the **Next.js frontend only**; business logic (ASR/LLM, storage, database) lives in the separate FastAPI backend.
 
 ## 概览
-面向音视频内容理解的 AI 助手：支持本地上传或 YouTube 链接，一键生成结构化摘要/要点/待办，并提供实时进度更新。
+
+把上传的音视频文件或 YouTube 链接，转成结构化理解——带时间戳的转写、结构化摘要、关键要点与待办，并实时推送进度。本仓库仅为 **Next.js 前端**；ASR/LLM、存储、数据库等业务逻辑在独立的 FastAPI 后端。
 
 ## Features / 核心特性（前端视角）
-- Auth-first UI：登录态驱动导航与页面访问，OAuth 按钮与会话保持
-- Upload UX：文件格式校验、哈希计算、直传进度条、秒传提示与失败重试
-- YouTube 入口：链接校验与任务创建，统一入口体验
-- Task Dashboard：任务列表、筛选、状态徽章、失败重试与清理提示
-- Detail View：时间轴转写、摘要分区、关键要点/行动项展示
-- Real-time Feedback：WebSocket 进度推送，状态实时刷新
-- i18n UI：中英文切换、统一文案与错误提示展示
 
-## Screenshots / 关键截图
-> 将截图放入 `public/screenshots/` 后替换下面路径
-- 登录页（OAuth 入口与引导文案）
-  - `public/screenshots/login.png`
-- 任务列表（筛选、状态、重试入口）
-  - `public/screenshots/tasks.png`
-- 任务详情（转写/摘要/要点）
-  - `public/screenshots/task-detail.png`
-- 上传流程（进度与错误提示）
-  - `public/screenshots/upload.png`
-
-## Architecture / 架构与数据流（前端视角）
-```mermaid
-flowchart LR
-  UI[Next.js UI] -->|HTTP API| BE[FastAPI Backend]
-  UI -->|WebSocket| WS[Task Updates]
-  UI -->|Direct Upload| S3[MinIO/S3]
-  BE --> S3
-```
+- **登录与会话**：经共享 SSO 登录（Google/GitHub 由 auth-service 承担），登录态驱动导航与受保护路由。
+- **上传 UX**：格式校验、客户端 SHA256 计算、预签名直传 S3、秒传提示与失败重试。
+- **YouTube / 发现页**：粘贴链接转写；`/discover` 关键词搜索 + 热门推荐，对「已有转写」的结果感知并跳转。
+- **公开广场 `/explore`**：匿名可浏览公开任务。
+- **任务面板**：列表、筛选、状态徽章、失败重试与清理。
+- **详情视图**：时间轴转写、分区摘要、关键要点 / 行动项、AI 配图。
+- **实时反馈**：WebSocket 进度推送，断线自动重连并降级为 HTTP 轮询。
+- **转写内搜索**：基于后端全文检索（关键词/字面），命中片段高亮并可深链到时间点。
+- **管理后台 `/admin`**：屏蔽频道复核、成本看板等（受权限门控）。
+- **i18n**：中英文切换，错误文案由后端本地化后直显。
 
 ## Tech Stack / 技术栈
-- Next.js 14 + TypeScript + Tailwind + shadcn/ui
-- Auth.js (NextAuth v5)
-- Vitest + Testing Library
+
+- **Next.js 16**（App Router）+ **React 19** + **TypeScript 5**
+- **Tailwind CSS v4** + **shadcn/ui** + Radix UI
+- **Auth**：共享 SSO SDK [`auth-client-web`](https://github.com/HyxiaoGe/auth-client-web)（重定向到 auth-service 完成 Google/GitHub OAuth，令牌存 localStorage）。> 注：`next-auth` 仍在 `package.json` 中但为**历史残留依赖**，主认证流程不经 NextAuth。
+- **状态管理**：Zustand
+- **实时**：WebSocket
+- **测试**：Vitest + Testing Library
+- **主题**：next-themes（明/暗）
 
 ## Quick Start / 本地启动
+
 ```bash
 npm install
+cp .env.example .env.local   # 按需填写
 npm run dev
 ```
-Open http://localhost:3000
+
+打开 http://localhost:3000
+
+> 需配合后端（`ai-audio-assistant-web`，默认 `http://localhost:8088`）与 auth-service（默认 `http://localhost:8100`）一起运行。
 
 ## Environment / 环境变量
-参考 `.env.example`（建议复制为 `.env.local`）。
+
+复制 `.env.example` 为 `.env.local` 后按需调整。所有前端可见变量均以 `NEXT_PUBLIC_` 开头。
 
 | 变量名 | 说明 | 示例 |
 | --- | --- | --- |
-| `AUTH_SECRET` | Auth.js 密钥 | `xxxxx` |
-| `AUTH_GOOGLE_ID` | Google OAuth Client ID | `xxxxx` |
-| `AUTH_GOOGLE_SECRET` | Google OAuth Secret | `xxxxx` |
-| `AUTH_GITHUB_ID` | GitHub OAuth Client ID | `xxxxx` |
-| `AUTH_GITHUB_SECRET` | GitHub OAuth Secret | `xxxxx` |
 | `NEXT_PUBLIC_APP_URL` | 前端访问地址 | `http://localhost:3000` |
-
-## Docs / 文档
-- `docs/README.md`：文档入口
-- `docs/PRD.md` / `docs/ARCH.md`：产品与架构说明
-- `docs/API.md`：接口契约
+| `NEXT_PUBLIC_API_BASE_URL` | 后端 API 基址 | `http://localhost:8088/api/v1` |
+| `NEXT_PUBLIC_API_URL` | 后端源站（WebSocket / 媒体） | `http://localhost:8088` |
+| `NEXT_PUBLIC_AUTH_URL` | auth-service 地址 | `http://localhost:8100` |
+| `NEXT_PUBLIC_AUTH_CLIENT_ID` | 本应用在 auth-service 注册的 client id | `app_your_client_id` |
 
 ## Scripts / 常用命令
-- `npm run dev`：本地开发
-- `npm run lint`：代码检查
-- `npm run test`：单元测试
 
-## Contributing / 贡献指南
-见 `CONTRIBUTING.md`。
+| 命令 | 说明 |
+| --- | --- |
+| `npm run dev` | 本地开发（localhost:3000） |
+| `npm run build` | 生产构建 |
+| `npm run start` | 启动生产构建 |
+| `npm run lint` | ESLint（`eslint src`） |
+| `npm run test` | 单元测试（`vitest run`） |
+| `npx tsc --noEmit` | 类型检查 |
 
-## Changelog / 版本变更
-见 `CHANGELOG.md`。
+Pre-commit（husky + lint-staged）会在提交时对暂存文件自动跑 ESLint。
 
-## Roadmap / 路线图
-见 `ROADMAP.md`。
+## Architecture / 架构与数据流（前端视角）
 
-## License
-MIT
-
-## Getting Started
-
-First, run the development server:
-
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```mermaid
+flowchart LR
+  UI[Next.js UI] -->|REST API| BE[FastAPI Backend]
+  UI -->|WebSocket| WS[Task Progress]
+  UI -->|Presigned Direct Upload| S3[(MinIO / OSS / S3)]
+  UI -->|SSO redirect| AUTH[auth-service]
+  BE --> S3
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+前端职责：界面、OAuth 登录流、客户端文件哈希、S3 直传、展示后端错误。前端**不**校验 JWT、不生成预签名、不直连 ASR/LLM、不做数据库操作。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project Structure / 目录结构
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+src/
+├── app/
+│   ├── (auth)/login     # 登录页（公开）
+│   ├── auth/callback    # SSO 回调（公开）
+│   ├── (main)/          # 受保护路由（tasks / explore / discover / admin / settings / stats ...）
+│   └── globals.css      # Tailwind v4 主题（--app-* token）
+├── components/          # ui/(shadcn，勿改) · common · task · layout
+├── lib/                 # api-client.ts（统一 API 客户端）· auth-sdk.ts（SSO 引导）
+├── store/               # Zustand stores
+└── types/               # TypeScript 类型定义
+```
 
-## Learn More
+> 样式与组件约定（`--app-*` token 唯一样式源、用 `className` 任意值类、交互用 `<Button>` 原语、`ui/` 勿改）见 `CLAUDE.md`「样式与组件契约」。
 
-To learn more about Next.js, take a look at the following resources:
+## Docs / 文档
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `docs/README.md`：文档入口
+- `docs/PRD.md`：产品需求
+- `docs/ARCH.md`：前端架构
+- `docs/API.md`：接口契约
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Contributing / 贡献指南
 
-## Deploy on Vercel
+见 [`CONTRIBUTING.md`](CONTRIBUTING.md)；版本变更见 [`CHANGELOG.md`](CHANGELOG.md)。
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## License
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+[MIT](LICENSE)
