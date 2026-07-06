@@ -15,7 +15,13 @@ const mockClient = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/use-api-client", () => ({ useAPIClient: () => mockClient }));
-vi.mock("@/lib/i18n-context", () => ({ useI18n: () => ({ locale: "zh", t: (k: string) => k }) }));
+// t/返回对象必须稳定引用:否则每次渲染都产生新 t → loadSubscriptions(useCallback 依赖 t)
+// 每渲染换新引用 → 依赖它的 effect(挂载加载、搜索防抖)反复重跑,防抖 300ms 定时器永远被
+// 清掉重置、拉取陷入循环。生产里 t 来自 context 天然稳定,此处对齐。
+vi.mock("@/lib/i18n-context", () => {
+  const value = { locale: "zh", t: (k: string) => k };
+  return { useI18n: () => value };
+});
 vi.mock("@/lib/use-date-formatter", () => ({
   useDateFormatter: () => ({ formatRelativeTime: () => "1 天前" }),
 }));
@@ -43,7 +49,16 @@ vi.mock("@/components/youtube/ChannelCard", () => ({
     </button>
   ),
 }));
-vi.mock("@/components/youtube/ChannelSearchInput", () => ({ ChannelSearchInput: () => null }));
+// 搜索框 stub:渲染真实受控 input,便于驱动 onChange 触发防抖搜索。
+vi.mock("@/components/youtube/ChannelSearchInput", () => ({
+  ChannelSearchInput: ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+    <input
+      data-testid="channel-search-input"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  ),
+}));
 // 生产里 Radix Tabs 默认懒挂(非激活 tab 内容不挂载),保留这点对生产是对的:
 // 避免未打开的 tab 提前渲染 VideoCard 及其缩略图。但 Radix Presence 依赖
 // animation/transition 事件,在 jsdom 里切 tab 不可靠挂载内容。为在测试里直达每个
@@ -173,5 +188,47 @@ describe("Subscriptions 频道详情视频加载/错误态", () => {
     await waitFor(() =>
       expect(mockClient.getYouTubeChannelVideos.mock.calls.length).toBeGreaterThan(before)
     );
+  });
+});
+
+describe("Subscriptions 频道搜索无匹配", () => {
+  // 回归:后端全局搜索让「无匹配」时 subscriptions 变空,不能因此把搜索框连同整个头部塌成
+  // 「暂无订阅」(listEmpty),否则用户被困空状态无法清空/改词。应保留搜索框并显示 searchEmpty。
+  it("搜索无结果时保留搜索框并显示 searchEmpty(而非 listEmpty)", async () => {
+    mockClient.getYouTubeStatus.mockResolvedValue({
+      connected: true,
+      subscription_count: 1,
+      needs_reauth: false,
+    });
+    // 无 search → 返回 1 个频道;带 search → 返回空页(模拟无匹配)。
+    mockClient.getYouTubeSubscriptions.mockImplementation((params?: { search?: string }) =>
+      params?.search
+        ? Promise.resolve({ items: [], total: 0, page: 1, page_size: 20 })
+        : Promise.resolve({
+            items: [
+              { channel_id: "c1", channel_title: "频道一", is_hidden: false, is_starred: false },
+            ],
+            total: 1,
+            page: 1,
+            page_size: 20,
+          })
+    );
+    renderPage();
+
+    // 初始频道已加载(确认搜索前有订阅)。
+    expect(await screen.findByTestId("channel-card-stub")).toBeInTheDocument();
+
+    // 输入无匹配关键词,等防抖(300ms)后重新拉取到空结果。
+    fireEvent.change(screen.getByTestId("channel-search-input"), {
+      target: { value: "zzz-nomatch-xyz" },
+    });
+
+    await waitFor(
+      () => expect(screen.getByText("subscriptions.searchEmpty")).toBeInTheDocument(),
+      { timeout: 2000 }
+    );
+    // 关键断言:搜索框仍在(用户可清空/改词),且未误显「未订阅」空状态。
+    expect(screen.getByTestId("channel-search-input")).toBeInTheDocument();
+    expect(screen.queryByText("subscriptions.listEmpty")).not.toBeInTheDocument();
   });
 });
