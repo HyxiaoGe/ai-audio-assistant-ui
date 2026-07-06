@@ -685,6 +685,12 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
   const hasMoreVideos = latestVideos.length < videosTotal;
   const hasMoreChannelVideos = channelVideos.length < channelVideosTotal;
 
+  // 是否处于搜索态。后端全局搜索会在「无匹配」时把 subscriptions 清空,若仅凭
+  // subscriptions.length 判定,搜索框与整个头部会跟着塌成「未订阅」空状态,用户被困无法
+  // 清空/改词。搜索态下始终保留头部控件,并把空列表判为「无匹配」而非「未订阅」。
+  const isSearchingChannels = searchQuery.trim().length > 0;
+  const showChannelControls = subscriptions.length > 0 || isSearchingChannels;
+
   // Handle transcribe action - opens global modal with pre-filled URL
   const handleTranscribe = (videoUrl: string, videoId: string) => {
     openNewTask({ initialVideoUrl: videoUrl, initialYouTubeVideoId: videoId });
@@ -1170,7 +1176,7 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
                         <CardHeader className="pb-3">
                           <div className="flex items-center justify-between">
                             <CardTitle>{t("subscriptions.listTitle")}</CardTitle>
-                            {subscriptions.length > 0 && (
+                            {showChannelControls && (
                               <span
                                 className="text-sm"
                                 style={{ color: "var(--app-text-muted)" }}
@@ -1188,14 +1194,14 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
                             )}
                           </div>
                           {/* Search input */}
-                          {subscriptions.length > 0 && (
+                          {showChannelControls && (
                             <ChannelSearchInput
                               value={searchQuery}
                               onChange={setSearchQuery}
                             />
                           )}
                           {/* Filter buttons */}
-                          {subscriptions.length > 0 && (
+                          {showChannelControls && (
                             <div className="flex items-center gap-2 mt-3">
                               <Button
                                 variant={!starredOnly && !showHidden ? "default" : "outline"}
@@ -1241,26 +1247,28 @@ export default function Subscriptions({ searchParams }: SubscriptionsProps) {
                           ) : subsLoading && subscriptions.length === 0 ? (
                             <ChannelListSkeleton />
                           ) : subscriptions.length === 0 && !subsLoading ? (
-                            <div className="text-center py-8">
-                              <p
-                                className="text-sm"
-                                style={{ color: "var(--app-text-muted)" }}
-                              >
-                                {t("subscriptions.listEmpty")}
-                              </p>
-                              <p
-                                className="text-xs mt-1"
-                                style={{ color: "var(--app-text-muted)" }}
-                              >
-                                {t("subscriptions.listEmptyDesc")}
-                              </p>
-                            </div>
+                            isSearchingChannels ? (
+                              // 搜索无匹配:保留搜索框(见头部 showChannelControls),此处只提示无匹配。
+                              <div className="text-center py-8">
+                                <p className="text-sm text-[var(--app-text-muted)]">
+                                  {t("subscriptions.searchEmpty")}
+                                </p>
+                              </div>
+                            ) : (
+                              // 真正未订阅:引导去同步。
+                              <div className="text-center py-8">
+                                <p className="text-sm text-[var(--app-text-muted)]">
+                                  {t("subscriptions.listEmpty")}
+                                </p>
+                                <p className="text-xs mt-1 text-[var(--app-text-muted)]">
+                                  {t("subscriptions.listEmptyDesc")}
+                                </p>
+                              </div>
+                            )
                           ) : filteredSubscriptions.length === 0 ? (
+                            // subscriptions 非空但被 starred/hidden 过滤清空。
                             <div className="text-center py-8">
-                              <p
-                                className="text-sm"
-                                style={{ color: "var(--app-text-muted)" }}
-                              >
+                              <p className="text-sm text-[var(--app-text-muted)]">
                                 {t("subscriptions.searchEmpty")}
                               </p>
                             </div>
