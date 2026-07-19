@@ -15,6 +15,10 @@ export default function LoginPage() {
         setOpen(false)
         router.push("/")
       }}
+      onAuthenticated={() => {
+        setOpen(false)
+        router.replace("/tasks")
+      }}
       callbackUrl="/tasks"
     />
   )

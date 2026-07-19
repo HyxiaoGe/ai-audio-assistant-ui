@@ -10,13 +10,13 @@
 
 把上传的音视频文件或 YouTube 链接,转成**可核验、可复用、可发现**的结构化理解 —— 带时间戳的转写、结构化摘要、关键要点、待办与配图,并实时推送进度。
 
-这是产品的**前端**(Next.js);后端为独立的 FastAPI 应用 [`ai-audio-assistant-web`](https://github.com/HyxiaoGe/ai-audio-assistant-web),ASR/LLM、存储、数据库等业务逻辑都在后端。本仓只负责界面、OAuth 登录流、客户端文件哈希与对象存储直传;鉴权、提示词等经共享服务打通。
+这是产品的**前端**(Next.js);后端为独立的 FastAPI 应用 [`ai-audio-assistant-web`](https://github.com/HyxiaoGe/ai-audio-assistant-web),ASR/LLM、存储、数据库等业务逻辑都在后端。本仓只负责界面、OAuth/邮箱验证码登录流、客户端文件哈希与对象存储直传;鉴权、提示词等经共享服务打通。
 
 ## 功能特性
 
 以下均为代码中已落地的前端能力:
 
-- **登录与会话** —— 经共享 SSO SDK [`auth-client-web`](https://github.com/HyxiaoGe/auth-client-web) 重定向到 auth-service 完成 Google/GitHub OAuth;登录态驱动导航与受保护路由(`src/middleware.ts`)。
+- **登录与会话** —— 经共享 SSO SDK [`auth-client-web`](https://github.com/HyxiaoGe/auth-client-web) 接入 auth-service，支持 Google/GitHub OAuth 与无密码邮箱验证码登录;登录态驱动导航与受保护路由(`src/middleware.ts`)。
 - **上传体验** —— 客户端 SHA256 计算 + 预签名直传对象存储(MinIO/OSS/S3);命中已有内容秒传提示、失败重试。
 - **YouTube / 发现页** —— 粘贴链接直接转写;`/discover` 关键词搜索 + 热门推荐,对「已有转写」的结果感知并跳转。
 - **公开广场 `/explore`** —— 匿名浏览管理员公开的已完成任务及其转写/摘要。
@@ -33,7 +33,7 @@
 |------|-------------|
 | 框架 | Next.js 16(App Router)+ React 19 + TypeScript 5 |
 | UI | Tailwind CSS v4 + shadcn/ui + Radix UI;`--app-*` token 为唯一样式源(见 `CLAUDE.md`「样式与组件契约」) |
-| 鉴权 | 共享 SSO SDK `auth-client-web` 重定向 auth-service 完成 OAuth,令牌存 localStorage。`next-auth` 仍在 `package.json` 但为**历史残留依赖**,主流程不经它 |
+| 鉴权 | 共享 SSO SDK `auth-client-web` 接入 auth-service 的 OAuth 与邮箱验证码登录,令牌存 localStorage。`next-auth` 仍在 `package.json` 但为**历史残留依赖**,主流程不经它 |
 | 状态 | Zustand(客户端全局态)+ React Server Components |
 | 实时 | 原生 WebSocket(进度推送,自动重连 / 轮询降级) |
 | 主题 | next-themes(明 / 暗) |
@@ -46,11 +46,11 @@ flowchart LR
   UI[Next.js UI] -->|REST /api/v1| BE[FastAPI 后端]
   UI -->|WebSocket| WS[任务实时进度]
   UI -->|预签名直传| S3[(MinIO / OSS / S3)]
-  UI -->|SSO 重定向| AUTH[auth-service]
+  UI -->|OAuth / 邮箱验证码| AUTH[auth-service]
   BE --> S3
 ```
 
-前端职责:界面、OAuth 登录流、客户端文件哈希、对象存储直传、展示后端错误。前端**不**校验 JWT、**不**生成预签名、**不**直连 ASR/LLM、**不**做数据库操作。
+前端职责:界面、OAuth/邮箱验证码登录流、客户端文件哈希、对象存储直传、展示后端错误。前端**不**校验 JWT、**不**生成预签名、**不**直连 ASR/LLM、**不**做数据库操作。
 
 ## 快速开始
 

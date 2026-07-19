@@ -24,11 +24,6 @@
       "count": 5
     }
   },
-  "src/components/auth/LoginModal.tsx": {
-    "no-restricted-syntax": {
-      "count": 10
-    }
-  },
   "src/components/common/EmptyState.tsx": {
     "no-restricted-syntax": {
       "count": 6
@@ -60,11 +55,6 @@
     }
   },
   "src/components/common/PublicTaskCardSkeleton.tsx": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
-  "src/components/layout/AppShell.tsx": {
     "no-restricted-syntax": {
       "count": 2
     }

@@ -10,13 +10,13 @@
 
 Turn uploaded audio/video files or YouTube links into **verifiable, reusable, discoverable** structured understanding — timestamped transcripts, structured summaries, key points, action items, and illustrations, with real-time progress.
 
-This is the **frontend** (Next.js). The backend is a separate FastAPI app, [`ai-audio-assistant-web`](https://github.com/HyxiaoGe/ai-audio-assistant-web), where ASR/LLM, storage, and database logic live. This repository only handles the UI, OAuth login flow, client-side file hashing, and presigned direct upload; auth, prompts, and other shared concerns go through shared services.
+This is the **frontend** (Next.js). The backend is a separate FastAPI app, [`ai-audio-assistant-web`](https://github.com/HyxiaoGe/ai-audio-assistant-web), where ASR/LLM, storage, and database logic live. This repository only handles the UI, OAuth/email verification-code login flows, client-side file hashing, and presigned direct upload; auth, prompts, and other shared concerns go through shared services.
 
 ## Features
 
 All of the following are implemented in the frontend codebase:
 
-- **Login & session** — shared SSO SDK [`auth-client-web`](https://github.com/HyxiaoGe/auth-client-web) redirects to auth-service for Google/GitHub OAuth; session state drives navigation and protected routes (`src/middleware.ts`).
+- **Login & session** — shared SSO SDK [`auth-client-web`](https://github.com/HyxiaoGe/auth-client-web) integrates with auth-service for Google/GitHub OAuth and passwordless email verification-code login; session state drives navigation and protected routes (`src/middleware.ts`).
 - **Upload UX** — client-side SHA256 hashing + presigned direct upload to object storage (MinIO/OSS/S3); instant-upload hint on content match, retry on failure.
 - **YouTube / discover** — transcribe by pasting a link; `/discover` keyword search + trending recommendations, aware of already-transcribed results and deep-linking to them.
 - **Public explore `/explore`** — anonymously browse admin-published completed tasks with their transcripts/summaries.
@@ -33,7 +33,7 @@ All of the following are implemented in the frontend codebase:
 |-------|--------------|
 | Framework | Next.js 16 (App Router) + React 19 + TypeScript 5 |
 | UI | Tailwind CSS v4 + shadcn/ui + Radix UI; `--app-*` tokens are the single source of styling (see `CLAUDE.md` design-system contract) |
-| Auth | Shared SSO SDK `auth-client-web` redirects to auth-service for OAuth, tokens in localStorage. `next-auth` is still in `package.json` but is a **residual dependency**; the main flow does not use it |
+| Auth | Shared SSO SDK `auth-client-web` integrates with auth-service for OAuth and email verification-code login, with tokens in localStorage. `next-auth` is still in `package.json` but is a **residual dependency**; the main flow does not use it |
 | State | Zustand (client global state) + React Server Components |
 | Real-time | Native WebSocket (progress push, auto-reconnect / polling fallback) |
 | Theme | next-themes (light / dark) |
@@ -46,11 +46,11 @@ flowchart LR
   UI[Next.js UI] -->|REST /api/v1| BE[FastAPI Backend]
   UI -->|WebSocket| WS[Task Progress]
   UI -->|Presigned Direct Upload| S3[(MinIO / OSS / S3)]
-  UI -->|SSO redirect| AUTH[auth-service]
+  UI -->|OAuth / email code| AUTH[auth-service]
   BE --> S3
 ```
 
-Frontend responsibilities: UI, OAuth login flow, client-side file hashing, direct upload, and rendering backend errors. The frontend does **not** verify JWTs, generate presigned URLs, call ASR/LLM directly, or touch the database.
+Frontend responsibilities: UI, OAuth/email verification-code login flows, client-side file hashing, direct upload, and rendering backend errors. The frontend does **not** verify JWTs, generate presigned URLs, call ASR/LLM directly, or touch the database.
 
 ## Quick Start
 

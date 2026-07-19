@@ -21,16 +21,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const closeNewTask = useUIStore((s) => s.closeNewTask);
 
   return (
-    <div className="h-screen flex flex-col" style={{ background: "var(--app-bg)" }}>
+    <div className="h-screen flex flex-col bg-[var(--app-bg)]">
       <Header />
       <div className="flex-1 flex overflow-hidden">
         <Sidebar />
-        <main className="flex-1 overflow-y-auto" style={{ background: "var(--app-bg)" }}>
+        <main className="flex-1 overflow-y-auto bg-[var(--app-bg)]">
           {children}
         </main>
       </div>
 
-      <LoginModal isOpen={loginOpen} onClose={closeLogin} callbackUrl={pathname} />
+      <LoginModal
+        isOpen={loginOpen}
+        onClose={closeLogin}
+        onAuthenticated={closeLogin}
+        callbackUrl={pathname}
+      />
       <NewTaskModal
         isOpen={newTaskOpen}
         onClose={closeNewTask}

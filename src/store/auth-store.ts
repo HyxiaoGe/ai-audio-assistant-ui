@@ -52,6 +52,7 @@ interface AuthState {
   // Actions
   initialize: () => Promise<void>
   completeLogin: () => Promise<{ ok: boolean; redirectPath: string; error?: string }>
+  completeEmailCodeLogin: (rawUser: Record<string, unknown>) => void
   getAccessToken: () => Promise<string | null>
   revalidateToken: () => Promise<string | null>
   checkLiveness: () => Promise<void>
@@ -191,6 +192,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return { ok: false, redirectPath: silentReturn, error }
     }
     return { ok: false, redirectPath: "/login", error }
+  },
+
+  completeEmailCodeLogin: (rawUser) => {
+    if (!getStored(ACCESS_TOKEN_KEY)) {
+      throw new Error("邮箱验证码换码完成后缺少 access token")
+    }
+    const user = normalizeUser(rawUser)
+    setStored(USER_INFO_KEY, JSON.stringify(user))
+    set({ user, status: "authenticated" })
   },
 
   getAccessToken: async () => {
