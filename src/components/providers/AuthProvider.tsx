@@ -4,7 +4,7 @@ import { useEffect } from "react"
 import { subscribe as subscribeSdkAuth } from "auth-client-web"
 import { useRouter } from "next/navigation"
 import { useAuthStore } from "@/store/auth-store"
-import { maybeSilentLogin } from "@/lib/sso-probe"
+import { canAutoResumeSession, maybeSilentLogin } from "@/lib/sso-probe"
 import { configureAuth } from "@/lib/auth-sdk"
 import { beginAuthSessionTransition, blockAuthSessionTransition } from "@/lib/auth-session-transition"
 import { useI18n } from "@/lib/i18n-context"
@@ -84,12 +84,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let lastAt = 0
     const probe = () => {
-      // 只在已登录态探测：未登录/加载中无 token 可验，且避免与首屏静默探测竞态。
-      if (useAuthStore.getState().status !== "authenticated") return
+      const currentStatus = useAuthStore.getState().status
+      const path = window.location.pathname + window.location.search
+      const shouldResume =
+        currentStatus === "unauthenticated" && canAutoResumeSession(path)
+      if (currentStatus !== "authenticated" && !shouldResume) return
       const now = Date.now()
       if (now - lastAt < REVALIDATE_DEBOUNCE_MS) return
       lastAt = now
-      void useAuthStore.getState().checkLiveness()
+      if (currentStatus === "authenticated") {
+        void useAuthStore.getState().checkLiveness()
+      } else {
+        // 无本地会话时只做 SDK 的 JSON 恢复探测；中央无会话不会顶层跳转。
+        void useAuthStore.getState().resumeSession()
+      }
     }
     const onVisibility = () => {
       if (document.visibilityState === "visible") probe()

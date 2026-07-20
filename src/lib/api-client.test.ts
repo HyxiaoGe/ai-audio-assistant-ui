@@ -67,6 +67,19 @@ describe("api-client 账户切换响应栅栏", () => {
     await expect(pending).rejects.toBeInstanceOf(AuthSessionTransitionError)
     expect(fetchMock).not.toHaveBeenCalled()
   })
+
+  it("SDK 在 switched 事件投递前阻断 A/B 存储竞态时不发送业务请求", async () => {
+    useAuthStore.setState({
+      getAccessToken: vi.fn(async () => {
+        throw Object.assign(new Error("session switch pending"), { blocking: true })
+      }),
+    })
+    const fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+
+    await expect(createAPIClient().getTasks()).rejects.toMatchObject({ blocking: true })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
 })
 
 // 后端/nginx 接受了连接却永不响应（过载、worker 卡死、上游断开）时，request() 之前没有超时，

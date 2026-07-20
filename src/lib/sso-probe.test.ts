@@ -12,6 +12,7 @@ vi.mock("@/lib/auth-sdk", () => ({
 import { silentLogin } from "auth-client-web"
 
 import {
+  canAutoResumeSession,
   clearSsoReturn,
   hasPendingSsoReturn,
   isSafeReturnPath,
@@ -137,6 +138,19 @@ describe("sso-probe: silent SSO on app load", () => {
     expect(mockedSilentLogin).not.toHaveBeenCalled()
   })
 
+  it("allows JSON session resume on a protected route without a local token", () => {
+    expect(canAutoResumeSession("/tasks")).toBe(true)
+  })
+
+  it("blocks JSON session resume after explicit logout and on public routes", () => {
+    markLoggedOut()
+    expect(canAutoResumeSession("/tasks")).toBe(false)
+
+    sessionStorage.clear()
+    expect(canAutoResumeSession("/")).toBe(false)
+    expect(canAutoResumeSession("/explore?page=2")).toBe(false)
+  })
+
   it("takeSsoReturnPath reads and clears the captured origin", () => {
     sessionStorage.setItem(RETURN_KEY, "/notifications")
     expect(takeSsoReturnPath()).toBe("/notifications")
@@ -146,8 +160,10 @@ describe("sso-probe: silent SSO on app load", () => {
 
   it("clearSsoReturn drops a stale captured origin (so it can't hijack a later interactive login)", () => {
     sessionStorage.setItem(RETURN_KEY, "/stats")
+    sessionStorage.setItem(LOGGED_OUT_KEY, "1")
     clearSsoReturn()
     expect(sessionStorage.getItem(RETURN_KEY)).toBeNull()
+    expect(sessionStorage.getItem(LOGGED_OUT_KEY)).toBeNull()
   })
 
   // hasPendingSsoReturn lets the callback page tell a SILENT-probe transit (RETURN captured

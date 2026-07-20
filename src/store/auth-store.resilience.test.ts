@@ -13,6 +13,7 @@ vi.mock("auth-client-web", () => ({
   login: vi.fn(),
   logout: vi.fn(),
   reconcileSession: vi.fn().mockResolvedValue({ status: "match" }),
+  clearLocalSessionIfCurrent: vi.fn(async () => ({ status: "cleared" })),
   tokenStore: () => ({
     getAccessToken: () => localStorage.getItem("auth_access_token"),
     getUser: () => {
@@ -29,6 +30,18 @@ vi.mock("@/lib/media-ticket", () => ({
   clearMediaTicket: vi.fn(() => {
     statusWhenTicketCleared = useAuthStore.getState().status
   }),
+}))
+vi.mock("@/store/global-store", () => ({
+  useGlobalStore: { getState: () => ({ resetForAuthChange: vi.fn() }) },
+}))
+vi.mock("@/store/user-store", () => ({
+  useUserStore: { getState: () => ({ clearProfile: vi.fn() }) },
+}))
+vi.mock("@/store/discover-store", () => ({
+  useDiscoverStore: { getState: () => ({ reset: vi.fn() }) },
+}))
+vi.mock("@/store/audio-store", () => ({
+  useAudioStore: { getState: () => ({ stop: vi.fn() }) },
 }))
 
 import { fetchUserInfo, getAccessToken, logout } from "auth-client-web"

@@ -10,6 +10,7 @@
 
 import { create } from "zustand"
 import {
+  clearLocalSessionIfCurrent as sdkClearLocalSessionIfCurrent,
   fetchUserInfo as sdkFetchUserInfo,
   getState as sdkGetState,
   getAccessToken as sdkGetAccessToken,
@@ -18,6 +19,7 @@ import {
   logout as sdkLogout,
   reconcileSession as sdkReconcileSession,
   refresh as sdkRefresh,
+  resumeSession as sdkResumeSession,
   tokenStore as sdkTokenStore,
 } from "auth-client-web"
 
@@ -63,6 +65,8 @@ interface AuthState {
   getAccessToken: () => Promise<string | null>
   revalidateToken: () => Promise<string | null>
   reconcileAccount: () => Promise<"unchanged" | "switched" | "blocked">
+  resumeSession: () => Promise<"local_session" | "no_session" | "resumed" | void>
+  settleRemoteSessionLoss: (expectedAccessToken: string | null) => Promise<"cleared" | "switched" | "blocked">
   prepareAccountSwitch: () => Promise<void>
   syncCommittedAccount: (rawUser: Record<string, unknown>) => Promise<void>
   acknowledgeAccountSwitch: () => void
@@ -167,6 +171,16 @@ async function clearUserBoundRuntimeState(): Promise<void> {
 }
 
 let accountSwitchCleanup: Promise<void> | null = null
+let remoteSessionLossCleanup: Promise<"cleared" | "switched" | "blocked"> | null = null
+
+function ensureUserBoundRuntimeCleanup(): Promise<void> {
+  if (accountSwitchCleanup === null) {
+    accountSwitchCleanup = clearUserBoundRuntimeState().finally(() => {
+      accountSwitchCleanup = null
+    })
+  }
+  return accountSwitchCleanup
+}
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
@@ -177,12 +191,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   prepareAccountSwitch: async () => {
     beginAuthSessionTransition()
     set({ status: "synchronizing", accountSwitchError: null, switchedAccountEmail: null })
-    if (accountSwitchCleanup === null) {
-      accountSwitchCleanup = clearUserBoundRuntimeState().finally(() => {
-        accountSwitchCleanup = null
-      })
-    }
-    await accountSwitchCleanup
+    await ensureUserBoundRuntimeCleanup()
   },
 
   syncCommittedAccount: async (rawUser) => {
@@ -210,6 +219,48 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   acknowledgeAccountSwitch: () => set({ switchedAccountEmail: null }),
 
+  settleRemoteSessionLoss: async (expectedAccessToken) => {
+    if (remoteSessionLossCleanup !== null) return remoteSessionLossCleanup
+    // 这是“中央会话已明确失效”的本地收敛，不是用户显式登出：不能写 LOGGED_OUT 守卫，
+    // 否则中央账号随后切到 B 时，本标签会被永久挡在自动恢复之外。
+    remoteSessionLossCleanup = (async () => {
+      beginAuthSessionTransition()
+      set({ status: "synchronizing", accountSwitchError: null, switchedAccountEmail: null })
+      try {
+        // 条件清理在 SDK 的统一会话写锁内完成：只有共享存储仍是实际收到 401 的旧票据
+        // 才删除；兄弟标签已提交 B 时保留 B，避免迟到的 A 清理覆盖新会话。
+        const result = await sdkClearLocalSessionIfCurrent(expectedAccessToken)
+        await ensureUserBoundRuntimeCleanup()
+        if (result.status === "changed") {
+          if (result.user === null) {
+            throw new Error("检测到新会话，但用户信息不完整，请重试")
+          }
+          await get().syncCommittedAccount(result.user as unknown as Record<string, unknown>)
+          return "switched"
+        }
+        completeAuthSessionTransition()
+        set({
+          user: null,
+          status: "unauthenticated",
+          accountSwitchError: null,
+          switchedAccountEmail: null,
+        })
+        return "cleared"
+      } catch (err) {
+        // 旧身份缓存没有确认清完时保持请求屏障，绝不开放 B 的请求能力。
+        blockAuthSessionTransition()
+        set({
+          status: "synchronizing",
+          accountSwitchError: err instanceof Error ? err.message : "旧账户缓存清理未完成，请重试",
+        })
+        return "blocked"
+      }
+    })().finally(() => {
+      remoteSessionLossCleanup = null
+    })
+    return remoteSessionLossCleanup
+  },
+
   initialize: async () => {
     configureAuth()
 
@@ -235,6 +286,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     // 校验/刷新 token。SDK 语义：定论失败（无 refresh token / 轮转被拒）返回 null 且已清空其
     // 自身会话；瞬时网络故障则 throw。两者必须区别对待——瞬时故障不能把用户登出。
+    const expectedAccessToken = getStoredAccessToken()
     let token: string | null
     try {
       token = await sdkGetAccessToken()
@@ -245,12 +297,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return
     }
     if (token === null) {
-      set({ user: null, status: "unauthenticated", accountSwitchError: null })
+      await get().settleRemoteSessionLoss(expectedAccessToken)
       return
     }
 
     // token 有效 → 拉最新 userinfo 富化；userinfo 仅瞬时失败时不应把有效会话登出
-    const sdkUser = await sdkFetchUserInfo(token).catch(() => null)
+    let sdkUser: Awaited<ReturnType<typeof sdkFetchUserInfo>> | null = null
+    try {
+      sdkUser = await sdkFetchUserInfo(token)
+    } catch (err) {
+      if (isAuthRejection(err)) {
+        await get().settleRemoteSessionLoss(token)
+        return
+      }
+    }
     if (sdkUser) {
       const user = normalizeUser(sdkUser as unknown as Record<string, unknown>)
       setStoredUser(user)
@@ -301,11 +361,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   getAccessToken: async () => {
     configureAuth()
+    const expectedAccessToken = getStoredAccessToken()
     try {
       const token = await sdkGetAccessToken()
       if (token === null) {
-        // 定论失败：SDK 已清空自身会话 → 同步反映到 audio 自己的 store（两者非同一 store）
-        set({ user: null, status: "unauthenticated" })
+        // 定论失败：同时清 SDK、宿主认证态和 A 的业务运行态，不留下会阻塞恢复的旧票据。
+        await get().settleRemoteSessionLoss(expectedAccessToken)
       }
       return token
     } catch (error) {
@@ -318,6 +379,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   revalidateToken: async () => {
     configureAuth()
     if (get().status === "synchronizing") return null
+    const expectedAccessToken = getStoredAccessToken()
     // 强制服务端往返(轮换)的取 token 路径。现仅供 api-client 的 401 重试使用:某个受保护请求
     // 被服务端拒为 401(本地 access token 已被别处轮换 / 吊销 / 时钟偏移),必须 sdkRefresh() 拿到
     // 服务端当前有效的(轮换后)新票再重试——不能信 getAccessToken 的本地缓存(会拿回刚被拒的同一
@@ -328,7 +390,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const token = await sdkRefresh()
       if (token === null) {
-        set({ user: null, status: "unauthenticated" })
+        await get().settleRemoteSessionLoss(expectedAccessToken)
       }
       return token
     } catch (error) {
@@ -362,6 +424,46 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
+  resumeSession: async () => {
+    configureAuth()
+    if (get().status !== "unauthenticated") return "local_session"
+    let cleanupStarted = false
+    try {
+      const result = await sdkResumeSession({
+        beforeCommit: async () => {
+          cleanupStarted = true
+          await get().prepareAccountSwitch()
+        },
+      })
+      if (result.status === "no_session") return "no_session"
+
+      if (result.status === "local_session") {
+        // 极窄竞态：同源兄弟标签已在 Web Lock 等待期间完成原子提交。宿主仍必须先清空
+        // A 的运行态，再采用共享存储里的新会话；不能直接把缓存用户灌回去。
+        const stored = getStoredUser()
+        if (stored) {
+          await get().prepareAccountSwitch()
+          await get().syncCommittedAccount(stored)
+        }
+        return "local_session"
+      }
+
+      // beforeCommit 已完成请求屏障与旧缓存清理；这里只采用 SDK 原子提交的 B 会话。
+      await get().syncCommittedAccount(result.user as unknown as Record<string, unknown>)
+      return "resumed"
+    } catch (err) {
+      if (cleanupStarted || get().status === "synchronizing") {
+        blockAuthSessionTransition()
+        set({
+          status: "synchronizing",
+          accountSwitchError: err instanceof Error ? err.message : "账户恢复未完成，请重试",
+        })
+      }
+      // 瞬时网络故障保持未登录终态；下次 focus/visibility 或低频定时器再尝试。
+      return
+    }
+  },
+
   checkLiveness: async () => {
     configureAuth()
     // 已登出 / 加载中无需探测(无 token 可验,且避免与首屏静默探测竞态)
@@ -391,6 +493,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // 据此登出。瞬时网络 / 5xx / 解析失败一律保持登录(宁可漏判一轮也绝不因抖动误登出——漏判由
     // 下一次正常 API 请求的 401 或 token 过期兜住)。覆盖「纯播放 / 纯 SSE 页长时间不发受保护请求」
     // 的 SLO 盲区:scoped media 短票不查 denylist,否则别处登出最坏要等到 token 过期才被感知。
+    const expectedAccessToken = getStoredAccessToken()
     let token: string | null
     try {
       token = await sdkGetAccessToken()
@@ -398,14 +501,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return // 瞬时故障:保持现状,不登出
     }
     if (token === null) {
-      set({ user: null, status: "unauthenticated" }) // 定论失败(刷新被拒 / 无票)
+      await get().settleRemoteSessionLoss(expectedAccessToken) // 定论失败(刷新被拒 / 无票)
       return
     }
     try {
       await sdkFetchUserInfo(token)
     } catch (err) {
       if (isAuthRejection(err)) {
-        set({ user: null, status: "unauthenticated" })
+        await get().settleRemoteSessionLoss(token)
       }
       // 否则瞬时:保持登录
     }
