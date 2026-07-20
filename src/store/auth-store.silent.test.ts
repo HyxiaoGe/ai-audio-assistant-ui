@@ -1,5 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+const {
+  clearMediaTicketMock,
+  resetGlobalMock,
+  clearProfileMock,
+  resetDiscoverMock,
+  stopAudioMock,
+} = vi.hoisted(() => ({
+  clearMediaTicketMock: vi.fn(),
+  resetGlobalMock: vi.fn(),
+  clearProfileMock: vi.fn(),
+  resetDiscoverMock: vi.fn(),
+  stopAudioMock: vi.fn(),
+}))
+
 // Fake the SDK boundary; drive handleCallback per test. We use the REAL sso-probe so the
 // silent-return capture (sessionStorage) is exercised end-to-end with completeLogin.
 vi.mock("auth-client-web", () => ({
@@ -11,19 +25,45 @@ vi.mock("auth-client-web", () => ({
   logout: vi.fn(),
   silentLogin: vi.fn(),
   reconcileSession: vi.fn().mockResolvedValue({ status: "match" }),
+  resumeSession: vi.fn(),
   tokenStore: () => ({
+    getAccessToken: () => localStorage.getItem("auth_access_token"),
+    getUser: () => {
+      const raw = localStorage.getItem("auth_user_info")
+      return raw ? JSON.parse(raw) : null
+    },
     setUser: (user: unknown) => localStorage.setItem("auth_user_info", JSON.stringify(user)),
+    clear: () => localStorage.clear(),
   }),
 }))
-vi.mock("@/lib/media-ticket", () => ({ clearMediaTicket: vi.fn() }))
+vi.mock("@/lib/media-ticket", () => ({ clearMediaTicket: clearMediaTicketMock }))
+vi.mock("@/store/global-store", () => ({
+  useGlobalStore: { getState: () => ({ resetForAuthChange: resetGlobalMock }) },
+}))
+vi.mock("@/store/user-store", () => ({
+  useUserStore: { getState: () => ({ clearProfile: clearProfileMock }) },
+}))
+vi.mock("@/store/discover-store", () => ({
+  useDiscoverStore: { getState: () => ({ reset: resetDiscoverMock }) },
+}))
+vi.mock("@/store/audio-store", () => ({
+  useAudioStore: { getState: () => ({ stop: stopAudioMock }) },
+}))
 
-import { handleCallback, login as sdkLogin, logout as sdkLogout } from "auth-client-web"
+import {
+  handleCallback,
+  login as sdkLogin,
+  logout as sdkLogout,
+  resumeSession as sdkResumeSession,
+} from "auth-client-web"
 
+import { resetAuthSessionTransitionForTests } from "@/lib/auth-session-transition"
 import { loginWithGoogle, useAuthStore } from "./auth-store"
 
 const mockedHandleCallback = vi.mocked(handleCallback)
 const mockedSdkLogout = vi.mocked(sdkLogout)
 const mockedSdkLogin = vi.mocked(sdkLogin)
+const mockedSdkResumeSession = vi.mocked(sdkResumeSession)
 
 const RETURN_KEY = "audio_sso_return"
 const LOGGED_OUT_KEY = "audio_sso_logged_out"
@@ -35,6 +75,7 @@ describe("auth-store completeLogin: silent SSO probe outcomes", () => {
     vi.clearAllMocks()
     localStorage.clear()
     sessionStorage.clear()
+    resetAuthSessionTransitionForTests()
     useAuthStore.setState({ user: null, status: "loading" })
   })
 
@@ -119,11 +160,59 @@ describe("auth-store completeLogin: silent SSO probe outcomes", () => {
 
   it("interactive login clears a stale silent-return so an abandoned probe can't hijack the redirect", () => {
     sessionStorage.setItem(RETURN_KEY, "/stats") // 残留自一个被放弃的静默探测
+    sessionStorage.setItem(LOGGED_OUT_KEY, "1")
     mockedSdkLogin.mockReturnValue(undefined as never)
 
     loginWithGoogle("/admin")
 
     expect(sessionStorage.getItem(RETURN_KEY)).toBeNull()
+    expect(sessionStorage.getItem(LOGGED_OUT_KEY)).toBeNull()
     expect(mockedSdkLogin).toHaveBeenCalledWith("google", { redirectPath: "/admin" })
+  })
+
+  it("resumeSession adopts the SDK atomically committed user and enters authenticated state", async () => {
+    mockedSdkResumeSession.mockImplementation(async (options) => {
+      await options?.beforeCommit?.({ user: USER })
+      localStorage.setItem("auth_access_token", "token-b")
+      localStorage.setItem("auth_refresh_token", "refresh-b")
+      return { status: "resumed", user: USER }
+    })
+    useAuthStore.setState({ user: null, status: "unauthenticated" })
+
+    const result = await useAuthStore.getState().resumeSession()
+
+    expect(result).toBe("resumed")
+    expect(useAuthStore.getState().status).toBe("authenticated")
+    expect(useAuthStore.getState().user?.id).toBe("u1")
+    expect(clearMediaTicketMock).toHaveBeenCalledOnce()
+    expect(resetGlobalMock).toHaveBeenCalledOnce()
+    expect(clearProfileMock).toHaveBeenCalledOnce()
+    expect(resetDiscoverMock).toHaveBeenCalledOnce()
+    expect(stopAudioMock).toHaveBeenCalledOnce()
+  })
+
+  it("resumeSession leaves the host unauthenticated when the central session is absent", async () => {
+    mockedSdkResumeSession.mockResolvedValue({ status: "no_session" })
+    useAuthStore.setState({ user: null, status: "unauthenticated" })
+
+    const result = await useAuthStore.getState().resumeSession()
+
+    expect(result).toBe("no_session")
+    expect(useAuthStore.getState().status).toBe("unauthenticated")
+  })
+
+  it("resumeSession adopts a sibling-tab local_session only after clearing old runtime state", async () => {
+    localStorage.setItem("auth_access_token", "token-b")
+    localStorage.setItem("auth_refresh_token", "refresh-b")
+    localStorage.setItem("auth_user_info", JSON.stringify(USER))
+    mockedSdkResumeSession.mockResolvedValue({ status: "local_session" })
+    useAuthStore.setState({ user: null, status: "unauthenticated" })
+
+    const result = await useAuthStore.getState().resumeSession()
+
+    expect(result).toBe("local_session")
+    expect(clearMediaTicketMock).toHaveBeenCalledOnce()
+    expect(useAuthStore.getState().status).toBe("authenticated")
+    expect(useAuthStore.getState().user?.id).toBe("u1")
   })
 })

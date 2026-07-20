@@ -89,4 +89,43 @@ describe("AuthProvider bootstrap", () => {
     })
     expect(useAuthStore.getState().status).toBe("synchronizing")
   })
+
+  it("SDK 先发 synchronizing 再发 authenticated 时等待旧账户清理后才采用 B", async () => {
+    let releaseCleanup!: () => void
+    const cleanupGate = new Promise<void>((resolve) => {
+      releaseCleanup = resolve
+    })
+    const events: string[] = []
+    const prepareAccountSwitch = vi.fn(async () => {
+      events.push("cleanup:start")
+      await cleanupGate
+      events.push("cleanup:done")
+    })
+    const syncCommittedAccount = vi.fn(async () => {
+      events.push("adopt:B")
+    })
+    useAuthStore.setState({
+      initialize: vi.fn(),
+      prepareAccountSwitch,
+      syncCommittedAccount,
+      status: "unauthenticated",
+      accountSwitchError: null,
+    })
+    mockedMaybe.mockReturnValue(false)
+    render(
+      <AuthProvider>
+        <div />
+      </AuthProvider>
+    )
+
+    sdkSubscriber.current?.({ status: "synchronizing", user: null })
+    useAuthStore.setState({ status: "synchronizing" })
+    sdkSubscriber.current?.({ status: "authenticated", user: { id: "u-b" } })
+    await Promise.resolve()
+    expect(syncCommittedAccount).not.toHaveBeenCalled()
+
+    releaseCleanup()
+    await waitFor(() => expect(syncCommittedAccount).toHaveBeenCalledOnce())
+    expect(events).toEqual(["cleanup:start", "cleanup:done", "adopt:B"])
+  })
 })

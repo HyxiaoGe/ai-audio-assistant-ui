@@ -108,14 +108,43 @@ export function takeSsoReturnPath(): string | null {
 }
 
 /**
- * 清除残留的原始路径——交互式登录开始时调用：一个被放弃的静默探测会留下 RETURN_KEY，
- * 若不清，后续交互式登录的回调会读到它并把用户带到错误的目标页（劫持重定向）。
+ * 交互式登录开始时清理旧生命周期守卫：一个被放弃的静默探测会留下 RETURN_KEY，若不清，
+ * 后续回调会被带到错误目标；过去的显式登出 LOGGED_OUT_KEY 也必须清除，否则新登录完成后
+ * 该标签页仍会永久拒绝自动会话恢复。
  */
 export function clearSsoReturn(): void {
   try {
-    session()?.removeItem(RETURN_KEY)
+    const s = session()
+    s?.removeItem(RETURN_KEY)
+    // 用户重新主动登录代表开启了新的认证生命周期；否则同一标签页中过去一次显式登出留下的
+    // 守卫会永久压住后续的自动会话恢复。
+    s?.removeItem(LOGGED_OUT_KEY)
   } catch {
     // ignore
+  }
+}
+
+function isPublicPath(currentPath: string): boolean {
+  const pathOnly = currentPath.split("?")[0]
+  return pathOnly === "/" || PUBLIC_PATH_PREFIXES.some((prefix) => pathOnly.startsWith(prefix))
+}
+
+/**
+ * 未登录标签页能否执行一次无跳转的中央会话恢复探测。
+ *
+ * 这里只判断宿主侧安全边界；真正的中央 Cookie 探测、PKCE 换票和 token/user 原子提交均由 SDK
+ * 的 resumeSession 负责。sessionStorage 不可用时失败保守，避免绕过显式登出守卫。
+ */
+export function canAutoResumeSession(currentPath: string): boolean {
+  if (typeof window === "undefined") return false
+  if (currentPath.startsWith(CALLBACK_PATH) || isPublicPath(currentPath)) return false
+  const s = session()
+  if (!s) return false
+  try {
+    if (s.getItem(LOGGED_OUT_KEY)) return false
+    return !window.localStorage.getItem(ACCESS_TOKEN_KEY)
+  } catch {
+    return false
   }
 }
 
@@ -133,8 +162,7 @@ export function maybeSilentLogin(currentPath: string): boolean {
   // 先剥掉 query 串再匹配,保证 "/?callbackUrl=..."、"/explore?page=2" 这类带 query 的路径也豁免。
   // /explore* 用前缀匹配;首页 "/" 必须精确匹配——用前缀 "/" 会匹配所有路径、等于全局关掉探针
   // (/settings、/tasks 等都不再探测,安全回归),故首页单独走 pathOnly === "/" 精确判断。
-  const pathOnly = currentPath.split("?")[0]
-  if (pathOnly === "/" || PUBLIC_PATH_PREFIXES.some((prefix) => pathOnly.startsWith(prefix))) return false
+  if (isPublicPath(currentPath)) return false
 
   let loggedOut: string | null
   let probed: string | null

@@ -14,7 +14,14 @@ vi.mock("auth-client-web", async () => {
 // 打一次 denylist 受保护端点，被吊销则翻未登录，【绝不轮换 refresh token】（旧实现每次 focus 都
 // 走 SDK refresh 轮换，慢隧道下失同步会引发被动登出）。触发两路：focus/可见性恢复（即时，去抖）
 // 与低频定时器（兜底覆盖无 focus 事件的空闲页）。约束：只在已登录态触发。
-vi.mock("@/lib/sso-probe", () => ({ maybeSilentLogin: vi.fn(() => false) }))
+const { canAutoResumeSessionMock } = vi.hoisted(() => ({
+  canAutoResumeSessionMock: vi.fn(() => true),
+}))
+
+vi.mock("@/lib/sso-probe", () => ({
+  maybeSilentLogin: vi.fn(() => false),
+  canAutoResumeSession: canAutoResumeSessionMock,
+}))
 
 import { useAuthStore } from "@/store/auth-store"
 
@@ -31,6 +38,7 @@ function renderProvider() {
 describe("AuthProvider focus/visibility liveness probe (read-only SLO)", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    canAutoResumeSessionMock.mockReturnValue(true)
   })
 
   afterEach(() => {
@@ -59,14 +67,41 @@ describe("AuthProvider focus/visibility liveness probe (read-only SLO)", () => {
     expect(checkLiveness).toHaveBeenCalledTimes(1)
   })
 
-  it("does NOT probe on focus when the user is not authenticated", () => {
+  it("resumes the central session on focus when the user is not authenticated", () => {
     const checkLiveness = vi.fn().mockResolvedValue(undefined)
-    useAuthStore.setState({ initialize: vi.fn(), checkLiveness, status: "unauthenticated" })
+    const resumeSession = vi.fn().mockResolvedValue("no_session")
+    useAuthStore.setState({ initialize: vi.fn(), checkLiveness, resumeSession, status: "unauthenticated" })
 
     renderProvider()
     window.dispatchEvent(new Event("focus"))
 
     expect(checkLiveness).not.toHaveBeenCalled()
+    expect(resumeSession).toHaveBeenCalledTimes(1)
+  })
+
+  it("does NOT resume after explicit logout or on an exempt public route", () => {
+    const resumeSession = vi.fn().mockResolvedValue("no_session")
+    canAutoResumeSessionMock.mockReturnValue(false)
+    useAuthStore.setState({ initialize: vi.fn(), resumeSession, status: "unauthenticated" })
+
+    renderProvider()
+    window.dispatchEvent(new Event("focus"))
+
+    expect(canAutoResumeSessionMock).toHaveBeenCalledWith(
+      window.location.pathname + window.location.search
+    )
+    expect(resumeSession).not.toHaveBeenCalled()
+  })
+
+  it("debounces an unauthenticated focus + visibilitychange burst into one resume", () => {
+    const resumeSession = vi.fn().mockResolvedValue("no_session")
+    useAuthStore.setState({ initialize: vi.fn(), resumeSession, status: "unauthenticated" })
+
+    renderProvider()
+    window.dispatchEvent(new Event("focus"))
+    document.dispatchEvent(new Event("visibilitychange"))
+
+    expect(resumeSession).toHaveBeenCalledTimes(1)
   })
 
   it("debounces a focus + visibilitychange burst into a single probe", () => {
@@ -91,6 +126,21 @@ describe("AuthProvider focus/visibility liveness probe (read-only SLO)", () => {
       expect(checkLiveness).not.toHaveBeenCalled() // 挂载不立即探测
       vi.advanceTimersByTime(5 * 60 * 1000) // 推进一个兜底间隔
       expect(checkLiveness).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("runs the low-frequency session resume fallback while unauthenticated", () => {
+    vi.useFakeTimers()
+    try {
+      const resumeSession = vi.fn().mockResolvedValue("no_session")
+      useAuthStore.setState({ initialize: vi.fn(), resumeSession, status: "unauthenticated" })
+
+      renderProvider()
+      expect(resumeSession).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(5 * 60 * 1000)
+      expect(resumeSession).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()
     }
