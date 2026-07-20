@@ -1,12 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("auth-client-web", () => ({
+  configure: vi.fn(),
   fetchUserInfo: vi.fn(),
   getAccessToken: vi.fn(),
   handleCallback: vi.fn(),
   login: vi.fn(),
   logout: vi.fn(),
   refresh: vi.fn(),
+  reconcileSession: vi.fn().mockResolvedValue({ status: "match" }),
+  tokenStore: () => ({
+    getAccessToken: () => localStorage.getItem("auth_access_token"),
+    setUser: (user: unknown) => localStorage.setItem("auth_user_info", JSON.stringify(user)),
+  }),
 }))
 
 import { useAuthStore } from "./auth-store"

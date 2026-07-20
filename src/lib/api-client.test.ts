@@ -1,7 +1,73 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { ApiError } from "@/types/api"
 import { useAuthStore } from "@/store/auth-store"
+import {
+  AuthSessionTransitionError,
+  beginAuthSessionTransition,
+  completeAuthSessionTransition,
+  resetAuthSessionTransitionForTests,
+} from "@/lib/auth-session-transition"
 import { createAPIClient } from "./api-client"
+
+describe("api-client 账户切换响应栅栏", () => {
+  let originalGetAccessToken: () => Promise<string | null>
+
+  beforeEach(() => {
+    originalGetAccessToken = useAuthStore.getState().getAccessToken
+    resetAuthSessionTransitionForTests()
+  })
+
+  afterEach(() => {
+    useAuthStore.setState({ getAccessToken: originalGetAccessToken })
+    resetAuthSessionTransitionForTests()
+    vi.unstubAllGlobals()
+  })
+
+  it("A 的响应在换号后才读完时必须被拒绝，不能写入 B 的页面", async () => {
+    let bodyController: ReadableStreamDefaultController<Uint8Array> | null = null
+    const response = new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          bodyController = controller
+        },
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    )
+    const fetchMock = vi.fn(async () => response)
+    vi.stubGlobal("fetch", fetchMock)
+
+    const pending = createAPIClient("account-a-token").getTasks()
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    beginAuthSessionTransition()
+    bodyController?.enqueue(
+      new TextEncoder().encode(
+        JSON.stringify({ code: 0, message: "ok", data: { items: [] }, traceId: "t" })
+      )
+    )
+    bodyController?.close()
+
+    await expect(pending).rejects.toBeInstanceOf(AuthSessionTransitionError)
+  })
+
+  it("取 A token 期间 B 已完成切换时，不把 A token 绑定到 B epoch", async () => {
+    let resolveToken!: (token: string) => void
+    useAuthStore.setState({
+      getAccessToken: vi.fn(() => new Promise<string>((resolve) => {
+        resolveToken = resolve
+      })),
+    })
+    const fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+
+    const pending = createAPIClient().getTasks()
+    beginAuthSessionTransition()
+    completeAuthSessionTransition()
+    resolveToken("token-a")
+
+    await expect(pending).rejects.toBeInstanceOf(AuthSessionTransitionError)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
 
 // 后端/nginx 接受了连接却永不响应（过载、worker 卡死、上游断开）时，request() 之前没有超时，
 // 返回的 Promise 永不 settle —— loading 永转、mutation 永不回报。这里锁定：请求必须在超时后

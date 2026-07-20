@@ -28,6 +28,11 @@ import type { WsImageReadyData } from "@/types/api";
 import { notifySuccess, notifyError, notifyWarning, notifyInfo } from "@/lib/notify";
 import { getNotificationVariant } from "@/lib/notification-variant";
 import { translateStatic } from "@/lib/i18n-static";
+import {
+  assertAuthSessionStable,
+  captureAuthSessionEpoch,
+  registerAuthBoundCloser,
+} from "@/lib/auth-session-transition";
 
 // Backend may send either the auth handshake (data.type === "authenticated")
 // or a unified envelope { kind, data, traceId }.
@@ -93,6 +98,7 @@ export function makeVisibilityRefetch(
 
 export function useGlobalWebSocket() {
   const authUser = useAuthStore((s) => s.user);
+  const authStatus = useAuthStore((s) => s.status);
   const client = useAPIClient();
   const router = useRouter();
   const wsRef = useRef<WebSocket | null>(null);
@@ -104,6 +110,8 @@ export function useGlobalWebSocket() {
   const reconnectAttemptsRef = useRef(0);
   const isAuthenticatedRef = useRef(false);
   const enabledRef = useRef(true);
+  const connectionEpochRef = useRef<number | null>(null);
+  const releaseAuthCloserRef = useRef<(() => void) | null>(null);
 
   // 用 per-field selector 订阅，避免无 selector 的整店订阅在任意 global state 变化时
   // 都触发本 hook 重跑（这些都是 zustand 稳定 action）。返回值处已用 selector，这里对齐。
@@ -127,7 +135,7 @@ export function useGlobalWebSocket() {
 
   // Start HTTP polling fallback
   const startPolling = useCallback(() => {
-    if (!authUser || pollingIntervalRef.current) return;
+    if (!authUser || authStatus !== "authenticated" || pollingIntervalRef.current) return;
 
     const poll = async () => {
       try {
@@ -154,7 +162,7 @@ export function useGlobalWebSocket() {
     // Poll immediately, then every 5 seconds
     poll();
     pollingIntervalRef.current = setInterval(poll, POLLING_INTERVAL);
-  }, [authUser, client, updateTask]);
+  }, [authUser, authStatus, client, updateTask]);
 
   const showNotificationToast = useCallback(
     (data: WsNotificationData) => {
@@ -191,6 +199,14 @@ export function useGlobalWebSocket() {
   // Handle incoming WebSocket messages
   const handleMessage = useCallback(
     (event: MessageEvent) => {
+      if (!enabledRef.current) return;
+      try {
+        const epoch = connectionEpochRef.current;
+        if (epoch === null) return;
+        assertAuthSessionStable(epoch);
+      } catch {
+        return;
+      }
       let response: WebSocketMessage;
       try {
         response = JSON.parse(event.data);
@@ -246,7 +262,7 @@ export function useGlobalWebSocket() {
 
   // Reconnect with exponential backoff
   const reconnect = useCallback(() => {
-    if (!enabledRef.current || !authUser) return;
+    if (!enabledRef.current || !authUser || authStatus !== "authenticated") return;
 
     const attempts = reconnectAttemptsRef.current;
     if (attempts >= MAX_RECONNECT_ATTEMPTS) {
@@ -268,19 +284,33 @@ export function useGlobalWebSocket() {
       reconnectAttemptsRef.current += 1;
       connectRef.current?.();
     });
-  }, [authUser, startPolling, setWsReconnecting]);
+  }, [authUser, authStatus, startPolling, setWsReconnecting]);
 
   // Connect to WebSocket
   const connect = useCallback(async () => {
-    if (!authUser) return;
+    if (!authUser || authStatus !== "authenticated") return;
+
+    let authEpoch: number;
+    try {
+      authEpoch = captureAuthSessionEpoch();
+    } catch {
+      return;
+    }
 
     // Close existing connection
     if (wsRef.current) {
+      releaseAuthCloserRef.current?.();
+      releaseAuthCloserRef.current = null;
       wsRef.current.close();
     }
 
     // Get authentication token
     const token = await getToken();
+    try {
+      assertAuthSessionStable(authEpoch);
+    } catch {
+      return;
+    }
     if (!token) {
       return;
     }
@@ -314,6 +344,13 @@ export function useGlobalWebSocket() {
     try {
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
+      connectionEpochRef.current = authEpoch;
+      releaseAuthCloserRef.current = registerAuthBoundCloser(() => {
+        if (wsRef.current !== ws) return;
+        enabledRef.current = false;
+        stopPolling();
+        ws.close(4003, "Auth session changed");
+      }, authEpoch);
 
       ws.onopen = () => {
         isAuthenticatedRef.current = false;
@@ -348,6 +385,9 @@ export function useGlobalWebSocket() {
         // 仅当关闭的是当前 socket 时才清理：被 connect() 取代的旧 socket 的延迟 onclose
         // 不得清掉活 socket 的 auth 定时器/引用，也不得触发多余重连。
         closeIfCurrent(wsRef, ws, () => {
+          releaseAuthCloserRef.current?.();
+          releaseAuthCloserRef.current = null;
+          connectionEpochRef.current = null;
           if (authTimeoutRef.current) {
             clearTimeout(authTimeoutRef.current);
           }
@@ -364,7 +404,7 @@ export function useGlobalWebSocket() {
       setWsConnected(false);
       reconnect();
     }
-  }, [authUser, handleMessage, setWsConnected, reconnect]);
+  }, [authUser, authStatus, handleMessage, setWsConnected, reconnect, stopPolling]);
 
   useEffect(() => {
     connectRef.current = () => {
@@ -379,6 +419,9 @@ export function useGlobalWebSocket() {
   // Disconnect
   const disconnect = useCallback(() => {
     enabledRef.current = false;
+    releaseAuthCloserRef.current?.();
+    releaseAuthCloserRef.current = null;
+    connectionEpochRef.current = null;
 
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
@@ -402,15 +445,17 @@ export function useGlobalWebSocket() {
 
   // Connect on mount, disconnect on unmount
   useEffect(() => {
-    if (authUser) {
+    if (authUser && authStatus === "authenticated") {
       enabledRef.current = true;
       connect();
+    } else {
+      disconnect();
     }
 
     return () => {
       disconnect();
     };
-  }, [authUser, connect, disconnect]);
+  }, [authUser, authStatus, connect, disconnect]);
 
   // 窗口重新可见时兜底重取列表 + 未读数（增量推送会漏掉离线期间的事件）。
   useEffect(() => {

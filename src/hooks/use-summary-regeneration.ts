@@ -9,6 +9,7 @@ import {
   createSummaryStreamErrorHandler,
 } from '@/lib/summary-stream';
 import { createStreamThrottle } from '@/lib/stream-throttle';
+import { registerAuthBoundCloser } from '@/lib/auth-session-transition';
 import {
   extractPlaceholderDescription,
   findImagePlaceholders,
@@ -78,6 +79,11 @@ export function useSummaryRegeneration({
   const { t } = useI18n();
 
   const summaryStreamRef = useRef<Record<SummaryRegenerateType, EventSource | null>>({
+    overview: null,
+    key_points: null,
+    action_items: null,
+  });
+  const summaryAuthReleaseRef = useRef<Record<SummaryRegenerateType, (() => void) | null>>({
     overview: null,
     key_points: null,
     action_items: null,
@@ -201,6 +207,8 @@ export function useSummaryRegeneration({
           ) || null
         : null;
 
+      summaryAuthReleaseRef.current[summaryType]?.();
+      summaryAuthReleaseRef.current[summaryType] = null;
       summaryStreamRef.current[summaryType]?.close();
       summaryStreamRef.current[summaryType] = null;
       if (summaryPollRef.current[summaryType]) {
@@ -268,6 +276,16 @@ export function useSummaryRegeneration({
           const streamUrl = `${normalizedBaseUrl}/summaries/${id}/stream?summary_type=${summaryType}&token=${encodeURIComponent(token)}`;
           const eventSource = new EventSource(streamUrl);
           summaryStreamRef.current[summaryType] = eventSource;
+          let unregisterAuthCloser = () => {};
+          const closeEventSource = () => {
+            unregisterAuthCloser();
+            if (summaryAuthReleaseRef.current[summaryType] === unregisterAuthCloser) {
+              summaryAuthReleaseRef.current[summaryType] = null;
+            }
+            eventSource.close();
+          };
+          unregisterAuthCloser = registerAuthBoundCloser(closeEventSource);
+          summaryAuthReleaseRef.current[summaryType] = unregisterAuthCloser;
           let regenerateTriggered = false;
           let connectedReceived = false;
 
@@ -301,7 +319,7 @@ export function useSummaryRegeneration({
               // 出错收尾:先把 buffer 余量立即 flush,已收到的部分内容保持可见,绝不丢字。
               summaryStreamThrottle.flushNow(summaryType);
               window.clearTimeout(connectionTimeout);
-              eventSource.close();
+              closeEventSource();
               summaryStreamRef.current[summaryType] = null;
               setSummaryStreaming((prev) => ({ ...prev, [summaryType]: false }));
               notifyError(message || t("task.retryFailed"));
@@ -398,7 +416,7 @@ export function useSummaryRegeneration({
               window.clearTimeout(imagesTimeoutRef.current);
               imagesTimeoutRef.current = null;
             }
-            eventSource.close();
+            closeEventSource();
             summaryStreamRef.current[summaryType] = null;
             client.getSummary(id).then((result) => {
               buildSummaryState(result.items);
@@ -420,14 +438,14 @@ export function useSummaryRegeneration({
 
             // If no images expected, close connection immediately
             if (!hasImages) {
-              eventSource.close();
+              closeEventSource();
               summaryStreamRef.current[summaryType] = null;
               setSummaryStreaming((prev) => ({ ...prev, [summaryType]: false }));
             } else {
               // Keep connection open for image.ready and images.completed events
               // Set a timeout to close if images.completed never arrives (90s = 60s per image + 30s buffer)
               imagesTimeoutRef.current = window.setTimeout(() => {
-                eventSource.close();
+                closeEventSource();
                 summaryStreamRef.current[summaryType] = null;
                 setSummaryStreaming((prev) => ({ ...prev, [summaryType]: false }));
                 // Mark remaining generating images as failed
@@ -481,8 +499,11 @@ export function useSummaryRegeneration({
   useEffect(() => {
     const summaryStreams = summaryStreamRef.current;
     const summaryPolls = summaryPollRef.current;
+    const summaryAuthReleases = summaryAuthReleaseRef.current;
     return () => {
       (Object.keys(summaryStreams) as SummaryRegenerateType[]).forEach((type) => {
+        summaryAuthReleases[type]?.();
+        summaryAuthReleases[type] = null;
         summaryStreams[type]?.close();
         if (summaryPolls[type]) {
           window.clearInterval(summaryPolls[type] ?? undefined);
