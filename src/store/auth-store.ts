@@ -11,18 +11,23 @@
 import { create } from "zustand"
 import {
   fetchUserInfo as sdkFetchUserInfo,
+  getState as sdkGetState,
   getAccessToken as sdkGetAccessToken,
   handleCallback as sdkHandleCallback,
   login as sdkLogin,
   logout as sdkLogout,
+  reconcileSession as sdkReconcileSession,
   refresh as sdkRefresh,
+  tokenStore as sdkTokenStore,
 } from "auth-client-web"
 
 import { configureAuth } from "@/lib/auth-sdk"
 import { clearSsoReturn, isSafeReturnPath, markLoggedOut, takeSsoReturnPath } from "@/lib/sso-probe"
-
-const ACCESS_TOKEN_KEY = "auth_access_token"
-const USER_INFO_KEY = "auth_user_info"
+import {
+  beginAuthSessionTransition,
+  blockAuthSessionTransition,
+  completeAuthSessionTransition,
+} from "@/lib/auth-session-transition"
 
 export interface AuthUserPreferences {
   locale: string
@@ -47,26 +52,54 @@ const DEFAULT_PREFERENCES: AuthUserPreferences = {
 
 interface AuthState {
   user: AuthUser | null
-  status: "loading" | "authenticated" | "unauthenticated"
+  status: "loading" | "authenticated" | "unauthenticated" | "synchronizing"
+  accountSwitchError: string | null
+  switchedAccountEmail: string | null
 
   // Actions
-  initialize: () => Promise<void>
+  initialize: () => Promise<"unchanged" | "switched" | "blocked" | void>
   completeLogin: () => Promise<{ ok: boolean; redirectPath: string; error?: string }>
   completeEmailCodeLogin: (rawUser: Record<string, unknown>) => void
   getAccessToken: () => Promise<string | null>
   revalidateToken: () => Promise<string | null>
-  checkLiveness: () => Promise<void>
+  reconcileAccount: () => Promise<"unchanged" | "switched" | "blocked">
+  prepareAccountSwitch: () => Promise<void>
+  syncCommittedAccount: (rawUser: Record<string, unknown>) => Promise<void>
+  acknowledgeAccountSwitch: () => void
+  checkLiveness: () => Promise<"unchanged" | "switched" | "blocked" | void>
   logout: () => Promise<void>
 }
 
-function getStored(key: string): string | null {
+function getStoredAccessToken(): string | null {
   if (typeof window === "undefined") return null
-  return localStorage.getItem(key)
+  configureAuth()
+  if (typeof sdkTokenStore !== "function") return localStorage.getItem("auth_access_token")
+  return sdkTokenStore().getAccessToken()
 }
 
-function setStored(key: string, value: string): void {
+function getStoredUser(): Record<string, unknown> | null {
+  if (typeof window === "undefined") return null
+  configureAuth()
+  if (typeof sdkTokenStore !== "function") {
+    const raw = localStorage.getItem("auth_user_info")
+    if (raw === null) return null
+    try {
+      return JSON.parse(raw) as Record<string, unknown>
+    } catch {
+      return null
+    }
+  }
+  return sdkTokenStore().getUser<Record<string, unknown>>()
+}
+
+function setStoredUser(user: AuthUser): void {
   if (typeof window === "undefined") return
-  localStorage.setItem(key, value)
+  configureAuth()
+  if (typeof sdkTokenStore !== "function") {
+    localStorage.setItem("auth_user_info", JSON.stringify(user))
+    return
+  }
+  sdkTokenStore().setUser(user)
 }
 
 /**
@@ -114,25 +147,87 @@ function isAuthRejection(err: unknown): boolean {
   return /\b40[13]\b/.test(msg)
 }
 
+function isBlockingReconcileFailure(err: unknown): boolean {
+  return typeof err === "object" && err !== null && "blocking" in err && err.blocking === true
+}
+
+async function clearUserBoundRuntimeState(): Promise<void> {
+  const [media, global, user, discover, audio] = await Promise.all([
+    import("@/lib/media-ticket"),
+    import("@/store/global-store"),
+    import("@/store/user-store"),
+    import("@/store/discover-store"),
+    import("@/store/audio-store"),
+  ])
+  media.clearMediaTicket()
+  global.useGlobalStore.getState().resetForAuthChange()
+  user.useUserStore.getState().clearProfile()
+  discover.useDiscoverStore.getState().reset()
+  audio.useAudioStore.getState().stop()
+}
+
+let accountSwitchCleanup: Promise<void> | null = null
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   status: "loading",
+  accountSwitchError: null,
+  switchedAccountEmail: null,
+
+  prepareAccountSwitch: async () => {
+    beginAuthSessionTransition()
+    set({ status: "synchronizing", accountSwitchError: null, switchedAccountEmail: null })
+    if (accountSwitchCleanup === null) {
+      accountSwitchCleanup = clearUserBoundRuntimeState().finally(() => {
+        accountSwitchCleanup = null
+      })
+    }
+    await accountSwitchCleanup
+  },
+
+  syncCommittedAccount: async (rawUser) => {
+    if (accountSwitchCleanup !== null) await accountSwitchCleanup
+    const user = normalizeUser(rawUser)
+    const current = get()
+    // 当前标签的 reconcile promise 与 SDK subscriber 会同时看到同一次提交；第一条路径
+    // 已完成采用后，第二条必须幂等退出，避免重复 toast、路由跳转和用户缓存写入。
+    if (
+      current.status === "authenticated" &&
+      current.user?.id === user.id &&
+      current.accountSwitchError === null
+    ) {
+      return
+    }
+    setStoredUser(user)
+    completeAuthSessionTransition()
+    set({
+      user,
+      status: "authenticated",
+      accountSwitchError: null,
+      switchedAccountEmail: user.email,
+    })
+  },
+
+  acknowledgeAccountSwitch: () => set({ switchedAccountEmail: null }),
 
   initialize: async () => {
     configureAuth()
 
-    if (!getStored(ACCESS_TOKEN_KEY)) {
-      set({ user: null, status: "unauthenticated" })
+    if (!getStoredAccessToken()) {
+      set({ user: null, status: "unauthenticated", accountSwitchError: null })
       return
     }
 
+    const reconciliation = await get().reconcileAccount()
+    if (reconciliation === "switched" || reconciliation === "blocked") return reconciliation
+
     // 先用缓存即时上屏；记下缓存用户，后续遇到瞬时网络故障时据此保持已登录
     let cachedUser: AuthUser | null = null
-    const cached = getStored(USER_INFO_KEY)
+    const cached = getStoredUser()
     if (cached) {
       try {
-        cachedUser = normalizeUser(JSON.parse(cached))
-        set({ user: cachedUser, status: "authenticated" })
+        cachedUser = normalizeUser(cached)
+        set({ user: cachedUser, status: "authenticated", accountSwitchError: null })
       } catch {
         // ignore parse errors
       }
@@ -146,11 +241,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch {
       // 瞬时故障此刻无法校验：有缓存用户就维持已登录（真过期时下次 API 调用会触发 401 重认证）；
       // 无可展示用户则落到未登录。
-      if (!cachedUser) set({ user: null, status: "unauthenticated" })
+      if (!cachedUser) set({ user: null, status: "unauthenticated", accountSwitchError: null })
       return
     }
     if (token === null) {
-      set({ user: null, status: "unauthenticated" })
+      set({ user: null, status: "unauthenticated", accountSwitchError: null })
       return
     }
 
@@ -158,15 +253,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const sdkUser = await sdkFetchUserInfo(token).catch(() => null)
     if (sdkUser) {
       const user = normalizeUser(sdkUser as unknown as Record<string, unknown>)
-      setStored(USER_INFO_KEY, JSON.stringify(user))
-      set({ user, status: "authenticated" })
+      setStoredUser(user)
+      set({ user, status: "authenticated", accountSwitchError: null })
     } else if (cachedUser) {
       // token 有效但 userinfo 瞬时失败 → 保持缓存用户的已登录态
-      set({ user: cachedUser, status: "authenticated" })
+      set({ user: cachedUser, status: "authenticated", accountSwitchError: null })
     } else {
       // token 有效但既无最新 userinfo 也无缓存可展示 → 无法呈现用户
-      set({ user: null, status: "unauthenticated" })
+      set({ user: null, status: "unauthenticated", accountSwitchError: null })
     }
+    return "unchanged"
   },
 
   completeLogin: async () => {
@@ -180,8 +276,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     if (result.status === "authenticated") {
       const user = normalizeUser(result.user as unknown as Record<string, unknown>)
-      setStored(USER_INFO_KEY, JSON.stringify(user))
-      set({ user, status: "authenticated" })
+      setStoredUser(user)
+      set({ user, status: "authenticated", accountSwitchError: null })
       return { ok: true, redirectPath: silentReturn || result.redirectPath || "/tasks" }
     }
 
@@ -195,12 +291,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   completeEmailCodeLogin: (rawUser) => {
-    if (!getStored(ACCESS_TOKEN_KEY)) {
+    if (!getStoredAccessToken()) {
       throw new Error("邮箱验证码换码完成后缺少 access token")
     }
     const user = normalizeUser(rawUser)
-    setStored(USER_INFO_KEY, JSON.stringify(user))
-    set({ user, status: "authenticated" })
+    setStoredUser(user)
+    set({ user, status: "authenticated", accountSwitchError: null })
   },
 
   getAccessToken: async () => {
@@ -212,7 +308,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ user: null, status: "unauthenticated" })
       }
       return token
-    } catch {
+    } catch (error) {
+      if (isBlockingReconcileFailure(error)) throw error
       // 瞬时网络故障：不要登出，只让这次取 token 失败（调用方据 null 跳过重试）
       return null
     }
@@ -220,6 +317,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   revalidateToken: async () => {
     configureAuth()
+    if (get().status === "synchronizing") return null
     // 强制服务端往返(轮换)的取 token 路径。现仅供 api-client 的 401 重试使用:某个受保护请求
     // 被服务端拒为 401(本地 access token 已被别处轮换 / 吊销 / 时钟偏移),必须 sdkRefresh() 拿到
     // 服务端当前有效的(轮换后)新票再重试——不能信 getAccessToken 的本地缓存(会拿回刚被拒的同一
@@ -233,15 +331,60 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ user: null, status: "unauthenticated" })
       }
       return token
-    } catch {
+    } catch (error) {
+      if (isBlockingReconcileFailure(error)) throw error
       return null
+    }
+  },
+
+  reconcileAccount: async () => {
+    configureAuth()
+    if (!getStoredAccessToken()) return "unchanged"
+    try {
+      const result = await sdkReconcileSession({
+        beforeCommit: () => get().prepareAccountSwitch(),
+      })
+      if (result.status !== "switched") return "unchanged"
+
+      await get().syncCommittedAccount(result.user as unknown as Record<string, unknown>)
+      return "switched"
+    } catch (err) {
+      if (isBlockingReconcileFailure(err)) {
+        blockAuthSessionTransition()
+        set({
+          status: "synchronizing",
+          accountSwitchError: err instanceof Error ? err.message : "账户同步未完成，请重试",
+        })
+        return "blocked"
+      }
+      // 未确认身份分叉的网络错误不改变现有会话。
+      return "unchanged"
     }
   },
 
   checkLiveness: async () => {
     configureAuth()
     // 已登出 / 加载中无需探测(无 token 可验,且避免与首屏静默探测竞态)
-    if (get().status !== "authenticated") return
+    if (get().status !== "authenticated" && get().status !== "synchronizing") return
+    const reconciliation = await get().reconcileAccount()
+    if (reconciliation === "switched" || reconciliation === "blocked") return reconciliation
+    if (get().status === "synchronizing") {
+      const sdkState = typeof sdkGetState === "function" ? sdkGetState() : null
+      if (sdkState?.status === "authenticated" && sdkState.user) {
+        try {
+          await get().prepareAccountSwitch()
+          await get().syncCommittedAccount(sdkState.user as unknown as Record<string, unknown>)
+          return "switched"
+        } catch (err) {
+          blockAuthSessionTransition()
+          set({
+            status: "synchronizing",
+            accountSwitchError: err instanceof Error ? err.message : "账户缓存清理未完成，请重试",
+          })
+          return "blocked"
+        }
+      }
+    }
     // 只读单点登出探测——【绝不轮换 refresh token】。由 focus/可见性恢复与低频定时器触发:
     // 取本地 access token(sdkGetAccessToken 仅临期才刷),再打一次 auth-service 的 denylist 受
     // 保护端点 userinfo。别处登出后这张 access token 签名仍有效、但被服务端吊销标记拒为 401 →
@@ -266,6 +409,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
       // 否则瞬时:保持登录
     }
+    return "unchanged"
   },
 
   logout: async () => {
@@ -284,7 +428,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch {
       // ignore: 本地清理在下方无条件执行
     }
-    set({ user: null, status: "unauthenticated" })
+    completeAuthSessionTransition()
+    set({
+      user: null,
+      status: "unauthenticated",
+      accountSwitchError: null,
+      switchedAccountEmail: null,
+    })
   },
 }))
 

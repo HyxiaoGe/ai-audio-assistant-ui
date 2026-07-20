@@ -67,6 +67,7 @@ interface GlobalStore {
   wsReconnecting: boolean;
   setWsConnected: (connected: boolean) => void;
   setWsReconnecting: (reconnecting: boolean) => void;
+  resetForAuthChange: () => void;
 }
 
 // ============================================================================
@@ -272,5 +273,21 @@ export const useGlobalStore = create<GlobalStore>((set, get) => ({
 
   setWsReconnecting: (reconnecting: boolean) => {
     set({ wsReconnecting: reconnecting });
+  },
+
+  resetForAuthChange: () => {
+    set({
+      tasks: {},
+      imageReadyEvents: {},
+      notifications: [],
+      unreadCount: 0,
+      notificationsLoaded: false,
+      notificationsLoading: false,
+      notificationsError: null,
+      notificationsPage: 0,
+      notificationsHasMore: true,
+      wsConnected: false,
+      wsReconnecting: false,
+    });
   },
 }));

@@ -4,6 +4,8 @@
  */
 
 import { useAuthStore } from "@/store/auth-store"
+import { tokenStore as sdkTokenStore } from "auth-client-web"
+import { configureAuth } from "@/lib/auth-sdk"
 
 /**
  * Get valid access token (auto-refreshes if expired)
@@ -19,7 +21,8 @@ export async function getToken(): Promise<string | null> {
  */
 export function getTokenSync(): string | null {
   if (typeof window === "undefined") return null
-  return localStorage.getItem("auth_access_token")
+  configureAuth()
+  return sdkTokenStore().getAccessToken()
 }
 
 /**
@@ -27,7 +30,8 @@ export function getTokenSync(): string | null {
  */
 export function isAuthenticated(): boolean {
   if (typeof window === "undefined") return false
-  return localStorage.getItem("auth_access_token") !== null
+  configureAuth()
+  return sdkTokenStore().getAccessToken() !== null
 }
 
 /**
@@ -36,8 +40,6 @@ export function isAuthenticated(): boolean {
 export function clearToken(): void {
   // Handled by auth store logout
   if (typeof window === "undefined") return
-  localStorage.removeItem("auth_access_token")
-  localStorage.removeItem("auth_refresh_token")
-  localStorage.removeItem("auth_token_expiry")
-  localStorage.removeItem("auth_user_info")
+  configureAuth()
+  sdkTokenStore().clear()
 }

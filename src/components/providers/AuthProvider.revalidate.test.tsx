@@ -1,6 +1,14 @@
 import { render } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }) }))
+vi.mock("@/lib/i18n-context", () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+vi.mock("@/lib/notify", () => ({ notifySuccess: vi.fn() }))
+vi.mock("auth-client-web", async () => {
+  const actual = await vi.importActual<typeof import("auth-client-web")>("auth-client-web")
+  return { ...actual, subscribe: vi.fn(() => vi.fn()) }
+})
+
 // 跨应用单点登出（SLO）的前端探测：别处登出后，本标签页手里的 access token 签名仍然有效、
 // 本地无从察觉。AuthProvider 用【只读存活探测】感知它——store.checkLiveness 只读本地 token +
 // 打一次 denylist 受保护端点，被吊销则翻未登录，【绝不轮换 refresh token】（旧实现每次 focus 都

@@ -7,19 +7,19 @@ import { AuthProvider } from "@/components/providers/AuthProvider"
 
 export const Providers = ({ children }: { children: React.ReactNode }) => {
   return (
-    <AuthProvider>
-      <ThemeProvider
-        attribute="class"
-        defaultTheme="system"
-        enableSystem
-        disableTransitionOnChange
-      >
-        <SettingsProvider>
-          <I18nProvider>
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
+      disableTransitionOnChange
+    >
+      <SettingsProvider>
+        <I18nProvider>
+          <AuthProvider>
             {children}
-          </I18nProvider>
-        </SettingsProvider>
-      </ThemeProvider>
-    </AuthProvider>
+          </AuthProvider>
+        </I18nProvider>
+      </SettingsProvider>
+    </ThemeProvider>
   )
 }

@@ -9,6 +9,10 @@ vi.mock("auth-client-web", () => ({
   fetchUserInfo: vi.fn(),
   login: vi.fn(),
   logout: vi.fn(),
+  reconcileSession: vi.fn().mockResolvedValue({ status: "match" }),
+  tokenStore: () => ({
+    setUser: (user: unknown) => localStorage.setItem("auth_user_info", JSON.stringify(user)),
+  }),
 }))
 
 import { handleCallback } from "auth-client-web"

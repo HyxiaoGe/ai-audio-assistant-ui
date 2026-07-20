@@ -6,6 +6,7 @@ import { resolveStreamToken } from '@/lib/stream-ticket';
 import { resolveSummaryStreamBaseUrl, attachSseServerErrorListener } from '@/lib/summary-stream';
 import { ApiError } from '@/types/api';
 import { SUMMARY_POLL_INTERVAL_MS, SUMMARY_OVERALL_TIMEOUT_MS } from '@/lib/summary-constants';
+import { registerAuthBoundCloser } from '@/lib/auth-session-transition';
 import type {
   ComparisonResult,
   SummaryItem,
@@ -48,6 +49,7 @@ export function useSummaryCompare({
   // 该既存泄漏(连同 imagesTimeoutRef 同款)立独立后续修复项。clearCompare/startCompare 重开时正常关流。
   const comparePollRef = useRef<number | null>(null);
   const compareStreamRef = useRef<EventSource | null>(null);
+  const compareAuthReleaseRef = useRef<(() => void) | null>(null);
   const compareExpectedRef = useRef<number>(0);
 
   // ── 派生 memo(modelNameMap 逐字搬自 1617-1626;父级保留同款一份供 renderModelProvenance,
@@ -207,6 +209,8 @@ export function useSummaryCompare({
       window.clearInterval(comparePollRef.current);
       comparePollRef.current = null;
     }
+    compareAuthReleaseRef.current?.();
+    compareAuthReleaseRef.current = null;
     compareStreamRef.current?.close();
     compareStreamRef.current = null;
 
@@ -261,9 +265,19 @@ export function useSummaryCompare({
         const streamUrl = `${normalizedBaseUrl}/summaries/${id}/compare/${comparison.comparison_id}/stream?summary_type=${compareSummaryType}&token=${encodeURIComponent(token)}`;
         const eventSource = new EventSource(streamUrl);
         compareStreamRef.current = eventSource;
+        let unregisterAuthCloser = () => {};
+        const closeEventSource = () => {
+          unregisterAuthCloser();
+          if (compareAuthReleaseRef.current === unregisterAuthCloser) {
+            compareAuthReleaseRef.current = null;
+          }
+          eventSource.close();
+        };
+        unregisterAuthCloser = registerAuthBoundCloser(closeEventSource);
+        compareAuthReleaseRef.current = unregisterAuthCloser;
 
         const handleStreamError = (message?: string) => {
-          eventSource.close();
+          closeEventSource();
           compareStreamRef.current = null;
           setCompareError(message || t("task.compareFailed"));
           startPollingFallback();
@@ -329,7 +343,7 @@ export function useSummaryCompare({
               }
               const completedCount = next.filter((item) => item.status === "completed").length;
               if (completedCount >= expected) {
-                eventSource.close();
+                closeEventSource();
                 compareStreamRef.current = null;
                 setCompareLoading(false);
               }
@@ -370,6 +384,8 @@ export function useSummaryCompare({
       window.clearInterval(comparePollRef.current);
       comparePollRef.current = null;
     }
+    compareAuthReleaseRef.current?.();
+    compareAuthReleaseRef.current = null;
     compareStreamRef.current?.close();
     compareStreamRef.current = null;
   };

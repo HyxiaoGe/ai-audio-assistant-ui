@@ -10,6 +10,10 @@ vi.mock("auth-client-web", () => ({
   login: vi.fn(),
   logout: vi.fn(),
   silentLogin: vi.fn(),
+  reconcileSession: vi.fn().mockResolvedValue({ status: "match" }),
+  tokenStore: () => ({
+    setUser: (user: unknown) => localStorage.setItem("auth_user_info", JSON.stringify(user)),
+  }),
 }))
 vi.mock("@/lib/media-ticket", () => ({ clearMediaTicket: vi.fn() }))
 

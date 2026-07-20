@@ -12,6 +12,14 @@ vi.mock("auth-client-web", () => ({
   fetchUserInfo: vi.fn(),
   login: vi.fn(),
   logout: vi.fn(),
+  reconcileSession: vi.fn().mockResolvedValue({ status: "match" }),
+  tokenStore: () => ({
+    getAccessToken: () => localStorage.getItem("auth_access_token"),
+    getUser: () => {
+      const raw = localStorage.getItem("auth_user_info")
+      return raw === null ? null : JSON.parse(raw)
+    },
+  }),
 }))
 
 // Observe ordering in logout(): the media ticket must be cleared BEFORE the store flips to
@@ -70,6 +78,18 @@ describe("auth-store resilience: transient vs definitive auth failure", () => {
     expect(token).toBeNull()
     expect(useAuthStore.getState().status).toBe("unauthenticated")
     expect(useAuthStore.getState().user).toBeNull()
+  })
+
+  it("getAccessToken: 已确认换号的 blocking 错误必须向请求层传播", async () => {
+    useAuthStore.setState({ user: CACHED_USER, status: "synchronizing" })
+    mockedGetAccessToken.mockRejectedValue(
+      Object.assign(new Error("account switch"), { blocking: true })
+    )
+
+    await expect(useAuthStore.getState().getAccessToken()).rejects.toMatchObject({
+      blocking: true,
+    })
+    expect(useAuthStore.getState().status).toBe("synchronizing")
   })
 
   // ── initialize() ────────────────────────────────────────────────────────────

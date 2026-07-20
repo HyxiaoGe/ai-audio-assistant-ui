@@ -433,6 +433,14 @@
     "loginWithGoogle": "Continue with Google",
     "loginWithGitHub": "Continue with GitHub",
     "emailCodeLogin": "Sign in with email verification code",
+    "accountSwitch": {
+      "syncingTitle": "Synchronizing your account",
+      "syncingDescription": "Your account changed in another app. Switching securely now.",
+      "blockedTitle": "Account synchronization incomplete",
+      "retry": "Retry synchronization",
+      "completed": "Signed-in account switched",
+      "completedWithEmail": "Signed-in account switched to {email}"
+    },
     "emailCode": {
       "title": "Sign in with email",
       "description": "Enter your email address and we'll send you a verification code. If this is your first time, we'll create your account automatically.",

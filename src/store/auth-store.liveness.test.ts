@@ -17,6 +17,10 @@ vi.mock("auth-client-web", () => ({
   fetchUserInfo: vi.fn(),
   login: vi.fn(),
   logout: vi.fn(),
+  reconcileSession: vi.fn().mockResolvedValue({ status: "match" }),
+  tokenStore: () => ({
+    getAccessToken: () => localStorage.getItem("auth_access_token"),
+  }),
 }))
 
 import { fetchUserInfo, getAccessToken, refresh } from "auth-client-web"

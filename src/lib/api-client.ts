@@ -12,6 +12,13 @@ import { getToken } from "@/lib/auth-token"
 import { recordBackendVersion } from "@/store/version-store"
 import { translateStatic } from "@/lib/i18n-static"
 import {
+  AuthSessionTransitionError,
+  assertAuthSessionStable,
+  captureAuthSessionEpoch,
+  getAuthSessionTransitionState,
+  registerAuthBoundController,
+} from "@/lib/auth-session-transition"
+import {
   AdminCostsResponse,
   AdminUserTasksResponse,
   AllowlistEntry,
@@ -175,8 +182,10 @@ async function request<T>(
 ): Promise<T> {
   // 取 token 可能触发 SDK refresh（经隧道 0.5-1.5s）：token 临期时所有并发请求会被同一次
   // refresh 集体闸住——这是认证请求的必要代价，公开请求走下面的 publicRequest 免排队。
+  const authEpoch = captureAuthSessionEpoch()
   const authToken = await getAuthToken(token)
-  return dispatchRequest<T>(endpoint, options, authToken)
+  assertAuthSessionStable(authEpoch)
+  return dispatchRequest<T>(endpoint, options, authToken, authEpoch)
 }
 
 /**
@@ -200,7 +209,8 @@ async function publicRequest<T>(
 async function dispatchRequest<T>(
   endpoint: string,
   options: RequestInit,
-  authToken: string | null
+  authToken: string | null,
+  expectedEpoch?: number
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`
   const locale = getLocale()
@@ -219,6 +229,10 @@ async function dispatchRequest<T>(
   // 超时/中断控制：到点 abort，所有 fetch 共用同一信号；finally 里清理定时器。
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  let authRequest: ReturnType<typeof registerAuthBoundController> | null = null
+  if (authToken) {
+    authRequest = registerAuthBoundController(controller, expectedEpoch)
+  }
 
   try {
     let response = await fetch(url, {
@@ -226,6 +240,7 @@ async function dispatchRequest<T>(
       headers,
       signal: controller.signal,
     })
+    if (authRequest) assertAuthSessionStable(authRequest.epoch)
 
     // 401 时强制服务端校验后重试。用 revalidateToken（走 SDK refresh 真往返）而非
     // getAccessToken（未过期时直接返回本地缓存）：401 已表明服务端不接受这张令牌，可能是
@@ -234,16 +249,22 @@ async function dispatchRequest<T>(
     // 注：publicRequest（匿名通道）的目标端点零鉴权、不返回 401，此分支对其为死代码——
     // 即使理论上触发，revalidateToken 也只是一次无害的会话校验，不影响匿名请求语义。
     if (response.status === 401 && typeof window !== "undefined") {
+      authRequest?.release()
+      authRequest = null
+      const refreshEpoch = captureAuthSessionEpoch()
       const { useAuthStore } = await import("@/store/auth-store")
       const newToken = await useAuthStore.getState().revalidateToken()
       if (newToken && newToken !== authToken) {
+        assertAuthSessionStable(refreshEpoch)
         headers["Authorization"] = `Bearer ${newToken}`
         // 重试用全新的 controller/timeout：首个 controller 可能已接近或到达超时被 abort，
         // 复用其信号会让重试立刻以 AbortError 失败。
         const retryController = new AbortController()
         const retryTimeoutId = setTimeout(() => retryController.abort(), REQUEST_TIMEOUT_MS)
         try {
+          if (newToken) authRequest = registerAuthBoundController(retryController, refreshEpoch)
           response = await fetch(url, { ...options, headers, signal: retryController.signal })
+          if (authRequest) assertAuthSessionStable(authRequest.epoch)
         } finally {
           clearTimeout(retryTimeoutId)
         }
@@ -268,6 +289,7 @@ async function dispatchRequest<T>(
     const retryAfterParsed = retryAfterRaw ? Number.parseInt(retryAfterRaw, 10) : NaN
     const retryAfterSec = Number.isFinite(retryAfterParsed) ? retryAfterParsed : undefined
     const rawBody = await response.text()
+    if (authRequest) assertAuthSessionStable(authRequest.epoch)
 
     let result: ApiResponse<T> | undefined
     if (rawBody) {
@@ -300,6 +322,12 @@ async function dispatchRequest<T>(
     // 如果已经是 ApiError，直接抛出
     if (error instanceof ApiError) {
       throw error
+    }
+    if (
+      error instanceof AuthSessionTransitionError ||
+      getAuthSessionTransitionState() !== "stable"
+    ) {
+      throw new AuthSessionTransitionError()
     }
 
     // 超时/中断：AbortController 触发（浏览器与 undici 均抛 AbortError 的 DOMException），
@@ -339,6 +367,7 @@ async function dispatchRequest<T>(
     )
   } finally {
     clearTimeout(timeoutId)
+    authRequest?.release()
   }
 }
 
