@@ -10,8 +10,6 @@ services:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
         NEXT_PUBLIC_AUTH_URL: ${NEXT_PUBLIC_AUTH_URL}
         NEXT_PUBLIC_AUTH_CLIENT_ID: ${NEXT_PUBLIC_AUTH_CLIENT_ID}
-    ports:
-      - "3002:3000"
     restart: unless-stopped
     mem_limit: 128m
     networks:
