@@ -147,8 +147,6 @@ jobs:
               image: ${{ env.IMAGE_NAME }}:${{ github.sha }}
               container_name: ai-audio-assistant-ui
               restart: always
-              ports:
-                - "3002:3000"
               environment:
                 - NODE_ENV=production
               deploy:
