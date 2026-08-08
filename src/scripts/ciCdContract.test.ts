@@ -50,10 +50,22 @@ afterEach(() => {
 
 function read(path: string): string {
   try {
-    return readFileSync(path, "utf8")
+    return normalizeNewlines(readFileSync(path, "utf8"))
   } catch {
     throw new Error(`缺少文件：${relative(ROOT, path)}`)
   }
+}
+
+function normalizeNewlines(value: string): string {
+  return value.replace(/\r\n?/g, "\n")
+}
+
+function portablePath(value: string): string {
+  return value.replace(/\\/g, "/")
+}
+
+function directoryLinkType(platform: string = process.platform): "dir" | "junction" {
+  return platform === "win32" ? "junction" : "dir"
 }
 
 function escapeRegExp(value: string): string {
@@ -61,7 +73,7 @@ function escapeRegExp(value: string): string {
 }
 
 function indentedBlock(text: string, key: string, indent: number): string {
-  const lines = text.split("\n")
+  const lines = normalizeNewlines(text).split("\n")
   const prefix = " ".repeat(indent)
   const startPattern = new RegExp(`^${escapeRegExp(prefix + key)}:\\s*(?:#.*)?$`)
   const siblingPattern = new RegExp(`^${escapeRegExp(prefix)}\\S[^:]*:\\s*(?:.*)$`)
@@ -245,7 +257,7 @@ function parseUsesLine(line: string): Omit<UsesOccurrence, "lineNumber"> | null 
 }
 
 function usesOccurrences(text: string): UsesOccurrence[] {
-  return text.split("\n").flatMap((line, index) => {
+  return normalizeNewlines(text).split("\n").flatMap((line, index) => {
     const parsed = parseUsesLine(line)
     return parsed ? [{ lineNumber: index + 1, ...parsed }] : []
   })
@@ -386,7 +398,7 @@ function validateActionFiles(repoRoot: string): string[] {
       try {
         assertExternalActionPin(value, comment)
       } catch (error) {
-        throw new Error(`${relative(root, path)}:${lineNumber}: ${(error as Error).message}`)
+        throw new Error(`${portablePath(relative(root, path))}:${lineNumber}: ${(error as Error).message}`)
       }
     }
   }
@@ -632,6 +644,26 @@ describe("Action pin scanner", () => {
     }
   })
 
+  it("解析 Windows CRLF workflow 时不把回车带入 uses 与顶层块", () => {
+    const text = [
+      "permissions:",
+      "  contents: read",
+      "jobs:",
+      "  validate:",
+      "    steps:",
+      `      - uses: actions/checkout@${CHECKOUT_SHA} # v6`,
+      "",
+    ].join("\r\n")
+
+    expect(indentedBlock(text, "permissions", 0).trimEnd().split("\n")).toEqual([
+      "permissions:",
+      "  contents: read",
+    ])
+    expect(usesOccurrences(text).map(({ value, comment }) => [value, comment])).toEqual([
+      [`actions/checkout@${CHECKOUT_SHA}`, "# v6"],
+    ])
+  })
+
   it("递归解析本地 Action、纳入未引用 manifest 并安全终止循环", () => {
     const root = temporaryRoot()
     writeFixture(root, ".github/workflows/ci.yml", "steps:\n  - uses: ./custom/entry\n")
@@ -639,13 +671,23 @@ describe("Action pin scanner", () => {
     writeFixture(root, "custom/loop/action.yaml", "steps:\n  - uses: ./custom/file-action.yml\n")
     writeFixture(root, "custom/file-action.yml", `steps:\n  - uses: ./custom/entry\n  - uses: owner/action@${"a".repeat(40)} # v1\n`)
     writeFixture(root, ".github/actions/unreferenced/action.yaml", "runs:\n  using: composite\n")
-    expect(validateActionFiles(root).map((path) => relative(realpathSync(root), path))).toEqual([
+    expect(validateActionFiles(root).map((path) => portablePath(relative(realpathSync(root), path)))).toEqual([
       ".github/actions/unreferenced/action.yaml",
       ".github/workflows/ci.yml",
       "custom/entry/action.yml",
       "custom/file-action.yml",
       "custom/loop/action.yaml",
     ])
+  })
+
+  it("将 Windows 路径统一为可审计的 POSIX 相对路径", () => {
+    expect(portablePath(".github\\workflows\\ci.yml")).toBe(".github/workflows/ci.yml")
+    expect(portablePath("custom/entry/action.yml")).toBe("custom/entry/action.yml")
+  })
+
+  it("Windows 使用无需符号链接权限的目录 junction 验证真实路径逃逸", () => {
+    expect(directoryLinkType("win32")).toBe("junction")
+    expect(directoryLinkType("darwin")).toBe("dir")
   })
 
   it("拒绝本地 Action 缺失、逃逸及目录无 manifest", () => {
@@ -662,13 +704,15 @@ describe("Action pin scanner", () => {
   it("按真实路径拒绝仓内 symlink 指向仓外 Action 文件或目录", () => {
     const root = temporaryRoot()
     const outside = temporaryRoot()
-    writeFixture(outside, "file-action.yml", "runs:\n  using: composite\n")
-    symlinkSync(join(outside, "file-action.yml"), join(root, "linked-action.yml"), "file")
-    writeFixture(root, ".github/workflows/ci.yml", "steps:\n  - uses: ./linked-action.yml\n")
-    expect(() => collectActionFiles(root)).toThrow("真实路径不能逃逸仓库根目录")
+    if (process.platform !== "win32") {
+      writeFixture(outside, "file-action.yml", "runs:\n  using: composite\n")
+      symlinkSync(join(outside, "file-action.yml"), join(root, "linked-action.yml"), "file")
+      writeFixture(root, ".github/workflows/ci.yml", "steps:\n  - uses: ./linked-action.yml\n")
+      expect(() => collectActionFiles(root)).toThrow("真实路径不能逃逸仓库根目录")
+    }
 
     writeFixture(outside, "directory-action/action.yml", "runs:\n  using: composite\n")
-    symlinkSync(join(outside, "directory-action"), join(root, "linked-action"), "dir")
+    symlinkSync(join(outside, "directory-action"), join(root, "linked-action"), directoryLinkType())
     writeFixture(root, ".github/workflows/ci.yml", "steps:\n  - uses: ./linked-action\n")
     expect(() => collectActionFiles(root)).toThrow("真实路径不能逃逸仓库根目录")
   })
