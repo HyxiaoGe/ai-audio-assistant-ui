@@ -581,19 +581,18 @@ describe("master release workflow", () => {
 
     const finalize = jobBlock(text, "finalize")
     expect(stepBlocks(finalize).filter((step) => stepName(step) === "Push CI/CD metrics")).toHaveLength(1)
-    expect(stepBlocks(finalize).filter((step) => stepName(step) === "通知飞书(部署结果)")).toHaveLength(1)
+    expect(stepBlocks(finalize).filter((step) => stepName(step) === "通知飞书(部署结果)")).toHaveLength(0)
+    expect(text).not.toContain("FEISHU_INFRA_WEBHOOK")
     const resolveStatus = stepByName(finalize, "Resolve final release status")
     expect(resolveStatus).toContain("PUBLISH_RESULT: ${{ needs.publish.result }}")
     expect(resolveStatus).toContain("DEPLOY_RESULT: ${{ needs.deploy.result }}")
     expect(resolveStatus).toMatch(/if \[ "\$PUBLISH_RESULT" = "success" \] && \[ "\$DEPLOY_RESULT" = "success" \]; then/)
     expect(resolveStatus).toContain("final_status=failure")
 
-    for (const name of ["Push CI/CD metrics", "通知飞书(部署结果)"]) {
-      const step = stepByName(finalize, name)
-      expect(step).toMatch(/^        if: always\(\)\s*$/m)
-      expect(step).toMatch(/^        continue-on-error: true\s*$/m)
-      expect(step).toMatch(/^        timeout-minutes: 2\s*$/m)
-    }
+    const metrics = stepByName(finalize, "Push CI/CD metrics")
+    expect(metrics).toMatch(/^        if: always\(\)\s*$/m)
+    expect(metrics).toMatch(/^        continue-on-error: true\s*$/m)
+    expect(metrics).toMatch(/^        timeout-minutes: 2\s*$/m)
     expect(finalize).toContain("${{ steps.final_status.outputs.status }}")
     expect(stepByName(finalize, "Fail unsuccessful release")).toMatch(/exit 1/)
     expect(finalize).not.toMatch(/deployment:\s*true/)
