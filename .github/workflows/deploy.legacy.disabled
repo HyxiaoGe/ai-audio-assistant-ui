@@ -1,8 +1,7 @@
-name: Deploy to Dev Server (Legacy / Manual Fallback)
+name: Deploy to Dev Server (Legacy / Disabled Archive)
 
-# 主流水线已切到 build-and-deploy.yml（Windows runner build → push GHCR → dev pull）。
-# 这个 workflow 退化成 GHCR 故障 / Windows runner 离线时的手动应急入口：dev 自 build。
-# 不再随 master push 触发，避免和 GHCR 路径双跑造成镜像版本冲突。
+# 主流水线已切到 build-and-deploy.yml。此文件仅作可逆历史存档；.disabled 后缀
+# 不会被 GitHub 识别为 workflow，也不得作为绕过发布边界的手动入口。
 on:
   workflow_dispatch:
 
@@ -11,10 +10,12 @@ jobs:
     runs-on: [self-hosted, Linux, X64]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
 
       - name: Record start time
-        run: echo "BUILD_START=$(date +%s)" >> $GITHUB_ENV
+        run: echo "BUILD_START=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: Deploy
         run: |

@@ -2,8 +2,9 @@ name: AI Audio UI Build & Deploy
 
 on:
   push:
+    branches: [master]
     # 纯文档改动跳过整条 build+deploy(仅这些文件时不触发)。
-    # 文档+代码混合的 push 仍照常部署;需强制部署走下方 workflow_dispatch。
+    # 文档+代码混合的 push 仍照常部署；需强制部署走下方 workflow_dispatch。
     paths-ignore:
       - '**.md'
       - 'docs/**'
@@ -16,20 +17,21 @@ permissions:
 
 concurrency:
   group: ai-audio-ui-build-deploy-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
-# 镜像源:阿里云 ACR 个人版(深圳),替代原 ghcr.io。
-# 动机:Windows 构建机与 dev 部署机同处国内,镜像却经 ghcr(海外 Fastly)跨境往返一圈,
-# 大镜像在 GFW 链路上 pull 反复被 reset(部署反复栽在 Login/Pull GHCR)。改走境内 ACR 去掉跨境跳。
 env:
   REGISTRY: crpi-77w10wlykpqilmmb.cn-shenzhen.personal.cr.aliyuncs.com
   IMAGE_NAME: crpi-77w10wlykpqilmmb.cn-shenzhen.personal.cr.aliyuncs.com/seanfield/ai-audio-assistant-ui
 
 jobs:
-  build:
-    name: Build on Windows runner
+  publish:
+    name: Publish master image on Windows runner
+    if: github.ref == 'refs/heads/master'
     runs-on: [self-hosted, Windows, X64]
-    timeout-minutes: 30
+    timeout-minutes: 40
+    environment:
+      name: dev
+      deployment: false
     outputs:
       started_at: ${{ steps.pipeline_start.outputs.started_at }}
       runner_name: ${{ steps.pipeline_start.outputs.runner_name }}
@@ -55,31 +57,41 @@ jobs:
 
       - name: Push CI/CD active metric
         continue-on-error: true
+        timeout-minutes: 1
         shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
         env:
           PUSHGW_AUTH: ${{ secrets.PUSHGW_BASIC_AUTH }}
         run: |
-          $environment = if ($env:GITHUB_REF_NAME -eq "master") { "dev" } else { "preview" }
-          $branchKey = $env:GITHUB_REF_NAME -replace '[^A-Za-z0-9_.-]', '_'
           $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
           $metrics = @"
           # HELP cicd_pipeline_active Whether a CI/CD pipeline is currently active (1=true, 0=false).
           # TYPE cicd_pipeline_active gauge
-          cicd_pipeline_active{project="ai-audio-assistant-ui",branch="$env:GITHUB_REF_NAME",environment="$environment",runner="${{ runner.name }}"} 1
+          cicd_pipeline_active{project="ai-audio-assistant-ui",branch="master",environment="dev",runner="${{ runner.name }}"} 1
           # HELP cicd_pipeline_active_timestamp_seconds Timestamp of the latest CI/CD active-state update.
           # TYPE cicd_pipeline_active_timestamp_seconds gauge
-          cicd_pipeline_active_timestamp_seconds{project="ai-audio-assistant-ui",branch="$env:GITHUB_REF_NAME",environment="$environment",runner="${{ runner.name }}"} $now
+          cicd_pipeline_active_timestamp_seconds{project="ai-audio-assistant-ui",branch="master",environment="dev",runner="${{ runner.name }}"} $now
           "@
           $body = (($metrics -replace "`r`n", "`n").Trim() + "`n")
           $bytes = [System.Text.Encoding]::UTF8.GetBytes($body)
-          # pushgateway 本体只绑 loopback,经 nginx 9094 鉴权反代推送(凭证在仓库 Secret PUSHGW_BASIC_AUTH)
-          Invoke-WebRequest -UseBasicParsing -Method Post -Uri "http://192.168.1.11:9094/metrics/job/cicd_active/project_key/ai-audio-assistant-ui/branch_key/$branchKey/environment_key/$environment" -ContentType "text/plain; version=0.0.4" -Headers @{ Authorization = "Basic $env:PUSHGW_AUTH" } -Body $bytes -TimeoutSec 5
+          Invoke-WebRequest -UseBasicParsing -Method Post -Uri "http://192.168.1.11:9094/metrics/job/cicd_active/project_key/ai-audio-assistant-ui/branch_key/master/environment_key/dev" -ContentType "text/plain; version=0.0.4" -Headers @{ Authorization = "Basic $env:PUSHGW_AUTH" } -Body $bytes -TimeoutSec 5
+
+      - name: Isolate Docker credentials
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          $dockerConfig = Join-Path $env:RUNNER_TEMP ".docker-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-$env:GITHUB_JOB"
+          if (Test-Path -LiteralPath $dockerConfig) {
+            Remove-Item -LiteralPath $dockerConfig -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path $dockerConfig | Out-Null
+          "DOCKER_CONFIG=$dockerConfig" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 20
 
@@ -91,28 +103,29 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund --cache "%RUNNER_TEMP%\npm-cache"
 
+      - name: Lint
+        run: npm run lint
+
       - name: Build
         run: npm run build
 
       - name: Run tests
         run: npm test
 
-      - name: Login to ACR
-        # cmd 的 `echo %VAR% | docker login --password-stdin` 在 Windows docker 上把口令传歪 → ACR 判 401
-        # (dev bash 同一凭据三元组可成功登录,已排除凭据错)。改 -p 直传参数,绕开 echo/stdin 管道。
-        # runner 为私有自托管机、secret 在 GitHub 日志中被掩码,-p 在此场景安全。
-        run: docker login %REGISTRY% -u %ACR_USERNAME% -p %ACR_PASSWORD%
-        env:
-          ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
-          ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
-
       - name: Build Docker image
         run: |
           docker build --build-arg NEXT_PUBLIC_APP_URL="%NEXT_PUBLIC_APP_URL%" --build-arg NEXT_PUBLIC_API_BASE_URL="%NEXT_PUBLIC_API_BASE_URL%" --build-arg NEXT_PUBLIC_API_URL="%NEXT_PUBLIC_API_URL%" --build-arg NEXT_PUBLIC_AUTH_URL="%NEXT_PUBLIC_AUTH_URL%" --build-arg NEXT_PUBLIC_AUTH_CLIENT_ID="%NEXT_PUBLIC_AUTH_CLIENT_ID%" --build-arg NEXT_PUBLIC_BUILD_SHA=%GITHUB_SHA% -t "%IMAGE_NAME%:%GITHUB_SHA%" .
 
+      - name: Login to ACR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+          logout: false
+
       - name: Push Docker image
-        run: |
-          docker push "%IMAGE_NAME%:%GITHUB_SHA%"
+        run: docker push "%IMAGE_NAME%:%GITHUB_SHA%"
 
       - name: Cleanup local Docker artifacts
         if: always()
@@ -120,22 +133,55 @@ jobs:
           docker image rm "%IMAGE_NAME%:%GITHUB_SHA%" 2>NUL
           docker builder prune --filter "until=72h" -f
 
-  deploy-dev:
+      - name: Cleanup Docker credentials
+        if: always()
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          $expected = [System.IO.Path]::GetFullPath((Join-Path $env:RUNNER_TEMP ".docker-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT-$env:GITHUB_JOB"))
+          $runnerTemp = [System.IO.Path]::GetFullPath($env:RUNNER_TEMP)
+          if ([string]::IsNullOrWhiteSpace($env:DOCKER_CONFIG) -or [System.IO.Path]::GetFullPath($env:DOCKER_CONFIG) -ne $expected) {
+            throw "拒绝清理非本 job 的 DOCKER_CONFIG: $env:DOCKER_CONFIG"
+          }
+          $configPath = [System.IO.Path]::GetFullPath($env:DOCKER_CONFIG)
+          if (-not $configPath.StartsWith($runnerTemp + [System.IO.Path]::DirectorySeparatorChar)) {
+            throw "DOCKER_CONFIG 不在 RUNNER_TEMP 下: $configPath"
+          }
+          if (Test-Path -LiteralPath $configPath) {
+            Remove-Item -LiteralPath $configPath -Recurse -Force
+          }
+
+  deploy:
     name: Deploy master on dev server
     if: github.ref == 'refs/heads/master'
-    needs: build
+    needs: publish
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 10
+    timeout-minutes: 15
+    environment: dev
+    outputs:
+      started_at: ${{ steps.deploy_start.outputs.started_at }}
 
     steps:
       - name: Record deploy start time
-        run: echo "DEPLOY_START=$(date +%s)" >> "$GITHUB_ENV"
+        id: deploy_start
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+
+      - name: Isolate Docker credentials
+        run: |
+          docker_config="${RUNNER_TEMP}/.docker-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}"
+          if [ -e "$docker_config" ]; then
+            echo "DOCKER_CONFIG 路径已存在，拒绝复用: $docker_config"
+            exit 1
+          fi
+          mkdir -p "$docker_config"
+          echo "DOCKER_CONFIG=$docker_config" >> "$GITHUB_ENV"
 
       - name: Login to ACR
-        run: echo "${ACR_PASSWORD}" | docker login "${REGISTRY}" -u "${ACR_USERNAME}" --password-stdin
-        env:
-          ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
-          ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+          logout: false
 
       - name: Pull and restart ai-audio-assistant-ui
         run: |
@@ -160,10 +206,31 @@ jobs:
             ai-audio-network:
               external: true
           EOF
-          # 兜底：清掉旧 compose project（ai-audio-assistant-ui-frontend-1）持有的容器，避免首次切换时端口冲突
           docker rm -f ai-audio-assistant-ui-frontend-1 2>/dev/null || true
           docker rm -f ai-audio-assistant-ui 2>/dev/null || true
           docker compose -f docker-compose.ai-audio-ui-ghcr.yml up -d
+
+      - name: Verify deployed image and version
+        run: |
+          expected_image="${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          actual_image="$(docker inspect --format '{{.Config.Image}}' ai-audio-assistant-ui)"
+          if [ "$actual_image" != "$expected_image" ]; then
+            echo "镜像身份不一致: expected=$expected_image actual=$actual_image"
+            docker logs --tail=120 ai-audio-assistant-ui || true
+            exit 1
+          fi
+
+          for attempt in $(seq 1 30); do
+            if docker exec ai-audio-assistant-ui node -e 'fetch("http://127.0.0.1:3000/version").then(async response => { if (!response.ok) throw new Error(`HTTP ${response.status}`); const payload = await response.json(); if (payload.version !== process.argv[1]) throw new Error(`version mismatch: expected=${process.argv[1]} actual=${payload.version}`) })' "$GITHUB_SHA"; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "版本探活失败，最后一次响应:"
+          docker exec ai-audio-assistant-ui node -e 'fetch("http://127.0.0.1:3000/version").then(response => response.text()).then(console.log)' || true
+          docker logs --tail=120 ai-audio-assistant-ui || true
+          exit 1
 
       - name: Cleanup old images
         if: always()
@@ -174,87 +241,78 @@ jobs:
             | sort -u \
             | xargs -r docker rmi || true
 
+      - name: Cleanup Docker credentials
+        if: always()
+        run: |
+          expected="${RUNNER_TEMP}/.docker-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}"
+          if [ -z "${DOCKER_CONFIG:-}" ] || [ "$DOCKER_CONFIG" != "$expected" ]; then
+            echo "拒绝清理非本 job 的 DOCKER_CONFIG: ${DOCKER_CONFIG:-<empty>}"
+            exit 1
+          fi
+          case "$DOCKER_CONFIG" in
+            "$RUNNER_TEMP"/.docker-"$GITHUB_RUN_ID"-"$GITHUB_RUN_ATTEMPT"-"$GITHUB_JOB") ;;
+            *)
+              echo "DOCKER_CONFIG 不在 RUNNER_TEMP 的 job 隔离路径下: $DOCKER_CONFIG"
+              exit 1
+              ;;
+          esac
+          rm -rf -- "$DOCKER_CONFIG"
+
+  finalize:
+    name: Finalize master release
+    needs: [publish, deploy]
+    if: ${{ always() && github.ref == 'refs/heads/master' }}
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 5
+    environment:
+      name: dev
+      deployment: false
+
+    steps:
+      - name: Resolve final release status
+        id: final_status
+        env:
+          PUBLISH_RESULT: ${{ needs.publish.result }}
+          DEPLOY_RESULT: ${{ needs.deploy.result }}
+          PUBLISH_STARTED_AT: ${{ needs.publish.outputs.started_at }}
+          DEPLOY_STARTED_AT: ${{ needs.deploy.outputs.started_at }}
+          PUBLISH_RUNNER_NAME: ${{ needs.publish.outputs.runner_name }}
+        run: |
+          if [ "$PUBLISH_RESULT" = "success" ] && [ "$DEPLOY_RESULT" = "success" ]; then
+            final_status=success
+          else
+            final_status=failure
+          fi
+
+          pipeline_started_at="${PUBLISH_STARTED_AT:-$(date +%s)}"
+          deploy_started_at="${DEPLOY_STARTED_AT:-$pipeline_started_at}"
+          runner_name="${PUBLISH_RUNNER_NAME:-unknown}"
+          {
+            echo "status=$final_status"
+            echo "pipeline_started_at=$pipeline_started_at"
+            echo "deploy_started_at=$deploy_started_at"
+            echo "runner_name=$runner_name"
+          } >> "$GITHUB_OUTPUT"
+          echo "发布最终状态: publish=$PUBLISH_RESULT deploy=$DEPLOY_RESULT final=$final_status"
+
       - name: Push CI/CD metrics
         if: always()
+        continue-on-error: true
+        timeout-minutes: 2
         run: |
           bash ~/scripts/push-cicd-metrics.sh \
             ai-audio-assistant-ui \
             "${{ github.ref_name }}" \
             dev \
-            "${{ job.status }}" \
-            "${{ needs.build.outputs.started_at }}" \
+            "${{ steps.final_status.outputs.status }}" \
+            "${{ steps.final_status.outputs.pipeline_started_at }}" \
             "${{ env.IMAGE_NAME }}:${{ github.sha }}" \
             "${{ github.sha }}" \
-            "${{ needs.build.outputs.runner_name }}" \
+            "${{ steps.final_status.outputs.runner_name }}" \
             ai-audio-assistant-ui \
-            "${{ env.DEPLOY_START }}"
+            "${{ steps.final_status.outputs.deploy_started_at }}"
 
-      - name: 通知飞书(部署结果)
-        if: always()
-        continue-on-error: true
-        env:
-          FEISHU_INFRA_WEBHOOK: ${{ secrets.FEISHU_INFRA_WEBHOOK }}
-          JOB_STATUS: ${{ job.status }}
-          REPO: ${{ github.repository }}
-          REF_NAME: ${{ github.ref_name }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          # 提交信息可含任意字符,只经 env 传入 python(os.environ→json),绝不进 shell,杜绝注入。
-          COMMIT_MSG: ${{ github.event.head_commit.message }}
-        run: |
-          if [ -z "$FEISHU_INFRA_WEBHOOK" ]; then
-            echo "FEISHU_INFRA_WEBHOOK 未配置,跳过飞书通知"
-            exit 0
-          fi
-          export SHORT_SHA="${GITHUB_SHA:0:7}"
-          export DEPLOY_TS="$(date -u '+%Y-%m-%d %H:%M UTC')"
-          python3 - <<'PY'
-          import json, os, urllib.request
-          ok = os.environ.get("JOB_STATUS") == "success"
-          repo = os.environ.get("REPO", "")
-          ref = os.environ.get("REF_NAME", "")
-          sha = os.environ.get("SHORT_SHA", "")
-          status = os.environ.get("JOB_STATUS", "")
-          ts = os.environ.get("DEPLOY_TS", "")
-          run_url = os.environ.get("RUN_URL", "")
-          raw = os.environ.get("COMMIT_MSG", "") or ""
-          lines = [ln for ln in raw.splitlines() if ln.strip()]
-          msg = "\n".join(lines[:3]) if lines else "(无提交信息)"
-          if len(msg) > 240:
-              msg = msg[:240] + "…"
-          card = {
-              "msg_type": "interactive",
-              "card": {
-                  "config": {"wide_screen_mode": True},
-                  "header": {
-                      "template": "green" if ok else "red",
-                      "title": {"tag": "plain_text",
-                                "content": ("✅ 部署成功 · " if ok else "❌ 部署失败 · ") + repo},
-                  },
-                  "elements": [
-                      {"tag": "div", "text": {"tag": "lark_md", "content": f"**提交信息**\n{msg}"}},
-                      {"tag": "hr"},
-                      {"tag": "div", "fields": [
-                          {"is_short": True, "text": {"tag": "lark_md", "content": f"**分支**\n{ref}"}},
-                          {"is_short": True, "text": {"tag": "lark_md", "content": f"**提交**\n`{sha}`"}},
-                          {"is_short": True, "text": {"tag": "lark_md", "content": f"**结果**\n{status}"}},
-                          {"is_short": True, "text": {"tag": "lark_md", "content": f"**时间**\n{ts}"}},
-                      ]},
-                      {"tag": "action", "actions": [
-                          {"tag": "button", "type": "primary",
-                           "text": {"tag": "plain_text", "content": "查看运行日志"},
-                           "url": run_url}]},
-                      {"tag": "note", "elements": [
-                          {"tag": "plain_text", "content": "🤖 UptimeKuma · CI/CD 部署告警"}]},
-                  ],
-              },
-          }
-          data = json.dumps(card).encode()
-          req = urllib.request.Request(
-              os.environ["FEISHU_INFRA_WEBHOOK"], data=data,
-              headers={"Content-Type": "application/json"})
-          try:
-              with urllib.request.urlopen(req, timeout=15) as r:
-                  print(f"飞书响应 http={r.status} body={r.read().decode()}")
-          except Exception as e:
-              print(f"飞书通知失败(忽略): {e!r}")
-          PY
+
+      - name: Fail unsuccessful release
+        if: ${{ always() && steps.final_status.outputs.status != 'success' }}
+        run: exit 1
