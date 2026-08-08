@@ -1,0 +1,57 @@
+name: PR Container Validation
+
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-audio-ui-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: PR container validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      PR_IMAGE: ai-audio-assistant-ui-pr:${{ github.sha }}
+      NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
+      NEXT_PUBLIC_API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_BASE_URL }}
+      NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+      NEXT_PUBLIC_AUTH_URL: ${{ vars.NEXT_PUBLIC_AUTH_URL }}
+      NEXT_PUBLIC_AUTH_CLIENT_ID: ${{ vars.NEXT_PUBLIC_AUTH_CLIENT_ID }}
+      NEXT_PUBLIC_BUILD_SHA: ${{ github.sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Run complete Vitest suite
+        run: npm test
+
+      - name: Build application
+        run: npm run build
+
+      - name: Build temporary Docker image
+        run: docker build --build-arg NEXT_PUBLIC_APP_URL="${NEXT_PUBLIC_APP_URL}" --build-arg NEXT_PUBLIC_API_BASE_URL="${NEXT_PUBLIC_API_BASE_URL}" --build-arg NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL}" --build-arg NEXT_PUBLIC_AUTH_URL="${NEXT_PUBLIC_AUTH_URL}" --build-arg NEXT_PUBLIC_AUTH_CLIENT_ID="${NEXT_PUBLIC_AUTH_CLIENT_ID}" --build-arg NEXT_PUBLIC_BUILD_SHA="${GITHUB_SHA}" -t "${PR_IMAGE}" .
+
+      - name: Cleanup temporary Docker image
+        if: always()
+        run: docker image rm "${PR_IMAGE}" || true
