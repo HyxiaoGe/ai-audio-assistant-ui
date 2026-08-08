@@ -8,6 +8,7 @@ const ROOT = resolve(import.meta.dirname, "../..")
 const WORKFLOWS = join(ROOT, ".github/workflows")
 const PR_CI = join(WORKFLOWS, "pr-ci.yml")
 const RELEASE = join(WORKFLOWS, "build-and-deploy.yml")
+const DRIFT_AUDIT = join(WORKFLOWS, "baseline-drift-audit.yml")
 
 const CHECKOUT_SHA = "d23441a48e516b6c34aea4fa41551a30e30af803"
 const SETUP_NODE_SHA = "249970729cb0ef3589644e2896645e5dc5ba9c38"
@@ -416,6 +417,29 @@ function temporaryRoot(): string {
   temporaryRoots.push(root)
   return root
 }
+
+describe("Engineering baseline drift audit", () => {
+  it("只按计划或人工触发并使用调用仓库的只读令牌", () => {
+    const text = read(DRIFT_AUDIT)
+    expect(triggerNames(text)).toEqual(new Set(["schedule", "workflow_dispatch"]))
+    expect(indentedBlock(text, "permissions", 0).trimEnd().split("\n")).toEqual([
+      "permissions:",
+      "  actions: read",
+      "  contents: read",
+    ])
+    expect(jobIds(text)).toEqual(["audit"])
+    const job = jobBlock(text, "audit")
+    expect(job).toMatch(/^    runs-on: ubuntu-latest\s*$/m)
+    expect(text).toContain("cancel-in-progress: false")
+    expect(job).toContain(
+      "HyxiaoGe/engineering-baseline/.github/actions/audit@a87c78c4ff6594b4351678bea354ff1f171645e9 # v1.1.0",
+    )
+    expect(job).toContain("repository: ${{ github.repository }}")
+    expect(text).not.toMatch(/\bsecrets\s*(?:\.|\[)/)
+    expect(text).not.toMatch(/^\s*environment\s*:/m)
+    expect(text).not.toContain("self-hosted")
+  })
+})
 
 describe("PR CI workflow", () => {
   it("只监听指向 master 的 pull_request 并按 PR 取消旧任务", () => {
