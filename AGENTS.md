@@ -3,7 +3,7 @@
 ## Project Structure & Module Organization
 - `src/app/` contains Next.js App Router routes, layouts, and route groups like `(auth)` and `(main)`.
 - `src/components/` holds reusable UI building blocks; `src/lib/` contains shared utilities (API client, auth, upload helpers).
-- `src/styles/` and `src/app/globals.css` define global styles; `public/` stores static assets.
+- `src/app/globals.css` defines global styles; `public/` stores static assets.
 - Reviewable engineering and design-system rules live in this tracked file; project overview is in `README.md`, and the tracked testing guide is `docs/TESTING.md`.
 
 ## Build, Test, and Development Commands
@@ -14,7 +14,7 @@
 
 ## Coding Style & Naming Conventions
 - TypeScript/TSX is the default; keep code in `src/` and follow existing patterns.
-- Indentation uses 2 spaces, double quotes, and no semicolons (match current files).
+- Indentation uses 2 spaces, double quotes, and semicolons (match current files).
 - Components use PascalCase (e.g., `TaskCard`), hooks use `useX` naming (e.g., `useUpload`).
 - Prefer named exports unless a Next.js file requires default (e.g., `layout.tsx`).
 

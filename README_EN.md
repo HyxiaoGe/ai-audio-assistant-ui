@@ -32,7 +32,7 @@ All of the following are implemented in the frontend codebase:
 | Layer | Tech / Notes |
 |-------|--------------|
 | Framework | Next.js 16 (App Router) + React 19 + TypeScript 5 |
-| UI | Tailwind CSS v4 + shadcn/ui + Radix UI; `--app-*` tokens are the single source of styling (see `CLAUDE.md` design-system contract) |
+| UI | Tailwind CSS v4 + shadcn/ui + Radix UI; `--app-*` tokens are the semantic source for colors, backgrounds, and borders (see `AGENTS.md`, "Design System Review Rules") |
 | Auth | Shared SSO SDK `auth-client-web` integrates with auth-service for OAuth and email verification-code login, with tokens in localStorage. `next-auth` is still in `package.json` but is a **residual dependency**; the main flow does not use it |
 | State | Zustand (client global state) + React Server Components |
 | Real-time | Native WebSocket (progress push, auto-reconnect / polling fallback) |
@@ -106,17 +106,18 @@ src/
 └── middleware.ts        # login gate for protected routes
 ```
 
-> The design-system contract (`--app-*` tokens as the single styling source, arbitrary-value `className` over inline `style={{}}`, `<Button>` primitive for interactions, `ui/` untouched) is documented in `CLAUDE.md`.
+> The design-system contract (`--app-*` tokens as the semantic source for colors, backgrounds, and borders; the existing Tailwind spacing scale for layout; arbitrary-value `className` over inline `style={{}}`; the `<Button>` primitive for interactions; and `ui/` left untouched) is documented in `AGENTS.md` under "Design System Review Rules".
 
 ## Docs
 
 | Doc | Location | Notes |
 |-----|----------|-------|
+| Engineering & review guide | `AGENTS.md` | project structure, workflow, design system, and Code Review rules |
 | Contributing | `CONTRIBUTING.md` | dev workflow and commit conventions |
 | Testing strategy | `docs/TESTING.md` | Vitest + Testing Library |
 | Env var sample | `.env.example` | frontend environment variables |
 
-> `CLAUDE.md` (design-system contract, directory conventions) is a **local dev doc, not published with the repo**.
+> `CLAUDE.md` remains a local tool-support file; the public, reviewable engineering contract is `AGENTS.md` together with `README.md`.
 
 ---
 
