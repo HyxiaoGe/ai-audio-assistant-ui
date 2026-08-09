@@ -4,7 +4,7 @@
 - `src/app/` contains Next.js App Router routes, layouts, and route groups like `(auth)` and `(main)`.
 - `src/components/` holds reusable UI building blocks; `src/lib/` contains shared utilities (API client, auth, upload helpers).
 - `src/styles/` and `src/app/globals.css` define global styles; `public/` stores static assets.
-- Reviewable engineering and design-system rules live in this tracked file; project overview is in `README.md`. `docs/` holds `TESTING.md` and the per-feature spec/plan archive (`docs/superpowers/`).
+- Reviewable engineering and design-system rules live in this tracked file; project overview is in `README.md`, and the tracked testing guide is `docs/TESTING.md`.
 
 ## Build, Test, and Development Commands
 - `npm run dev`: start the local Next.js dev server at `http://localhost:3000`.
@@ -42,7 +42,7 @@
 
 ## Design System Review Rules
 
-- Use the semantic `--app-*` tokens in `src/app/globals.css` as the only color, background, border, and spacing source; do not introduce hard-coded colors or a parallel palette.
+- Use the semantic `--app-*` tokens in `src/app/globals.css` as the color, background, and border source; use the existing Tailwind spacing scale for layout, and do not introduce hard-coded colors or a parallel palette.
 - Express tokens with Tailwind arbitrary-value `className` utilities rather than inline `style`; runtime-calculated values are the only exception and require the existing ESLint justification comment.
 - Prefer the shared `Button` primitive for interactions. A justified raw `<button>` must preserve themed states and focus-visible behavior and include the existing ESLint justification comment.
 - Treat `src/components/ui/` as shared shadcn primitives: do not modify it for feature styling; confirm any new primitive variant first.

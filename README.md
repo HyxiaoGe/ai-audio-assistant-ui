@@ -32,7 +32,7 @@
 | 层 | 技术 / 说明 |
 |------|-------------|
 | 框架 | Next.js 16(App Router)+ React 19 + TypeScript 5 |
-| UI | Tailwind CSS v4 + shadcn/ui + Radix UI;`--app-*` token 为唯一样式源(见 `AGENTS.md`「Design System Review Rules」) |
+| UI | Tailwind CSS v4 + shadcn/ui + Radix UI;`--app-*` token 为颜色、背景和边框语义源(见 `AGENTS.md`「Design System Review Rules」) |
 | 鉴权 | 共享 SSO SDK `auth-client-web` 接入 auth-service 的 OAuth 与邮箱验证码登录,令牌存 localStorage。`next-auth` 仍在 `package.json` 但为**历史残留依赖**,主流程不经它 |
 | 状态 | Zustand(客户端全局态)+ React Server Components |
 | 实时 | 原生 WebSocket(进度推送,自动重连 / 轮询降级) |
@@ -106,7 +106,7 @@ src/
 └── middleware.ts        # 受保护路由的登录门
 ```
 
-> 样式与组件约定(`--app-*` token 唯一样式源、用 `className` 任意值类不用内联 `style={{}}`、交互用 `<Button>` 原语、`ui/` 勿改)见 `AGENTS.md`「Design System Review Rules」。
+> 样式与组件约定(`--app-*` token 作为颜色/背景/边框语义源、布局使用现有 Tailwind spacing scale、用 `className` 任意值类不用内联 `style={{}}`、交互用 `<Button>` 原语、`ui/` 勿改)见 `AGENTS.md`「Design System Review Rules」。
 
 ## 文档索引
 
