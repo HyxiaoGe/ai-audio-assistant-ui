@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process"
 import { mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, isAbsolute, join, relative, resolve } from "node:path"
@@ -747,7 +748,12 @@ describe("master release workflow", () => {
     expect(contractSteps[0].if).toBeUndefined()
     expect(contractSteps[0]["continue-on-error"]).toBeUndefined()
 
-    expect(statSync(RELEASE_CONTRACT).mode & 0o111).not.toBe(0)
+    const contractIndexEntry = execFileSync(
+      "git",
+      ["ls-files", "--stage", "--", relative(ROOT, RELEASE_CONTRACT)],
+      { cwd: ROOT, encoding: "utf8" },
+    ).trim()
+    expect(contractIndexEntry.split(/\s+/, 1)[0]).toBe("100755")
     expect(read(RELEASE_CONTRACT)).toBe(
       "#!/usr/bin/env bash\nset -euo pipefail\n\nexec npx vitest run src/scripts/ciCdContract.test.ts\n",
     )
