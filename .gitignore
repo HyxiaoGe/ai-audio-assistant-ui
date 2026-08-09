@@ -49,6 +49,7 @@ yarn-error.log*
 next-env.d.ts
 
 CLAUDE.md
+AGENTS.local.md
 .env
 
 # 本地临时 / SDD 工具草稿 / 一次性报告 / 审计稿(不随仓公开)
