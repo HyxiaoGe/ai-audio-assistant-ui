@@ -1,0 +1,44 @@
+version: "1"
+workflow: .github/workflows/build-and-deploy.yml
+contract_test:
+  path: .github/scripts/release-safety-contract.sh
+  pr_step: release_safety_contract
+jobs:
+  prepare: null
+  publish: publish
+  deploy: deploy
+  finalize: finalize
+steps:
+  target: release_target
+  target_job: deploy
+  capture: capture_rollback_state
+  migrations: []
+  candidate: deploy_candidate
+  verify: [release_verify]
+  rollback: rollback_candidate
+  cleanup: release_cleanup
+  failure: null
+  finalize: release_metrics
+  finalize_failure: release_failure
+needs:
+  publish: []
+  deploy: [publish]
+  finalize: [publish, deploy]
+conditions:
+  prepare: null
+  publish: >-
+    github.ref == 'refs/heads/master' &&
+    (github.event_name != 'workflow_dispatch' || github.event.inputs.rollback_sha == '')
+  deploy: >-
+    always() && github.ref == 'refs/heads/master' &&
+    (needs.publish.result == 'success' ||
+    (needs.publish.result == 'skipped' && github.event_name == 'workflow_dispatch' &&
+    github.event.inputs.rollback_sha != ''))
+  migration: null
+  rollback: >-
+    failure() && steps.capture_rollback_state.outcome == 'success' &&
+    steps.deploy_candidate.outcome != 'skipped'
+  cleanup: success()
+  failure: null
+  finalize: always() && github.ref == 'refs/heads/master'
+  finalize_failure: always() && steps.final_status.outputs.status != 'success'

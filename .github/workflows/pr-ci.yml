@@ -40,6 +40,10 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
+      - name: Run release safety contract
+        id: release_safety_contract
+        run: .github/scripts/release-safety-contract.sh
+
       - name: Lint
         run: npm run lint
 
