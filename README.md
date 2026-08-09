@@ -32,7 +32,7 @@
 | 层 | 技术 / 说明 |
 |------|-------------|
 | 框架 | Next.js 16(App Router)+ React 19 + TypeScript 5 |
-| UI | Tailwind CSS v4 + shadcn/ui + Radix UI;`--app-*` token 为唯一样式源(见 `CLAUDE.md`「样式与组件契约」) |
+| UI | Tailwind CSS v4 + shadcn/ui + Radix UI;`--app-*` token 为唯一样式源(见 `AGENTS.md`「Design System Review Rules」) |
 | 鉴权 | 共享 SSO SDK `auth-client-web` 接入 auth-service 的 OAuth 与邮箱验证码登录,令牌存 localStorage。`next-auth` 仍在 `package.json` 但为**历史残留依赖**,主流程不经它 |
 | 状态 | Zustand(客户端全局态)+ React Server Components |
 | 实时 | 原生 WebSocket(进度推送,自动重连 / 轮询降级) |
@@ -106,17 +106,18 @@ src/
 └── middleware.ts        # 受保护路由的登录门
 ```
 
-> 样式与组件约定(`--app-*` token 唯一样式源、用 `className` 任意值类不用内联 `style={{}}`、交互用 `<Button>` 原语、`ui/` 勿改)见 `CLAUDE.md`「样式与组件契约」。
+> 样式与组件约定(`--app-*` token 唯一样式源、用 `className` 任意值类不用内联 `style={{}}`、交互用 `<Button>` 原语、`ui/` 勿改)见 `AGENTS.md`「Design System Review Rules」。
 
 ## 文档索引
 
 | 文档 | 位置 | 说明 |
 |------|------|------|
+| 工程与审查指南 | `AGENTS.md` | 项目结构、开发流程、设计系统与 Code Review 规则 |
 | 贡献指南 | `CONTRIBUTING.md` | 开发流程与提交规范 |
 | 测试策略 | `docs/TESTING.md` | Vitest + Testing Library |
 | 环境变量样例 | `.env.example` | 前端环境变量 |
 
-> `CLAUDE.md`(样式与组件契约、目录约定)为**本地开发文档,未随仓公开**。
+> `CLAUDE.md` 仍是本地工具辅助文件；公开、可审查的工程契约以 `AGENTS.md` 与 `README.md` 为准。
 
 ---
 

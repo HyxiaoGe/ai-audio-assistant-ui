@@ -4,7 +4,7 @@
 - `src/app/` contains Next.js App Router routes, layouts, and route groups like `(auth)` and `(main)`.
 - `src/components/` holds reusable UI building blocks; `src/lib/` contains shared utilities (API client, auth, upload helpers).
 - `src/styles/` and `src/app/globals.css` define global styles; `public/` stores static assets.
-- Engineering conventions and the design-system contract live in `CLAUDE.md`; project overview in `README.md`. `docs/` holds `TESTING.md` and the per-feature spec/plan archive (`docs/superpowers/`).
+- Reviewable engineering and design-system rules live in this tracked file; project overview is in `README.md`. `docs/` holds `TESTING.md` and the per-feature spec/plan archive (`docs/superpowers/`).
 
 ## Build, Test, and Development Commands
 - `npm run dev`: start the local Next.js dev server at `http://localhost:3000`.
@@ -35,13 +35,20 @@
 - Do not commit real credentials or tokens.
 
 ## Architecture References
-- Engineering conventions, design-system contract, structure: `CLAUDE.md`
+- Engineering conventions, design-system contract, structure: this tracked `AGENTS.md`
 - Project overview and structure: `README.md`
 - Testing strategy: `docs/TESTING.md`
-- (The old `docs/FE.md` / `docs/ARCH.md` were stale 2024-era copies and were removed; treat `CLAUDE.md` + `README.md` as authoritative.)
+- (The old `docs/FE.md` / `docs/ARCH.md` were stale 2024-era copies and were removed; treat this `AGENTS.md` + `README.md` as authoritative.)
+
+## Design System Review Rules
+
+- Use the semantic `--app-*` tokens in `src/app/globals.css` as the only color, background, border, and spacing source; do not introduce hard-coded colors or a parallel palette.
+- Express tokens with Tailwind arbitrary-value `className` utilities rather than inline `style`; runtime-calculated values are the only exception and require the existing ESLint justification comment.
+- Prefer the shared `Button` primitive for interactions. A justified raw `<button>` must preserve themed states and focus-visible behavior and include the existing ESLint justification comment.
+- Treat `src/components/ui/` as shared shadcn primitives: do not modify it for feature styling; confirm any new primitive variant first.
 
 ## Code Review Rules
 
-- 只报告本 PR 引入且有具体触发路径和实际影响的正确性、安全、兼容或发布风险；核对失败/回滚路径与测试能否拒绝错误实现，忽略风格、既有问题和猜测。
+- 只报告本 PR 引入且有具体触发路径和实际影响的正确性、性能、安全、兼容或发布风险；核对失败/回滚路径与测试能否拒绝错误实现，忽略风格、既有问题和猜测。
 - 认证、上传和 WebSocket 进度变更必须覆盖重连与 HTTP 轮询降级，避免只验证正常在线路径。
 - 保持前端职责边界：不校验 JWT、不生成预签名、不直连数据库或 ASR/LLM，敏感值不得进入客户端环境变量。
