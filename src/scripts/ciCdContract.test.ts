@@ -8,6 +8,8 @@ const ROOT = resolve(import.meta.dirname, "../..")
 const WORKFLOWS = join(ROOT, ".github/workflows")
 const PR_CI = join(WORKFLOWS, "pr-ci.yml")
 const RELEASE = join(WORKFLOWS, "build-and-deploy.yml")
+const RELEASE_MANIFEST = join(ROOT, ".github/release-safety.yml")
+const RELEASE_CONTRACT = join(ROOT, ".github/scripts/release-safety-contract.sh")
 
 const CHECKOUT_SHA = "d23441a48e516b6c34aea4fa41551a30e30af803"
 const SETUP_NODE_SHA = "249970729cb0ef3589644e2896645e5dc5ba9c38"
@@ -33,11 +35,18 @@ type UsesOccurrence = {
 
 type YamlRecord = Record<string, unknown>
 type WorkflowStep = YamlRecord & {
+  id?: unknown
+  if?: unknown
   name?: unknown
   run?: unknown
   uses?: unknown
   with?: unknown
+  "continue-on-error"?: unknown
 }
+
+const EXPECTED_PUBLISH_CONDITION = "${{ github.ref == 'refs/heads/master' && (github.event_name != 'workflow_dispatch' || github.event.inputs.rollback_sha == '') }}"
+const EXPECTED_DEPLOY_CONDITION = "${{ always() && github.ref == 'refs/heads/master' && (needs.publish.result == 'success' || (needs.publish.result == 'skipped' && github.event_name == 'workflow_dispatch' && github.event.inputs.rollback_sha != '')) }}"
+const EXPECTED_ROLLBACK_CONDITION = "${{ failure() && steps.capture_rollback_state.outcome == 'success' && steps.deploy_candidate.outcome != 'skipped' }}"
 
 const temporaryRoots: string[] = []
 
@@ -152,6 +161,184 @@ function parsedJobSteps(job: string): WorkflowStep[] {
     throw new Error("job.steps 必须是 YAML sequence")
   }
   return steps.map((step, index) => parseWorkflowStep(step, `job.steps[${index}]`))
+}
+
+function structuredJob(document: YamlRecord, jobId: string): YamlRecord {
+  if (!isRecord(document.jobs) || !isRecord(document.jobs[jobId])) {
+    throw new Error(`缺少结构化 job：${jobId}`)
+  }
+  return document.jobs[jobId]
+}
+
+function structuredSteps(document: YamlRecord, jobId: string): WorkflowStep[] {
+  const steps = structuredJob(document, jobId).steps
+  if (!Array.isArray(steps)) {
+    throw new Error(`${jobId}.steps 必须是 YAML sequence`)
+  }
+  return steps.map((step, index) => parseWorkflowStep(step, `${jobId}.steps[${index}]`))
+}
+
+function activeShellLines(run: unknown): string[] {
+  return typeof run === "string"
+    ? run.split(/\r?\n/).map((line) => line.trim()).filter((line) => line !== "" && !line.startsWith("#"))
+    : []
+}
+
+function releaseSafetyViolations(document: YamlRecord): string[] {
+  const violations: string[] = []
+  const publish = structuredJob(document, "publish")
+  const deploy = structuredJob(document, "deploy")
+  const deploySteps = structuredSteps(document, "deploy")
+  const finalizeSteps = structuredSteps(document, "finalize")
+  const stepWithId = (id: string): WorkflowStep | undefined => {
+    const matches = deploySteps.filter((step) => step.id === id)
+    if (matches.length !== 1) {
+      violations.push(`step id count: ${id}`)
+      return undefined
+    }
+    return matches[0]
+  }
+  const stepWithName = (steps: WorkflowStep[], name: string): WorkflowStep | undefined => {
+    const matches = steps.filter((step) => step.name === name)
+    if (matches.length !== 1) {
+      violations.push(`step name count: ${name}`)
+      return undefined
+    }
+    return matches[0]
+  }
+
+  if (publish.if !== EXPECTED_PUBLISH_CONDITION) violations.push("publish condition")
+  if (deploy.if !== EXPECTED_DEPLOY_CONDITION) violations.push("deploy condition")
+
+  const capture = stepWithId("capture_rollback_state")
+  const candidate = stepWithId("deploy_candidate")
+  const rollback = stepWithId("rollback_candidate")
+  if (rollback?.if !== EXPECTED_ROLLBACK_CONDITION) violations.push("rollback condition")
+  if (rollback?.["continue-on-error"] === true) violations.push("rollback continue-on-error")
+
+  const captureLines = activeShellLines(capture?.run)
+  for (const [label, predicate] of [
+    ["capture image ref", (line: string) => /^previous_image="\$\(docker inspect --format '\{\{\.Config\.Image\}\}' ai-audio-assistant-ui\)"$/.test(line)],
+    ["capture image id", (line: string) => /^previous_image_id="\$\(docker inspect --format '\{\{\.Image\}\}' ai-audio-assistant-ui\)"$/.test(line)],
+    ["capture managed image guard", (line: string) => line === 'case "$previous_image" in'],
+    ["capture managed image prefix", (line: string) => line === '"${IMAGE_NAME}:"*) previous_sha="${previous_image#"${IMAGE_NAME}:"}" ;;'],
+    ["capture sha guard", (line: string) => line === 'if ! [[ "$previous_sha" =~ ^[0-9a-f]{40}$ ]]; then'],
+    ["capture id guard", (line: string) => line === 'if ! [[ "$previous_image_id" =~ ^sha256:[0-9a-f]{64}$ ]]; then'],
+  ] as const) {
+    if (!captureLines.some(predicate)) violations.push(label)
+  }
+
+  const resolveTarget = stepWithName(deploySteps, "Resolve deployment target")
+  const expectedTargetEnv = {
+    TARGET_SHA: "${{ env.DEPLOY_TARGET_SHA }}",
+    ROLLBACK_SHA: "${{ github.event.inputs.rollback_sha }}",
+    ROLLBACK_REASON: "${{ github.event.inputs.rollback_reason }}",
+  }
+  if (JSON.stringify(resolveTarget?.env) !== JSON.stringify(expectedTargetEnv)) {
+    violations.push("resolve target env")
+  }
+  const expectedTargetLines = [
+    'if ! [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]; then',
+    'echo "rollback target must be a 40-character lowercase commit SHA"',
+    "exit 1",
+    "fi",
+    'if [ -n "$ROLLBACK_SHA" ]; then',
+    'if ! [[ "$ROLLBACK_SHA" =~ ^[0-9a-f]{40}$ ]]; then',
+    'echo "rollback target must be a 40-character lowercase commit SHA"',
+    "exit 1",
+    "fi",
+    'if [ -z "${ROLLBACK_REASON//[[:space:]]/}" ]; then',
+    'echo "rollback reason is required"',
+    "exit 1",
+    "fi",
+    'echo "准备手动回滚到 $ROLLBACK_SHA"',
+    "printf '手动回滚原因：%s\\n' \"$ROLLBACK_REASON\"",
+    'elif [ -n "${ROLLBACK_REASON//[[:space:]]/}" ]; then',
+    'echo "rollback reason requires rollback_sha"',
+    "exit 1",
+    "fi",
+  ]
+  if (JSON.stringify(activeShellLines(resolveTarget?.run)) !== JSON.stringify(expectedTargetLines)) {
+    violations.push("resolve target commands")
+  }
+
+  const candidateLines = activeShellLines(candidate?.run)
+  for (const required of [
+    "docker pull ${{ env.IMAGE_NAME }}:${{ env.DEPLOY_TARGET_SHA }}",
+    "docker compose -f docker-compose.ai-audio-ui-ghcr.yml config --quiet",
+    "docker compose -f docker-compose.ai-audio-ui-ghcr.yml up -d",
+  ]) {
+    if (!candidateLines.includes(required)) violations.push(`candidate command: ${required}`)
+  }
+
+  const verify = stepWithName(deploySteps, "Verify deployed image and version")
+  const verifyLines = activeShellLines(verify?.run)
+  for (const required of [
+    'expected_image_id="$(docker image inspect --format \'{{.Id}}\' "$expected_image")"',
+    'actual_image_id="$(docker inspect --format \'{{.Image}}\' ai-audio-assistant-ui)"',
+    'if [ "$actual_image" != "$expected_image" ] || [ "$actual_image_id" != "$expected_image_id" ]; then',
+  ]) {
+    if (!verifyLines.includes(required)) violations.push(`verify command: ${required}`)
+  }
+  if (!verifyLines.some((line) => line.startsWith("if docker exec ai-audio-assistant-ui node -e ") && line.includes("/version") && line.endsWith('"$DEPLOY_TARGET_SHA"; then') && !line.includes("|| true"))) {
+    violations.push("verify container version")
+  }
+
+  const rollbackLines = activeShellLines(rollback?.run)
+  for (const required of [
+    "docker compose -f docker-compose.ai-audio-ui-ghcr.yml up -d",
+    'if [ "$actual_image" != "$PREVIOUS_IMAGE" ] || [ "$actual_image_id" != "$PREVIOUS_IMAGE_ID" ]; then',
+  ]) {
+    if (!rollbackLines.includes(required)) violations.push(`rollback command: ${required}`)
+  }
+  if (!rollbackLines.some((line) => line.startsWith("if docker exec ai-audio-assistant-ui node -e ") && line.includes("/version") && line.endsWith('"$PREVIOUS_SHA"; then') && !line.includes("|| true"))) {
+    violations.push("rollback container version")
+  }
+
+  const cleanup = stepWithName(deploySteps, "Cleanup old images")
+  if (cleanup?.if !== "success()") violations.push("cleanup condition")
+  const finalStatus = stepWithName(finalizeSteps, "Resolve final release status")
+  const expectedFinalStatusEnv = {
+    PUBLISH_RESULT: "${{ needs.publish.result }}",
+    DEPLOY_RESULT: "${{ needs.deploy.result }}",
+    PUBLISH_STARTED_AT: "${{ needs.publish.outputs.started_at }}",
+    DEPLOY_STARTED_AT: "${{ needs.deploy.outputs.started_at }}",
+    PUBLISH_RUNNER_NAME: "${{ needs.publish.outputs.runner_name }}",
+    ROLLBACK_SHA: "${{ github.event.inputs.rollback_sha }}",
+  }
+  if (JSON.stringify(finalStatus?.env) !== JSON.stringify(expectedFinalStatusEnv)) {
+    violations.push("finalize status env")
+  }
+  const expectedFinalStatusLines = [
+    'if [ "$DEPLOY_RESULT" = "success" ] && (',
+    '[ "$PUBLISH_RESULT" = "success" ] ||',
+    '{ [ "$PUBLISH_RESULT" = "skipped" ] && [ -n "$ROLLBACK_SHA" ]; }',
+    "); then",
+    "final_status=success",
+    "else",
+    "final_status=failure",
+    "fi",
+    'pipeline_started_at="${PUBLISH_STARTED_AT:-$(date +%s)}"',
+    'deploy_started_at="${DEPLOY_STARTED_AT:-$pipeline_started_at}"',
+    'runner_name="${PUBLISH_RUNNER_NAME:-unknown}"',
+    "{",
+    'echo "status=$final_status"',
+    'echo "pipeline_started_at=$pipeline_started_at"',
+    'echo "deploy_started_at=$deploy_started_at"',
+    'echo "runner_name=$runner_name"',
+    '} >> "$GITHUB_OUTPUT"',
+    'echo "发布最终状态: publish=$PUBLISH_RESULT deploy=$DEPLOY_RESULT final=$final_status"',
+  ]
+  if (JSON.stringify(activeShellLines(finalStatus?.run)) !== JSON.stringify(expectedFinalStatusLines)) {
+    violations.push("finalize status commands")
+  }
+  const failRelease = stepWithName(finalizeSteps, "Fail unsuccessful release")
+  if (failRelease?.if !== "${{ always() && steps.final_status.outputs.status != 'success' }}") {
+    violations.push("finalize failure condition")
+  }
+  if (!activeShellLines(failRelease?.run).includes("exit 1")) violations.push("finalize failure command")
+
+  return violations
 }
 
 function documentSteps(text: string, context: string): WorkflowStep[] {
@@ -489,12 +676,97 @@ describe("PR CI workflow", () => {
 })
 
 describe("master release workflow", () => {
+  it("release safety manifest 映射真实 workflow 角色和 PR 契约步骤", () => {
+    const manifest = parseYamlRecord(read(RELEASE_MANIFEST), "release safety manifest")
+    expect(manifest).toEqual({
+      version: "1",
+      workflow: ".github/workflows/build-and-deploy.yml",
+      contract_test: {
+        path: ".github/scripts/release-safety-contract.sh",
+        pr_step: "release_safety_contract",
+      },
+      jobs: {
+        prepare: null,
+        publish: "publish",
+        deploy: "deploy",
+        finalize: "finalize",
+      },
+      steps: {
+        target: "release_target",
+        target_job: "deploy",
+        capture: "capture_rollback_state",
+        migrations: [],
+        candidate: "deploy_candidate",
+        verify: ["release_verify"],
+        rollback: "rollback_candidate",
+        cleanup: "release_cleanup",
+        failure: null,
+        finalize: "release_metrics",
+        finalize_failure: "release_failure",
+      },
+      needs: {
+        publish: [],
+        deploy: ["publish"],
+        finalize: ["publish", "deploy"],
+      },
+      conditions: {
+        prepare: null,
+        publish: "github.ref == 'refs/heads/master' && (github.event_name != 'workflow_dispatch' || github.event.inputs.rollback_sha == '')",
+        deploy: "always() && github.ref == 'refs/heads/master' && (needs.publish.result == 'success' || (needs.publish.result == 'skipped' && github.event_name == 'workflow_dispatch' && github.event.inputs.rollback_sha != ''))",
+        migration: null,
+        rollback: "failure() && steps.capture_rollback_state.outcome == 'success' && steps.deploy_candidate.outcome != 'skipped'",
+        cleanup: "success()",
+        failure: null,
+        finalize: "always() && github.ref == 'refs/heads/master'",
+        finalize_failure: "always() && steps.final_status.outputs.status != 'success'",
+      },
+    })
+
+    const releaseDocument = parseYamlRecord(read(RELEASE), "release workflow")
+    const deployIds = new Set(structuredSteps(releaseDocument, "deploy").map((step) => step.id))
+    const finalizeIds = new Set(structuredSteps(releaseDocument, "finalize").map((step) => step.id))
+    for (const id of [
+      "release_target",
+      "capture_rollback_state",
+      "deploy_candidate",
+      "release_verify",
+      "rollback_candidate",
+      "release_cleanup",
+    ]) {
+      expect(deployIds.has(id), `deploy 缺少稳定发布角色 id: ${id}`).toBe(true)
+    }
+    for (const id of ["release_metrics", "release_failure"]) {
+      expect(finalizeIds.has(id), `finalize 缺少稳定发布角色 id: ${id}`).toBe(true)
+    }
+
+    const prDocument = parseYamlRecord(read(PR_CI), "PR workflow")
+    const contractSteps = structuredSteps(prDocument, "validate").filter((step) => step.id === "release_safety_contract")
+    expect(contractSteps).toHaveLength(1)
+    expect(contractSteps[0].name).toBe("Run release safety contract")
+    expect(contractSteps[0].run).toBe(".github/scripts/release-safety-contract.sh")
+    expect(contractSteps[0].if).toBeUndefined()
+    expect(contractSteps[0]["continue-on-error"]).toBeUndefined()
+
+    expect(statSync(RELEASE_CONTRACT).mode & 0o111).not.toBe(0)
+    expect(read(RELEASE_CONTRACT)).toBe(
+      "#!/usr/bin/env bash\nset -euo pipefail\n\nexec npx vitest run src/scripts/ciCdContract.test.ts\n",
+    )
+
+    const completeSuite = structuredSteps(prDocument, "validate").filter((step) => step.name === "Run complete Vitest suite")
+    expect(completeSuite).toHaveLength(1)
+    expect(completeSuite[0].id).toBeUndefined()
+  })
+
   it("只允许 master push 和手动触发，且发布并发不取消", () => {
     const text = read(RELEASE)
     expect(triggerNames(text)).toEqual(new Set(["push", "workflow_dispatch"]))
     expect(indentedBlock(indentedBlock(text, "on", 0), "push", 2)).toMatch(/^    branches:\s*\[master\]\s*$/m)
     expect(indentedBlock(text, "on", 0)).not.toMatch(/^  pull_request:/m)
     expect(text).toMatch(/^  cancel-in-progress: false\s*$/m)
+    const manual = indentedBlock(indentedBlock(text, "on", 0), "workflow_dispatch", 2)
+    expect(manual).toMatch(/^    inputs:\s*$/m)
+    expect(manual).toMatch(/^      rollback_sha:\s*$/m)
+    expect(manual).toMatch(/^      rollback_reason:\s*$/m)
   })
 
   it("publish、deploy 与 finalize 使用正确 runner、依赖和 Environment 边界", () => {
@@ -502,13 +774,13 @@ describe("master release workflow", () => {
     expect(jobIds(text)).toEqual(["publish", "deploy", "finalize"])
     const publish = jobBlock(text, "publish")
     expect(publish).toMatch(/^    name: Publish master image on Windows runner\s*$/m)
-    expect(publish).toMatch(/^    if: github\.ref == 'refs\/heads\/master'\s*$/m)
+    expect(publish).toMatch(/^    if: \$\{\{ github\.ref == 'refs\/heads\/master' && \(github\.event_name != 'workflow_dispatch' \|\| github\.event\.inputs\.rollback_sha == ''\) \}\}\s*$/m)
     expect(publish).toMatch(/^    runs-on: \[self-hosted, Windows, X64\]\s*$/m)
     expect(publish).toMatch(/^    environment:\s*\n      name: dev\s*\n      deployment: false\s*$/m)
 
     const deploy = jobBlock(text, "deploy")
     expect(deploy).toMatch(/^    needs: publish\s*$/m)
-    expect(deploy).toMatch(/^    if: github\.ref == 'refs\/heads\/master'\s*$/m)
+    expect(deploy).toMatch(/^    if: \$\{\{ always\(\) && github\.ref == 'refs\/heads\/master' && \(needs\.publish\.result == 'success' \|\| \(needs\.publish\.result == 'skipped' && github\.event_name == 'workflow_dispatch' && github\.event\.inputs\.rollback_sha != ''\)\) \}\}\s*$/m)
     expect(deploy).toMatch(/^    runs-on: \[self-hosted, Linux, X64\]\s*$/m)
     expect(deploy).toMatch(/^    environment: dev\s*$/m)
 
@@ -576,11 +848,157 @@ describe("master release workflow", () => {
   it("deploy 验证镜像身份和容器内版本，失败时输出日志", () => {
     const deploy = jobBlock(read(RELEASE), "deploy")
     expect(deploy).toContain("docker inspect --format '{{.Config.Image}}' ai-audio-assistant-ui")
-    expect(deploy).toContain("${{ env.IMAGE_NAME }}:${{ github.sha }}")
+    expect(deploy).toContain("docker inspect --format '{{.Image}}' ai-audio-assistant-ui")
+    expect(deploy).toContain("docker image inspect --format '{{.Id}}'")
+    expect(deploy).toContain("${{ env.IMAGE_NAME }}:${{ env.DEPLOY_TARGET_SHA }}")
     expect(deploy).toMatch(/actual_image.*!=.*expected_image/)
+    expect(deploy).toMatch(/actual_image_id.*!=.*expected_image_id/)
     expect(deploy).toMatch(/docker exec ai-audio-assistant-ui[^\n]*(?:\\\n[^\n]*)*http:\/\/127\.0\.0\.1:3000\/version/)
-    expect(deploy).toMatch(/version.*GITHUB_SHA|GITHUB_SHA.*version/)
+    expect(deploy).toMatch(/version.*DEPLOY_TARGET_SHA|DEPLOY_TARGET_SHA.*version/)
     expect(deploy).toContain("docker logs --tail=")
+  })
+
+  it("手动回滚只接受不可变 SHA 和原因，并跳过发布步骤", () => {
+    const text = read(RELEASE)
+    const publish = jobBlock(text, "publish")
+    const deploy = jobBlock(text, "deploy")
+    const normalRelease = "github.event_name != 'workflow_dispatch' || github.event.inputs.rollback_sha == ''"
+
+    expect(text).toContain("DEPLOY_TARGET_SHA: ${{ github.event.inputs.rollback_sha || github.sha }}")
+    expect(publish).toContain("github.event.inputs.rollback_sha == ''")
+    expect(deploy).toContain("needs.publish.result == 'success'")
+    expect(deploy).toContain("needs.publish.result == 'skipped'")
+    expect(deploy).toContain("github.event.inputs.rollback_sha != ''")
+    for (const stepNameValue of [
+      "Checkout",
+      "Setup Node.js",
+      "Verify Docker access",
+      "Install dependencies",
+      "Lint",
+      "Build",
+      "Run tests",
+      "Build Docker image",
+      "Login to ACR",
+      "Push Docker image",
+    ]) {
+      expect(stepByName(publish, stepNameValue)).toContain(normalRelease)
+    }
+
+    const resolveTarget = stepByName(deploy, "Resolve deployment target")
+    expect(resolveTarget).toContain("ROLLBACK_SHA: ${{ github.event.inputs.rollback_sha }}")
+    expect(resolveTarget).toContain("ROLLBACK_REASON: ${{ github.event.inputs.rollback_reason }}")
+    expect(resolveTarget).toContain("^[0-9a-f]{40}$")
+    expect(resolveTarget).toContain("rollback reason is required")
+    expect(resolveTarget).toContain("rollback reason requires rollback_sha")
+    expect(resolveTarget).toContain('printf \'手动回滚原因：%s\\n\' "$ROLLBACK_REASON"')
+    expect(normalizedStepRun(resolveTarget)).not.toContain("${{ github.event.inputs.rollback_reason }}")
+  })
+
+  it("候选部署前捕获旧镜像引用和内容 ID", () => {
+    const deploy = jobBlock(read(RELEASE), "deploy")
+    const names = stepBlocks(deploy).map(stepName)
+    const capture = stepByName(deploy, "Capture rollback state")
+    const candidate = stepByName(deploy, "Pull and restart ai-audio-assistant-ui")
+
+    expect(names.indexOf("Capture rollback state")).toBeLessThan(names.indexOf("Pull and restart ai-audio-assistant-ui"))
+    expect(capture).toMatch(/^        id: capture_rollback_state\s*$/m)
+    expect(capture).toContain("{{.Config.Image}}")
+    expect(capture).toContain("{{.Image}}")
+    expect(capture).toContain("$GITHUB_OUTPUT")
+    expect(candidate).toMatch(/^        id: deploy_candidate\s*$/m)
+    expect(candidate).toContain("docker compose -f docker-compose.ai-audio-ui-ghcr.yml config --quiet")
+    expect(normalizedStepRun(candidate).indexOf("docker compose -f docker-compose.ai-audio-ui-ghcr.yml config --quiet"))
+      .toBeLessThan(normalizedStepRun(candidate).indexOf("docker rm -f ai-audio-assistant-ui"))
+  })
+
+  it("候选失败后恢复旧镜像并重新核对身份和容器内版本", () => {
+    const deploy = jobBlock(read(RELEASE), "deploy")
+    const rollback = stepByName(deploy, "Rollback failed candidate")
+
+    expect(rollback).toMatch(/^        if: \$\{\{ failure\(\) && steps\.capture_rollback_state\.outcome == 'success' && steps\.deploy_candidate\.outcome != 'skipped' \}\}\s*$/m)
+    expect(rollback).not.toContain("continue-on-error")
+    expect(rollback).toContain("steps.capture_rollback_state.outputs.previous_image")
+    expect(rollback).toContain("steps.capture_rollback_state.outputs.previous_image_id")
+    expect(rollback).toContain("docker compose -f docker-compose.ai-audio-ui-ghcr.yml up -d")
+    expect(rollback).toContain("{{.Config.Image}}")
+    expect(rollback).toContain("{{.Image}}")
+    expect(rollback).toMatch(/docker exec ai-audio-assistant-ui[^\n]*(?:\\\n[^\n]*)*http:\/\/127\.0\.0\.1:3000\/version/)
+    expect(rollback).toContain("PREVIOUS_SHA")
+  })
+
+  it("只有候选验收成功后才清理旧镜像", () => {
+    const cleanup = stepByName(jobBlock(read(RELEASE), "deploy"), "Cleanup old images")
+    expect(cleanup).toMatch(/^        if: success\(\)\s*$/m)
+    expect(cleanup).toContain("${{ env.DEPLOY_TARGET_SHA }}")
+  })
+
+  it("发布安全语义来自结构化 job、step 与有效命令", () => {
+    const document = parseYamlRecord(read(RELEASE), "release workflow")
+    expect(releaseSafetyViolations(document)).toEqual([])
+  })
+
+  it("手动回滚必须看到 publish 已跳过", () => {
+    const document = parseYamlRecord(read(RELEASE), "release workflow mutation")
+    structuredJob(document, "deploy").if = EXPECTED_DEPLOY_CONDITION.replace("needs.publish.result == 'skipped' && ", "")
+    expect(releaseSafetyViolations(document)).toContain("deploy condition")
+  })
+
+  it("success 旁路、注释、echo 与关键命令容错不能伪造发布安全", () => {
+    const document = parseYamlRecord(read(RELEASE), "release workflow mutation")
+    structuredJob(document, "publish").if = `${EXPECTED_PUBLISH_CONDITION} || success()`
+    structuredJob(document, "deploy").if = `${EXPECTED_DEPLOY_CONDITION} || success()`
+
+    const deploySteps = structuredSteps(document, "deploy")
+    const capture = deploySteps.find((step) => step.id === "capture_rollback_state")
+    const candidate = deploySteps.find((step) => step.id === "deploy_candidate")
+    const rollback = deploySteps.find((step) => step.id === "rollback_candidate")
+    const verify = deploySteps.find((step) => step.name === "Verify deployed image and version")
+    const resolveTarget = deploySteps.find((step) => step.name === "Resolve deployment target")
+    const finalStatus = structuredSteps(document, "finalize").find((step) => step.name === "Resolve final release status")
+    expect(capture?.run).toBeTypeOf("string")
+    expect(candidate?.run).toBeTypeOf("string")
+    expect(rollback?.run).toBeTypeOf("string")
+    expect(verify?.run).toBeTypeOf("string")
+    expect(resolveTarget?.run).toBeTypeOf("string")
+    expect(finalStatus?.run).toBeTypeOf("string")
+
+    rollback!.if = `${EXPECTED_ROLLBACK_CONDITION} || success()`
+    capture!.run = (capture!.run as string).replace(
+      'if ! [[ "$previous_image_id" =~ ^sha256:[0-9a-f]{64}$ ]]; then',
+      '# if ! [[ "$previous_image_id" =~ ^sha256:[0-9a-f]{64}$ ]]; then\n' +
+        'echo \'if ! [[ "$previous_image_id" =~ ^sha256:[0-9a-f]{64}$ ]]; then\'',
+    )
+    capture!.run = (capture!.run as string).replace(
+      'case "$previous_image" in',
+      'echo \'case "$previous_image" in\'',
+    )
+    candidate!.run = (candidate!.run as string).replace(
+      "docker compose -f docker-compose.ai-audio-ui-ghcr.yml up -d",
+      'echo "docker compose -f docker-compose.ai-audio-ui-ghcr.yml up -d"',
+    )
+    verify!.run = (verify!.run as string).replace(
+      '"$DEPLOY_TARGET_SHA"; then',
+      '"$DEPLOY_TARGET_SHA" || true; then',
+    )
+    rollback!.run = (rollback!.run as string).replace(
+      'if [ "$actual_image" != "$PREVIOUS_IMAGE" ] || [ "$actual_image_id" != "$PREVIOUS_IMAGE_ID" ]; then',
+      'echo \'if [ "$actual_image" != "$PREVIOUS_IMAGE" ] || [ "$actual_image_id" != "$PREVIOUS_IMAGE_ID" ]; then\'',
+    )
+    resolveTarget!.run = "echo unsafe"
+    finalStatus!.run = 'echo "status=success" >> "$GITHUB_OUTPUT"'
+
+    expect(releaseSafetyViolations(document)).toEqual(expect.arrayContaining([
+      "publish condition",
+      "deploy condition",
+      "rollback condition",
+      "capture id guard",
+      "capture managed image guard",
+      "candidate command: docker compose -f docker-compose.ai-audio-ui-ghcr.yml up -d",
+      "verify container version",
+      'rollback command: if [ "$actual_image" != "$PREVIOUS_IMAGE" ] || [ "$actual_image_id" != "$PREVIOUS_IMAGE_ID" ]; then',
+      "resolve target commands",
+      "finalize status commands",
+    ]))
   })
 
   it("finalize 集中副作用、联合结果并在任一前置失败时最终失败", () => {
@@ -598,13 +1016,16 @@ describe("master release workflow", () => {
     const resolveStatus = stepByName(finalize, "Resolve final release status")
     expect(resolveStatus).toContain("PUBLISH_RESULT: ${{ needs.publish.result }}")
     expect(resolveStatus).toContain("DEPLOY_RESULT: ${{ needs.deploy.result }}")
-    expect(resolveStatus).toMatch(/if \[ "\$PUBLISH_RESULT" = "success" \] && \[ "\$DEPLOY_RESULT" = "success" \]; then/)
+    expect(resolveStatus).toContain("ROLLBACK_SHA: ${{ github.event.inputs.rollback_sha }}")
+    expect(resolveStatus).toMatch(/if \[ "\$DEPLOY_RESULT" = "success" \] && \(\s*\[ "\$PUBLISH_RESULT" = "success" \] \|\|\s*\{ \[ "\$PUBLISH_RESULT" = "skipped" \] && \[ -n "\$ROLLBACK_SHA" \]; \}\s*\); then/)
     expect(resolveStatus).toContain("final_status=failure")
 
     const metrics = stepByName(finalize, "Push CI/CD metrics")
     expect(metrics).toMatch(/^        if: always\(\)\s*$/m)
     expect(metrics).toMatch(/^        continue-on-error: true\s*$/m)
     expect(metrics).toMatch(/^        timeout-minutes: 2\s*$/m)
+    expect(metrics).toContain("${{ env.IMAGE_NAME }}:${{ env.DEPLOY_TARGET_SHA }}")
+    expect(metrics).toContain("${{ env.DEPLOY_TARGET_SHA }}")
     expect(finalize).toContain("${{ steps.final_status.outputs.status }}")
     expect(stepByName(finalize, "Fail unsuccessful release")).toMatch(/exit 1/)
     expect(finalize).not.toMatch(/deployment:\s*true/)
