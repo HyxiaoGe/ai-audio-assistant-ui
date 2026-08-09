@@ -15,7 +15,7 @@ npm run dev
 
 ## Code Style
 - TypeScript only
-- 2-space indentation, double quotes, no semicolons
+- 2-space indentation, double quotes, and semicolons
 - Use existing components in `src/components/`
 
 ## Tests
